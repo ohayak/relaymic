@@ -16,7 +16,7 @@ const (
 )
 
 func main() {
-	tone := flag.Duration("tone", 0, "往 BlackHole 播这么久的 440Hz 正弦波做自检")
+	tone := flag.Duration("tone", 0, "play a 440Hz sine wave into the Remote Visio device for this long as a self-check")
 	flag.Parse()
 
 	ctx, err := audio.NewContext()
@@ -29,7 +29,7 @@ func main() {
 	if err != nil {
 		die(err)
 	}
-	fmt.Println("输出设备：")
+	fmt.Println("Output devices:")
 	for _, d := range devices {
 		mark := " "
 		if d.IsDefault {
@@ -38,11 +38,11 @@ func main() {
 		fmt.Printf("  %s %s\n", mark, d.Name)
 	}
 
-	bh, err := ctx.FindPlayback("blackhole")
+	bh, err := ctx.FindPlayback("remotevisio")
 	if err != nil {
 		die(err)
 	}
-	fmt.Printf("\n目标设备: %s\n", bh.Name)
+	fmt.Printf("\nTarget device: %s\n", bh.Name)
 
 	if *tone == 0 {
 		return
@@ -54,11 +54,11 @@ func main() {
 	}
 	defer player.Close()
 
-	fmt.Printf("播放 440Hz 正弦波 %s ...\n", *tone)
+	fmt.Printf("Playing 440Hz sine wave for %s ...\n", *tone)
 	deadline := time.Now().Add(*tone)
 	phase := 0.0
 	step := 2 * math.Pi * 440 / sampleRate
-	// 每次写 20ms，模拟真实的 Opus 帧节奏
+	// write 20ms at a time, mimicking the real Opus frame cadence
 	frame := make([]int16, sampleRate/50*channels)
 	for time.Now().Before(deadline) {
 		for i := 0; i < len(frame); i += channels {
@@ -73,10 +73,10 @@ func main() {
 	}
 
 	buffered, dropped, starved := player.Stats()
-	fmt.Printf("缓冲=%d 丢弃=%d 欠载=%d\n", buffered, dropped, starved)
+	fmt.Printf("buffered=%d dropped=%d starved=%d\n", buffered, dropped, starved)
 }
 
 func die(err error) {
-	fmt.Fprintln(os.Stderr, "错误:", err)
+	fmt.Fprintln(os.Stderr, "error:", err)
 	os.Exit(1)
 }

@@ -1,9 +1,12 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>接收监控</title>
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="/favicon-96.png" sizes="96x96" type="image/png">
+<link rel="apple-touch-icon" href="/favicon-96.png">
+<title>Receiver Monitor</title>
 <style>
   :root {
     --bg: #0f1115;
@@ -59,6 +62,9 @@
 
   .stats { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--dim); }
   .stats b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stats.spk { margin-top: 14px; }
+  .meter.spk { margin: 6px 0 0; }
+  .meter.spk i { background: var(--warn); }
 
   .segment { padding: 12px 0; border-top: 1px solid var(--line); }
   .segment:first-child { border-top: 0; padding-top: 0; }
@@ -67,7 +73,7 @@
   .segment .peak { color: var(--dim); margin-left: auto; font-variant-numeric: tabular-nums; }
   .segment audio { width: 100%; display: block; }
   .lane { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
-  .lane-label { flex: 0 0 52px; font-size: 12px; color: var(--dim); }
+  .lane-label { flex: 0 0 104px; font-size: 12px; color: var(--dim); }
   .lane audio { flex: 1; height: 32px; }
 
   .empty { color: var(--dim); font-size: 13px; text-align: center; padding: 8px 0; }
@@ -77,25 +83,27 @@
 </head>
 <body>
 <main>
-  <h1>接收监控</h1>
+  <h1 data-i18n="title">Receiver Monitor</h1>
 
   <div class="card">
     <div id="state" class="warn">—</div>
     <div id="path">—</div>
     <div class="meter"><i id="level"></i></div>
     <div class="stats">
-      <span>缓冲 <b id="buffered">—</b></span>
-      <span>丢弃 <b id="dropped">—</b></span>
-      <span>欠载 <b id="starved">—</b></span>
-      <span>收包 <b id="received">—</b></span>
-      <span>丢包 <b id="lost">—</b></span>
+      <span><span data-i18n="buffer">Buffer</span> <b id="buffered">—</b></span>
+      <span><span data-i18n="dropped">Dropped</span> <b id="dropped">—</b></span>
+      <span><span data-i18n="underruns">Underruns</span> <b id="starved">—</b></span>
+      <span><span data-i18n="received">Received</span> <b id="received">—</b></span>
+      <span><span data-i18n="lost">Lost</span> <b id="lost">—</b></span>
     </div>
+    <div class="stats spk"><span><span data-i18n="return_path">Return path (this Mac's system audio)</span> <b id="speaker">—</b></span></div>
+    <div class="meter spk"><i id="spkLevel"></i></div>
   </div>
 
   <div class="card">
-    <h2>分段录音</h2>
+    <h2 data-i18n="segments">Segment recordings</h2>
     <div id="segments">
-      <div class="empty">还没有录到语音段</div>
+      <div class="empty" data-i18n="no_segments">No speech segments recorded yet</div>
     </div>
   </div>
 </main>
@@ -103,8 +111,61 @@
 <script>
 const $ = id => document.getElementById(id);
 
-// 接收端多数故障（进程没起、局域网断了）会让 fetch 直接抛错而不是返回非 200，
-// 两种情况一律归一成"离线"，用户不用分辨是哪一种。
+// UI language: follow the browser's language, fall back to English. Status values come from the API and are shown as-is.
+const STRINGS = {
+  en: { title: 'Receiver Monitor', buffer: 'Buffer', dropped: 'Dropped', underruns: 'Underruns', received: 'Received', lost: 'Lost',
+        return_path: "Return path (this Mac's system audio)", off: 'off',
+        silent: "silent (the Mac isn't playing anything, or System Audio Recording isn't allowed)",
+        segments: 'Segment recordings', no_segments: 'No speech segments recorded yet',
+        lane_pre: 'before ring', lane_post: 'after ring', lane_loop: 'after device', offline: 'Receiver offline' },
+  es: { title: 'Monitor del receptor', buffer: 'Búfer', dropped: 'Descartados', underruns: 'Vacíos', received: 'Recibidos', lost: 'Perdidos',
+        return_path: 'Retorno (audio del sistema de este Mac)', off: 'apagado',
+        silent: 'silencio (el Mac no reproduce nada, o la grabación del audio del sistema no está permitida)',
+        segments: 'Grabaciones por segmento', no_segments: 'Aún no hay segmentos de voz grabados',
+        lane_pre: 'antes del búfer', lane_post: 'después del búfer', lane_loop: 'después del dispositivo', offline: 'Receptor desconectado' },
+  fr: { title: 'Moniteur du récepteur', buffer: 'Tampon', dropped: 'Rejetés', underruns: 'Sous-alimentations', received: 'Reçus', lost: 'Perdus',
+        return_path: 'Retour (son système de ce Mac)', off: 'désactivé',
+        silent: "silence (le Mac ne joue rien, ou l'enregistrement du son système n'est pas autorisé)",
+        segments: 'Enregistrements par segment', no_segments: 'Aucun segment de parole enregistré pour le moment',
+        lane_pre: 'avant le tampon', lane_post: 'après le tampon', lane_loop: 'après le périphérique', offline: 'Récepteur hors ligne' },
+  zh: { title: '接收监控', buffer: '缓冲', dropped: '丢弃', underruns: '欠载', received: '收包', lost: '丢包',
+        return_path: '回程（这台 Mac 的系统声音）', off: '关',
+        silent: '无声（Mac 没在出声，或「系统声音录制」未授权）',
+        segments: '分段录音', no_segments: '还没有录到语音段',
+        lane_pre: 'ring 前', lane_post: 'ring 后', lane_loop: '设备后', offline: '接收端离线' },
+  de: { title: 'Empfänger-Monitor', buffer: 'Puffer', dropped: 'Verworfen', underruns: 'Unterläufe', received: 'Empfangen', lost: 'Verloren',
+        return_path: 'Rückweg (Systemton dieses Macs)', off: 'aus',
+        silent: 'stumm (der Mac gibt nichts wieder, oder die Systemton-Aufnahme ist nicht erlaubt)',
+        segments: 'Segmentaufnahmen', no_segments: 'Noch keine Sprachsegmente aufgenommen',
+        lane_pre: 'vor dem Puffer', lane_post: 'nach dem Puffer', lane_loop: 'nach dem Gerät', offline: 'Empfänger offline' },
+  it: { title: 'Monitor del ricevitore', buffer: 'Buffer', dropped: 'Scartati', underruns: 'Sottoalimentazioni', received: 'Ricevuti', lost: 'Persi',
+        return_path: 'Ritorno (audio di sistema di questo Mac)', off: 'spento',
+        silent: "silenzio (il Mac non riproduce nulla, o la registrazione dell'audio di sistema non è consentita)",
+        segments: 'Registrazioni per segmento', no_segments: 'Nessun segmento vocale registrato finora',
+        lane_pre: 'prima del buffer', lane_post: 'dopo il buffer', lane_loop: 'dopo il dispositivo', offline: 'Ricevitore offline' },
+  hi: { title: 'रिसीवर मॉनिटर', buffer: 'बफ़र', dropped: 'छोड़े गए', underruns: 'अंडररन', received: 'प्राप्त', lost: 'खोए',
+        return_path: 'रिटर्न पाथ (इस Mac की सिस्टम आवाज़)', off: 'बंद',
+        silent: 'खामोश (Mac कुछ नहीं बजा रहा, या सिस्टम ऑडियो रिकॉर्डिंग की अनुमति नहीं है)',
+        segments: 'सेगमेंट रिकॉर्डिंग', no_segments: 'अभी तक कोई बोलने का सेगमेंट रिकॉर्ड नहीं हुआ',
+        lane_pre: 'बफ़र से पहले', lane_post: 'बफ़र के बाद', lane_loop: 'डिवाइस के बाद', offline: 'रिसीवर ऑफ़लाइन' },
+};
+function pickLang() {
+  const forced = new URLSearchParams(location.search).get('lang');
+  const wanted = forced ? [forced] : (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || 'en']);
+  for (const w of wanted) {
+    const primary = String(w).toLowerCase().split(/[-_]/)[0];
+    if (STRINGS[primary]) return primary;
+  }
+  return 'en';
+}
+const LANG = pickLang();
+document.documentElement.lang = LANG;
+const t = key => (STRINGS[LANG] && STRINGS[LANG][key]) || STRINGS.en[key] || key;
+document.title = t('title');
+for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
+
+// Most receiver failures (process not running, LAN down) make fetch throw rather than return a non-200,
+// so both cases collapse into "offline"; the user doesn't need to tell them apart.
 async function pollStatus() {
   try {
     const res = await fetch('/api/status');
@@ -121,7 +182,7 @@ function renderStatus(s) {
   $('state').className = connected ? 'ok' : 'warn';
   $('path').textContent = s.path || '—';
 
-  // dBFS 是负数，-60 视为静音、0 视为削波，线性映射成宽度。
+  // dBFS is negative: treat -60 as silence and 0 as clipping, mapped linearly to width.
   const db = typeof s.levelDb === 'number' ? s.levelDb : -60;
   $('level').style.width = Math.max(0, Math.min(100, (db + 60) / 60 * 100)) + '%';
 
@@ -130,46 +191,62 @@ function renderStatus(s) {
   $('starved').textContent = s.starved ?? '—';
   $('received').textContent = s.received ?? '—';
   $('lost').textContent = s.lost ?? '—';
+
+  // Return-path level. Without tap permission it is stuck at -120, indistinguishable from "the Mac just isn't
+  // playing anything", so spell out both possibilities rather than leave the user guessing at a silent bar.
+  const spk = s.speaker || {};
+  if (!spk.on) {
+    $('speaker').textContent = t('off');
+    $('spkLevel').style.width = '0';
+  } else {
+    const sdb = typeof spk.levelDb === 'number' ? spk.levelDb : -120;
+    const where = spk.output ? spk.output + ' · ' : '';
+    $('speaker').textContent = where + (sdb <= -119
+      ? t('silent')
+      : Math.round(sdb) + ' dBFS');
+    $('spkLevel').style.width = Math.max(0, Math.min(100, (sdb + 60) / 60 * 100)) + '%';
+  }
 }
 
 function renderOffline() {
-  $('state').textContent = '接收端离线';
+  $('state').textContent = t('offline');
   $('state').className = 'err';
   $('path').textContent = '—';
   $('level').style.width = '0';
+  $('spkLevel').style.width = '0';
   $('buffered').textContent = $('dropped').textContent = $('starved').textContent =
-    $('received').textContent = $('lost').textContent = '—';
+    $('received').textContent = $('lost').textContent = $('speaker').textContent = '—';
 }
 
 pollStatus();
 setInterval(pollStatus, 1000);
 
-// 分段列表接口已按新→旧排好序，这里只负责渲染。
-// 拿不到时保留原样就行，顶部状态已经在提示离线了，不用重复报错。
+// The segments API already returns newest first; this only renders.
+// On failure keep what we have: the status at the top already says offline, no need to report it twice.
 async function pollSegments() {
   try {
     const res = await fetch('/api/segments');
     if (!res.ok) throw new Error(String(res.status));
     renderSegments(await res.json());
-  } catch { /* 保留上一次的列表 */ }
+  } catch { /* keep the previous list */ }
 }
 
-// 各路按静音独立分段，同一句话在各路的开始时刻只差缓冲深度那点时间。
-// LANES 描述链路上的采样点，顺序就是音频流经的顺序。
+// Each lane segments on silence independently; the same utterance starts in every lane within about the buffer depth.
+// LANES lists the tap points along the pipeline, in the order the audio flows through them.
 const LANES = [
-  { key: 'pre',  label: 'ring 前',      prefix: '/api/segments/' },
-  { key: 'post', label: 'ring 后',      prefix: '/api/segments/post/' },
-  { key: 'loop', label: 'BlackHole 后', prefix: '/api/segments/loop/' },
+  { key: 'pre',  label: 'lane_pre',  prefix: '/api/segments/' },
+  { key: 'post', label: 'lane_post', prefix: '/api/segments/post/' },
+  { key: 'loop', label: 'lane_loop', prefix: '/api/segments/loop/' },
 ];
 
 function renderSegments(data) {
   const box = $('segments');
   if (LANES.every(l => !(data[l.key] || []).length)) {
-    box.innerHTML = '<div class="empty">还没有录到语音段</div>';
+    box.innerHTML = `<div class="empty">${t('no_segments')}</div>`;
     return;
   }
 
-  // 以时间为轴配对：把所有路的段扔进行列表，2 秒内的归为同一句。
+  // Pair by time: drop every lane's segments into a row list; those within 2 s count as the same utterance.
   const rows = [];
   for (const lane of LANES) {
     for (const seg of data[lane.key] || []) {
@@ -182,9 +259,9 @@ function renderSegments(data) {
   rows.sort((a, b) => b.t - a.t);
 
   const player = (seg, lane) => seg ? `
-      <div class="lane"><span class="lane-label">${lane.label}</span>
+      <div class="lane"><span class="lane-label">${t(lane.label)}</span>
       <audio controls preload="none" src="${lane.prefix}${encodeURIComponent(seg.name)}"></audio></div>`
-    : `<div class="lane"><span class="lane-label">${lane.label}</span><span class="empty">—</span></div>`;
+    : `<div class="lane"><span class="lane-label">${t(lane.label)}</span><span class="empty">—</span></div>`;
 
   box.innerHTML = rows.map(row => {
     const m = LANES.map(l => row[l.key]).find(Boolean);

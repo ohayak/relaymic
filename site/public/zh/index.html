@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RelayMic — 给你远程连的那台 Mac 一个真麦克风</title>
-<meta name="description" content="开源工具：远程桌面能把画面、键盘、鼠标送过去，唯独送不了你的声音。RelayMic 把任意设备浏览器里的麦克风，变成远程 Mac 上的系统输入设备。向日葵、ToDesk、TeamViewer、AnyDesk 都能并行用。">
+<title>Remote Visio — 给你远程连的那台 Mac 一个真麦克风</title>
+<meta name="description" content="开源工具：远程桌面能把画面、键盘、鼠标送过去，唯独送不了你的声音。Remote Visio 把任意设备浏览器里的麦克风，变成远程 Mac 上的系统输入设备。向日葵、ToDesk、TeamViewer、AnyDesk 都能并行用。">
 <link rel="canonical" href="https://relaymic.com/zh/">
 <link rel="alternate" hreflang="en" href="https://relaymic.com/">
 <link rel="alternate" hreflang="es" href="https://relaymic.com/es/">
@@ -15,12 +15,14 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://relaymic.com/zh/">
 <meta property="og:locale" content="zh_CN">
-<meta property="og:title" content="RelayMic — 给你远程连的那台 Mac 一个真麦克风">
+<meta property="og:title" content="Remote Visio — 给你远程连的那台 Mac 一个真麦克风">
 <meta property="og:description" content="对着手边任何一台设备的浏览器说话，你远程连的那台 Mac 把它当成系统麦克风。开源，AGPL-3.0。">
 <meta property="og:image" content="https://relaymic.com/assets/og.png">
 <meta name="twitter:card" content="summary_large_image">
 
-<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="/assets/favicon-96.png" sizes="96x96" type="image/png">
+<link rel="apple-touch-icon" href="/assets/favicon-96.png">
 <link rel="preload" href="/assets/fonts/archivo-var.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/site.css">
 
@@ -28,9 +30,9 @@
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  "name": "RelayMic",
+  "name": "Remote Visio",
   "applicationCategory": "UtilitiesApplication",
-  "operatingSystem": "macOS 12+",
+  "operatingSystem": "macOS 14.2+",
   "description": "把任意设备浏览器里的麦克风，变成远程 Mac 上的系统输入设备，与所使用的远程桌面软件无关。",
   "license": "https://www.gnu.org/licenses/agpl-3.0.html",
   "isAccessibleForFree": true
@@ -44,8 +46,8 @@
 <header class="nav">
   <div class="wrap nav-in">
     <a class="brand" href="/zh/">
-      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-      RelayMic
+      <img class="brand-mark" src="/assets/brand.png" alt="" width="22" height="22">
+      Remote Visio
     </a>
     <nav class="nav-links">
       <a href="#how">怎么用</a>
@@ -63,7 +65,7 @@
   <p class="eyebrow">给远程 Mac 补一个麦克风</p>
   <h1>对着这台说话，<br class="brk"><span class="amber">那台 Mac 听得见。</span></h1>
   <p class="lede">
-    远程桌面把你的画面、键盘、鼠标都送过去了，唯独送不了你的声音。RelayMic 送 ——
+    远程桌面把你的画面、键盘、鼠标都送过去了，唯独送不了你的声音。Remote Visio 送 ——
     而且是作为那台 Mac 上的一个真实系统麦克风，所以语音输入、飞书、Zoom、剪辑软件在输入设备列表里直接就能看到它。
   </p>
 
@@ -72,7 +74,7 @@
     <a class="btn" href="https://github.com/hueshu/relaymic/blob/main/SETUP.md">怎么安装</a>
   </div>
 
-  <p class="hero-meta">被控端 macOS 12+ &middot; 发送端任意浏览器 &middot; AGPL-3.0 开源，永久免费</p>
+  <p class="hero-meta">被控端 macOS 14.2+ &middot; 发送端任意浏览器 &middot; AGPL-3.0 开源，永久免费</p>
 </section>
 
 <!-- ── 规格条 ───────────────────────────────────────── -->
@@ -117,7 +119,7 @@
           <div class="devices">
             <div class="device"><span class="tick"></span>MacBook Pro 麦克风</div>
             <div class="device is-on">
-              <span class="tick">▸</span>BlackHole 2ch
+              <span class="tick">▸</span>Remote Visio
               <span class="mini" id="mini" aria-hidden="true"></span>
             </div>
             <div class="device"><span class="tick"></span>聚集设备</div>
@@ -159,13 +161,13 @@
         <tr><th scope="row">RustDesk</th><td class="yes">可以</td><td class="col-mic no">不行</td></tr>
         <tr><th scope="row">macOS 屏幕共享</th><td class="yes">可以</td><td class="col-mic no">不行</td></tr>
         <tr><th scope="row">微软远程桌面 <em>（且被控端是 Windows）</em></th><td class="yes">可以</td><td class="col-mic yes">可以 —— 系统自带，但只到 Windows 为止</td></tr>
-        <tr class="is-us"><th scope="row">RelayMic</th><td>这块交给你的远程工具</td><td class="col-mic yes">可以 —— 作为系统输入设备</td></tr>
+        <tr class="is-us"><th scope="row">Remote Visio</th><td>这块交给你的远程工具</td><td class="col-mic yes">可以 —— 作为系统输入设备</td></tr>
       </tbody>
     </table>
 
     <p class="footnote">
       规律很简单：<strong>被控端是 Windows，麦克风大多能传；被控端是 Mac，一个都传不了。</strong>
-      RelayMic 不替代你的远程工具 —— 它在旁边单独跑，那些工具继续管画面和键鼠，不知道也不需要知道它的存在。
+      Remote Visio 不替代你的远程工具 —— 它在旁边单独跑，那些工具继续管画面和键鼠，不知道也不需要知道它的存在。
     </p>
   </div>
 </section>
@@ -181,7 +183,7 @@
         <span class="step-n">01</span>
         <h3>把 SETUP.md 交给 AI</h3>
         <p>
-          Claude Code、Codex、Cursor 都行。对它说「照着 SETUP.md 把 RelayMic 装好，装完教我怎么用」。那份文档就是按 AI 能直接执行写的：每步带验证方法，出错有排查表。你不用自己敲命令。
+          Claude Code、Codex、Cursor 都行。对它说「照着 SETUP.md 把 Remote Visio 装好，装完教我怎么用」。那份文档就是按 AI 能直接执行写的：每步带验证方法，出错有排查表。你不用自己敲命令。
         </p>
       </div>
       <div class="step">
@@ -195,7 +197,7 @@
         <span class="step-n">03</span>
         <h3>在 Mac 上把输入设备选成它</h3>
         <p>
-          飞书、Zoom、语音输入、剪辑软件 —— 在各自的音频设置里选 BlackHole 2ch。对那台 Mac 来说这就是个普通麦克风，所以任何软件都不需要知道 RelayMic 存在。用语音输入的话，把远程 Mac 的听写快捷键改成和本地不一样的，免得按一下两边一起触发。
+          飞书、Zoom、语音输入、剪辑软件 —— 在各自的音频设置里选 Remote Visio（Zoom：设置 → 音频 → 麦克风 → Remote Visio；听写：系统设置 → 声音 → 输入 → Remote Visio）。对那台 Mac 来说这就是个普通麦克风，所以任何软件都不需要知道 Remote Visio 存在。用语音输入的话，把远程 Mac 的听写快捷键改成和本地不一样的，免得按一下两边一起触发。
         </p>
       </div>
     </div>
@@ -251,7 +253,7 @@
       <details>
         <summary>说实话，它有多糙？</summary>
         <p>
-          是作者自用的工具开源出来的，不是打磨过的成品。命令行启动，没有图形界面，没有安装包，日志和界面文案目前是中文，而且<strong>需要先用 Tailscale
+          是作者自用的工具开源出来的，不是打磨过的成品。菜单栏 App 加一个需要自己从源码构建的安装包（用你自己的 Developer ID 签名并公证），界面支持七种语言，日志和文档是英文，而且<strong>需要先用 Tailscale
           之类的方式把两台设备组到一个虚拟内网里</strong>。成熟的是音频链路本身 ——
           三台 Mac 天天在用。
         </p>
@@ -292,16 +294,18 @@
       <details>
         <summary>装的那个虚拟音频设备是什么？</summary>
         <p>
-          BlackHole，一个 MIT 开源的 macOS 音频驱动。RelayMic 引导你用 Homebrew
-          装它的官方包，不捆绑分发，卸载也干净。正是它让 Mac 上任何软件都能把
-          RelayMic 当成一个普通输入设备。
+          Remote Visio 自带的 Core Audio HAL 插件，源码在仓库的 driver/RemoteVisio.c，随项目一起以 AGPL-3.0 开源。在仓库目录里运行
+          <code>make install-driver</code>，它会用 Xcode Command Line Tools 里的 clang 编译（不需要 Xcode，也不需要 Homebrew 包），装到
+          /Library/Audio/Plug-Ins/HAL/RemoteVisio.driver（要输一次管理员密码），然后重启 coreaudiod（系统声音会停顿大约一秒）。装完后
+          <code>system_profiler SPAudioDataType | grep Remote Visio</code> 应该列出「Remote Visio」；看不到的话，<code>make install-driver</code> 其实已经打印了 codesign 和 coreaudiod 的诊断信息，先看那些，再试 <code>sudo killall coreaudiod</code>，或者重启（注销重登不会重启 coreaudiod）。它在 Mac 上显示为一个名叫「Remote Visio」的输入设备，故意做成不能被选为 Mac 的声音输出，所以装它永远不会劫持 Mac 的扬声器。卸载运行
+          <code>make uninstall-driver</code>，干净。需要 macOS 14.2 或更新。老版本用的 BlackHole 现在完全不需要了，可以用 <code>brew uninstall --cask blackhole-2ch</code> 删掉，留着也不影响。
         </p>
       </details>
       <details>
         <summary>iPhone 和 Mac 就在同一个屋里，也要用它吗？</summary>
         <p>
           不用。苹果的「连续互通麦克风」免费就能让旁边的 iPhone 当 Mac 的麦克风。
-          RelayMic 解决的是距离问题：不同楼、不同城市、不同国家。
+          Remote Visio 解决的是距离问题：不同楼、不同城市、不同国家。
         </p>
       </details>
       <details>
@@ -331,7 +335,7 @@
 </main>
 
 <footer class="wrap foot">
-  <span>&copy; 2026 RelayMic</span>
+  <span>&copy; 2026 Remote Visio</span>
   <a href="/zh/privacy">隐私</a>
   <a href="/zh/terms">条款</a>
   <a href="https://github.com/hueshu/relaymic">GitHub</a>

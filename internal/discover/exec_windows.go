@@ -7,10 +7,10 @@ import (
 	"syscall"
 )
 
-// hideWindow 阻止子进程弹出控制台窗口。
-// GUI 程序（-H windowsgui）里 exec 命令行工具，Windows 默认会给子进程
-// 开一个可见的 cmd 窗 —— 自动发现每 30 秒跑一次 tailscale，
-// 用户看到的就是屏幕每半分钟闪一个黑框。
+// hideWindow keeps the child process from popping up a console window.
+// When a GUI program (-H windowsgui) execs a command-line tool, Windows opens
+// a visible cmd window for it by default; auto-discovery runs tailscale every
+// 30s, so the user would see a black box flash every half minute.
 func hideWindow(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		HideWindow:    true,

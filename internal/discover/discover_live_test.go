@@ -2,10 +2,10 @@ package discover
 
 import "testing"
 
-// 真实环境探针：手动跑 go test -run TestLiveDiscover -v 用。
+// Live-environment probe: run manually with go test -run TestLiveDiscover -v.
 func TestLiveDiscover(t *testing.T) {
 	if testing.Short() {
-		t.Skip("live 探针")
+		t.Skip("live probe")
 	}
 	peers, err := tailnetPeers()
 	t.Logf("peers: %v err: %v", peers, err)
@@ -15,7 +15,7 @@ func TestLiveDiscover(t *testing.T) {
 
 func TestLiveSelfName(t *testing.T) {
 	if testing.Short() {
-		t.Skip("live 探针")
+		t.Skip("live probe")
 	}
 	t.Logf("DNS: %q  CLI: %q", selfNameFromDNS(), selfNameFromCLI())
 }

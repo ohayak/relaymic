@@ -12,89 +12,97 @@ import (
 	"time"
 )
 
-// segNameLayout 是段文件名里的时间格式。选它是因为字典序即时间序：
-// 在目录里 ls 一下就是一条时间线，不必额外读文件属性。
+// segNameLayout is the time format in segment file names. Chosen because
+// lexical order equals time order: an ls of the directory is a timeline,
+// with no file attributes to read.
 const segNameLayout = "20060102-150405"
 
-// SegmentInfo 描述一个已经封好的语音段。
+// SegmentInfo describes one finished speech segment.
 type SegmentInfo struct {
-	Name   string    // 文件名，不含目录
-	Time   time.Time // 段开始时刻
-	DurMS  int       // 段时长（含预滚）
-	PeakDB float64   // 段内峰值电平（dBFS）
+	Name   string    // file name without directory
+	Time   time.Time // segment start time
+	DurMS  int       // segment length (including pre-roll)
+	PeakDB float64   // peak level within the segment (dBFS)
 }
 
-// SegmentRecorder 把持续送入的 PCM 按语音段切成一个个 WAV 文件。
+// SegmentRecorder splits continuously fed PCM into one WAV file per speech segment.
 //
-// -record 录出来的是一整个大文件，而现场提的问题永远是"刚才那句为什么没识别出来"——
-// 回答它需要按句翻，不是拖进度条。所以这里以静音为界切段：一句一个文件，
-// 文件名就是时间，出了问题直接点最近那个听。
+// -record produces one big file, but the question from the field is always
+// "why wasn't that last sentence recognized", which is answered by flipping
+// through sentences, not by scrubbing a timeline. So segments are cut at
+// silence: one sentence per file, named by time; when something goes wrong,
+// play the latest one.
 //
-// 判据是帧峰值，喂进来的必须是增益之后的音频：浏览器实测发来的人声峰值只有
-// -56dBFS 左右（见 AGC 的注释），拿 -36dBFS 的门去卡原始样本，一句话都录不到。
+// The criterion is the frame peak, and the input must be post-gain audio:
+// speech from the browser peaks at only about -56dBFS (see the AGC comments),
+// so a -36dBFS gate on raw samples would never record a single sentence.
 type SegmentRecorder struct {
 	dir        string
 	sampleRate int
 	channels   int
 
-	// 分段参数。跑真实音频用构造函数里的默认值，测试为了秒级跑完会调小。
-	threshold   int   // 帧峰值超过它算有声
-	hangoverMS  int   // 段尾连续静音这么久就封段
-	maxSegMS    int   // 单段上限，免得持续噪声录出一个无限大的文件
-	prerollMS   int   // 开段时回补多长的预滚
-	minVoicedMS int   // 有效语音不足这么长的段直接扔掉
-	maxSegments int   // 目录里最多留多少段
-	maxBytes    int64 // 目录总体积上限。段数限制挡不住长段：单段可达
-	// 5 分钟 ≈ 115MB，50 段最坏十几 GB。按字节再兜一道底
+	// Segmentation parameters. Real audio uses the constructor defaults; tests shrink them to finish in seconds.
+	threshold   int   // frame peak above this counts as voiced
+	hangoverMS  int   // close the segment after this much trailing silence
+	maxSegMS    int   // per-segment cap, so steady noise cannot record an endless file
+	prerollMS   int   // how much pre-roll to back-fill when a segment opens
+	minVoicedMS int   // segments with less voiced audio than this are discarded
+	maxSegments int   // how many segments to keep in the directory
+	maxBytes    int64 // total directory size cap. The segment count cannot bound long segments: one can reach
+	// 5 minutes ≈ 115MB, 50 of them over ten GB in the worst case. Bytes are a second backstop.
 
 	mu    sync.Mutex
-	index []SegmentInfo // 已封的段，旧→新
+	index []SegmentInfo // finished segments, oldest to newest
 
-	// 预滚环形缓冲：始终保存最近 prerollMS 的样本。
+	// Pre-roll ring buffer: always holds the most recent prerollMS of samples.
 	pre     []int16
 	preHead int
 	preSize int
 
-	// 当前段的状态
+	// State of the current segment.
 	w       *WAVWriter
 	name    string
 	start   time.Time
-	written int // 已写样本数（含预滚）
-	voiced  int // 其中判为有声的样本数
+	written int // samples written (including pre-roll)
+	voiced  int // of which judged voiced
 	peak    int
-	silent  int // 段尾连续静音的样本数
+	silent  int // trailing silent samples
 
-	// 同一秒内开出的上一个段，用于给文件名续序号。
+	// The previous segment opened within the same second, to continue the file-name sequence number.
 	lastBase string
 	lastSeq  int
 }
 
-// NewSegmentRecorder 在 dir 下开始按段录音，目录不存在就建。
-// 目录里已有的 .wav 会被收进索引，上一次运行留下的段照样能回听。
+// NewSegmentRecorder starts segment recording under dir, creating it if needed.
+// Existing .wav files in the directory are indexed, so segments from the
+// previous run remain playable.
 func NewSegmentRecorder(dir string, sampleRate, channels int) (*SegmentRecorder, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, fmt.Errorf("创建分段录音目录 %q: %w", dir, err)
+		return nil, fmt.Errorf("create segment recording directory %q: %w", dir, err)
 	}
 	r := &SegmentRecorder{
 		dir:        dir,
 		sampleRate: sampleRate,
 		channels:   channels,
 		threshold:  500,  // ≈ -36dBFS
-		hangoverMS: 2000, // 说话中的停顿常有一秒多，短了会把一句话切成几截
+		hangoverMS: 2000, // pauses within speech often exceed a second; shorter would split one sentence into pieces
 		maxSegMS:   5 * 60 * 1000,
-		// 300ms 是"开口之前"的余量。判为有声时字头已经过去了几十毫秒，
-		// 不回补就会录成没有声母的半个字，回听时听不出问题出在哪。
+		// 300ms of "before the mouth opened" margin. By the time a frame is
+		// judged voiced the onset is tens of ms gone; without back-fill the
+		// recording is half a word with no initial consonant, and the playback
+		// tells you nothing about what went wrong.
 		prerollMS:   300,
-		minVoicedMS: 300, // 咳嗽、敲键盘都能越过阈值，但都不成句
+		minVoicedMS: 300, // a cough or a keystroke crosses the threshold, but neither is a sentence
 		maxSegments: 50,
-		maxBytes:    300 << 20, // 300MB/路，三路共约 1GB 封顶
+		maxBytes:    300 << 20, // 300MB per path, roughly 1GB cap across three paths
 	}
 	r.index = r.scan()
 	return r, nil
 }
 
-// Write 收一帧 PCM。由解码协程反复调用：绝大多数帧只是算个峰值再落盘，
-// 建文件、扫目录、删旧段都只发生在段边界上。
+// Write receives one frame of PCM. Called repeatedly by the decoder goroutine:
+// most frames only compute a peak and hit disk; creating files, scanning the
+// directory and pruning old segments happen only at segment boundaries.
 func (r *SegmentRecorder) Write(pcm []int16) {
 	if len(pcm) == 0 {
 		return
@@ -121,7 +129,7 @@ func (r *SegmentRecorder) Write(pcm []int16) {
 			return
 		}
 		if err := r.open(); err != nil {
-			// 这是诊断功能，坏了不该拖垮通话：丢掉这一帧继续跑。
+			// This is a diagnostic; failing must not take down the call: drop this frame and carry on.
 			r.pushPreroll(pcm)
 			return
 		}
@@ -145,7 +153,7 @@ func (r *SegmentRecorder) Write(pcm []int16) {
 	}
 }
 
-// List 返回已封好的段，新→旧：出问题时想听的永远是最近那句。
+// List returns finished segments, newest first: when something goes wrong, the one you want is the latest.
 func (r *SegmentRecorder) List() []SegmentInfo {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -158,14 +166,14 @@ func (r *SegmentRecorder) List() []SegmentInfo {
 
 func (r *SegmentRecorder) Dir() string { return r.dir }
 
-// Close 封掉正在录的那一段。太短的照样会被丢弃。
+// Close finishes the segment being recorded. Too-short ones are still discarded.
 func (r *SegmentRecorder) Close() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.finish()
 }
 
-// open 开一个新段：先把超量的旧段裁掉，再把预滚灌进去。
+// open starts a new segment: prune excess old segments first, then back-fill the pre-roll.
 func (r *SegmentRecorder) open() error {
 	r.prune()
 	now := time.Now()
@@ -182,7 +190,7 @@ func (r *SegmentRecorder) open() error {
 	return nil
 }
 
-// finish 封掉当前段：太短的直接删，剩下的进索引。
+// finish closes the current segment: too-short ones are deleted, the rest go into the index.
 func (r *SegmentRecorder) finish() {
 	if r.w == nil {
 		return
@@ -190,8 +198,8 @@ func (r *SegmentRecorder) finish() {
 	r.w.Close()
 	r.w = nil
 
-	// 零碎声音留着，列表会被几十条一秒不到的记录刷屏，
-	// 真正想回听的那句反而翻不着。
+	// Keeping fragments would flood the list with dozens of sub-second entries,
+	// burying the sentence you actually want to replay.
 	if r.voiced < r.samples(r.minVoicedMS) {
 		os.Remove(filepath.Join(r.dir, r.name))
 		return
@@ -204,14 +212,16 @@ func (r *SegmentRecorder) finish() {
 	})
 }
 
-// create 打开段文件。同一秒里封两段时基名会撞车，加序号避让——
-// 撞上的后果是 os.Create 把刚录好的那一段截断成空文件。
+// create opens the segment file. Two segments closed in the same second share
+// a base name, so a sequence number is added; a collision would have os.Create
+// truncate the segment just recorded into an empty file.
 func (r *SegmentRecorder) create(now time.Time) (string, *WAVWriter, error) {
 	base := now.Format(segNameLayout)
 	seq := 0
 	if base == r.lastBase {
-		// 序号只能往上走。回收已被裁掉的小序号，会让新段在时间序里
-		// 排到最前面，紧接着又被当成最旧的删掉。
+		// The sequence number only goes up. Reusing a small number that was
+		// pruned would sort the new segment to the front of the timeline,
+		// where it is promptly deleted as the oldest.
 		seq = r.lastSeq + 1
 	}
 	for ; ; seq++ {
@@ -232,8 +242,9 @@ func (r *SegmentRecorder) create(now time.Time) (string, *WAVWriter, error) {
 	}
 }
 
-// prune 删到"再开一段也不超过 maxSegments，且总体积不超 maxBytes"为止。
-// 以目录为准而不是内存索引：里面可能还压着上一次运行留下的文件。
+// prune deletes until one more segment fits under maxSegments and the total
+// size is under maxBytes. The directory, not the in-memory index, is the
+// source of truth: files from the previous run may still be there.
 func (r *SegmentRecorder) prune() {
 	names := r.names()
 	var total int64
@@ -265,7 +276,7 @@ func (r *SegmentRecorder) dropIndex(name string) {
 	}
 }
 
-// names 列出目录里的段文件，旧→新。
+// names lists the segment files in the directory, oldest to newest.
 func (r *SegmentRecorder) names() []string {
 	ents, err := os.ReadDir(r.dir)
 	if err != nil {
@@ -281,8 +292,9 @@ func (r *SegmentRecorder) names() []string {
 	return out
 }
 
-// scan 用目录里已有的文件重建索引。时长按文件大小折算，
-// 峰值当时没记下来，只能留 0——这两个字段是给人扫一眼用的，不是判据。
+// scan rebuilds the index from files already in the directory. Length is
+// derived from file size; the peak was never stored, so it stays 0. Both
+// fields are for a human glance, not for decisions.
 func (r *SegmentRecorder) scan() []SegmentInfo {
 	var out []SegmentInfo
 	for _, name := range r.names() {
@@ -299,9 +311,10 @@ func (r *SegmentRecorder) scan() []SegmentInfo {
 	return out
 }
 
-// pushPreroll 把 pcm 存进预滚环，只留最近 prerollMS。
+// pushPreroll stores pcm into the pre-roll ring, keeping only the last prerollMS.
 func (r *SegmentRecorder) pushPreroll(pcm []int16) {
-	// 参数被调过（测试）就重开一个环，省得构造和使用两处各记一份长度。
+	// If the parameter was changed (tests), start a new ring rather than
+	// tracking the length in both the constructor and here.
 	if n := r.samples(r.prerollMS); len(r.pre) != n {
 		r.pre = make([]int16, n)
 		r.preHead, r.preSize = 0, 0
@@ -319,7 +332,7 @@ func (r *SegmentRecorder) pushPreroll(pcm []int16) {
 	}
 }
 
-// drainPreroll 按时间顺序取出预滚并清空。
+// drainPreroll returns the pre-roll in time order and clears it.
 func (r *SegmentRecorder) drainPreroll() []int16 {
 	out := make([]int16, r.preSize)
 	for i := range out {
@@ -329,7 +342,7 @@ func (r *SegmentRecorder) drainPreroll() []int16 {
 	return out
 }
 
-// samples 把毫秒换成交错样本数。
+// samples converts milliseconds to an interleaved sample count.
 func (r *SegmentRecorder) samples(ms int) int {
 	return r.sampleRate * r.channels * ms / 1000
 }
@@ -341,7 +354,7 @@ func (r *SegmentRecorder) durMS(samples int) int {
 	return samples * 1000 / (r.sampleRate * r.channels)
 }
 
-// parseSegName 从 "20060102-150405[-N].wav" 里取出时刻和同秒内的序号。
+// parseSegName extracts the time and the same-second sequence number from "20060102-150405[-N].wav".
 func parseSegName(name string) (time.Time, int, bool) {
 	base := strings.TrimSuffix(name, ".wav")
 	if len(base) < len(segNameLayout) {
@@ -363,8 +376,9 @@ func parseSegName(name string) (time.Time, int, bool) {
 	return t, seq, true
 }
 
-// segLess 按时间序比较两个段文件名。不能直接比字符串：'-' 小于 '.'，
-// 同一秒里带序号的会排到不带序号的前面。
+// segLess orders two segment file names by time. A plain string compare is
+// wrong: '-' sorts before '.', so within one second the numbered ones would
+// come before the unnumbered one.
 func segLess(a, b string) bool {
 	ta, sa, oka := parseSegName(a)
 	tb, sb, okb := parseSegName(b)
@@ -377,7 +391,7 @@ func segLess(a, b string) bool {
 	return ta.Before(tb)
 }
 
-// dbFS 把 int16 峰值换成 dBFS。全零的段给个地板值，免得 -Inf 打进日志。
+// dbFS converts an int16 peak to dBFS. An all-zero segment gets a floor value, so -Inf never reaches the log.
 func dbFS(peak int) float64 {
 	if peak <= 0 {
 		return -100

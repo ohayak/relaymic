@@ -1,10 +1,12 @@
-// sender-gui 是原生发送端的图形界面：双击打开、选麦克风、点"开始"。
+// sender-gui is the native sender's graphical front end: double-click, pick a
+// microphone, press Start.
 //
-// 核心逻辑全在 internal/sender，这里只做三件事：
-// 把状态画出来、把选择存下来、把中文显示出来。
+// The core logic is all in internal/sender; this only does three things:
+// draw the status, remember the choices, and make Chinese text render.
 package main
 
 import (
+	_ "embed"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -18,13 +20,22 @@ import (
 	"github.com/hueshu/relaymic/internal/sender"
 )
 
-// config 是要记住的用户选择，存在用户配置目录下。
+// Window and taskbar icon (`make icons` derives it from icons/); the
+// .exe file icon is added by the build workflow from icons/RemoteVisio.ico.
+//
+//go:embed icon.png
+var iconPNG []byte
+
+// config is the user's remembered choices, stored under the user config directory.
 type config struct {
 	Target string `json:"target"`
 	Device string `json:"device"`
+	// Stored inverted: the zero value means "hear the return path", so old config
+	// files without this field default to on.
+	Mute bool `json:"mute"`
 }
 
-// shortHost 把 https://100.x.y.z:7420 缩成 100.x.y.z，状态行短一点。
+// shortHost shortens https://100.x.y.z:7420 to 100.x.y.z, to keep the status line short.
 func shortHost(target string) string {
 	t := strings.TrimPrefix(strings.TrimPrefix(target, "https://"), "http://")
 	if i := strings.Index(t, ":"); i > 0 {
@@ -38,7 +49,7 @@ func configPath() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(dir, "relaymic", "sender.json")
+	return filepath.Join(dir, "remotevisio", "sender.json")
 }
 
 func loadConfig() config {
@@ -65,16 +76,16 @@ func saveConfig(c config) {
 	_ = os.WriteFile(p, data, 0o644)
 }
 
-// useSystemCJKFont 让 Fyne 用系统自带的中文字体。
-// Fyne 内置字体不含中文，不设置的话界面全是豆腐块。
+// useSystemCJKFont makes Fyne use a Chinese font shipped with the system.
+// Fyne's bundled font has no Chinese glyphs; without this the UI is all tofu boxes.
 //
-// 只能用单 .ttf：FYNE_FONT 对 .ttc 字体集合直接报
-// "collections not allowed"，然后在渲染时空指针崩溃。
+// Only a single .ttf works: FYNE_FONT rejects .ttc collections with
+// "collections not allowed" and then crashes on a nil pointer while rendering.
 func useSystemCJKFont() {
 	candidates := []string{
-		`C:\Windows\Fonts\simhei.ttf`,                          // Windows 黑体，各版本都有
-		`C:\Windows\Fonts\Deng.ttf`,                            // 等线，Win10+
-		"/System/Library/Fonts/Supplemental/Arial Unicode.ttf", // macOS（开发测试用）
+		`C:\Windows\Fonts\simhei.ttf`,                          // SimHei, present on every Windows version
+		`C:\Windows\Fonts\Deng.ttf`,                            // DengXian, Win10+
+		"/System/Library/Fonts/Supplemental/Arial Unicode.ttf", // macOS (for development testing)
 	}
 	for _, p := range candidates {
 		if _, err := os.Stat(p); err == nil {
@@ -87,17 +98,19 @@ func useSystemCJKFont() {
 func main() {
 	useSystemCJKFont()
 
-	a := app.NewWithID("com.relaymic.sender")
-	w := a.NewWindow("远程麦克风")
+	a := app.NewWithID("com.remotevisio.sender")
+	a.SetIcon(fyne.NewStaticResource("icon.png", iconPNG))
+	w := a.NewWindow("Remote Visio")
 	w.Resize(fyne.NewSize(380, 300))
 
 	cfg := loadConfig()
 
-	// 默认自动发现 tailnet 里的所有接收端，界面上不需要填任何地址。
-	// 手动框只做补充（不在 tailnet 里的机器才需要）。
+	// By default every receiver in the tailnet is auto-discovered, so the UI needs
+	// no address at all. The manual box is only a supplement (for machines outside
+	// the tailnet).
 	targetEntry := widget.NewMultiLineEntry()
 	targetEntry.SetMinRowsVisible(2)
-	targetEntry.SetPlaceHolder("自动发现已开启，此处留空即可\n（可补充 tailnet 外的地址，每行一个）")
+	targetEntry.SetPlaceHolder("Auto-discovery is on; leave this empty\n(add addresses outside the tailnet here, one per line)")
 	targetEntry.SetText(cfg.Target)
 
 	mics, _ := sender.ListMics()
@@ -108,23 +121,27 @@ func main() {
 		micSelect.SetSelectedIndex(0)
 	}
 
-	status := widget.NewLabel("未连接（点开始后自动发现接收端）")
+	hearCheck := widget.NewCheck("Hear the remote Mac (headphones recommended)", nil)
+	hearCheck.SetChecked(!cfg.Mute)
+
+	status := widget.NewLabel("Not connected (press Start to auto-discover receivers)")
 	levelBar := widget.NewProgressBar()
 	levelBar.TextFormatter = func() string { return "" }
 
 	var eng *sender.Engine
 	var toggle *widget.Button
-	toggle = widget.NewButton("开始说话", func() {
+	toggle = widget.NewButton("Start talking", func() {
 		if eng != nil {
 			eng.Stop()
 			eng = nil
-			toggle.SetText("开始说话")
+			toggle.SetText("Start talking")
 			levelBar.SetValue(0)
 			return
 		}
 
 		cfg.Target = targetEntry.Text
 		cfg.Device = micSelect.Selected
+		cfg.Mute = !hearCheck.Checked
 		saveConfig(cfg)
 
 		targets := []string{}
@@ -133,13 +150,13 @@ func main() {
 				targets = append(targets, t)
 			}
 		}
-		e := sender.New(sender.Config{Targets: targets, Discover: true, Device: cfg.Device})
+		e := sender.New(sender.Config{Targets: targets, Discover: true, Device: cfg.Device, Speaker: !cfg.Mute})
 		states := map[string]string{}
 		order := []string{}
 		e.OnState = func(target, s string) {
 			fyne.Do(func() {
 				if _, seen := states[target]; !seen {
-					order = append(order, target) // 自动发现的目标按出现顺序排
+					order = append(order, target) // auto-discovered targets are listed in order of appearance
 				}
 				states[target] = s
 				lines := make([]string, 0, len(order))
@@ -150,7 +167,7 @@ func main() {
 			})
 		}
 		e.OnLevel = func(db float64) {
-			// -60dBFS 以下视为无声，0dBFS 满格
+			// below -60dBFS counts as silence, 0dBFS is full scale
 			v := (db + 60) / 60
 			if v < 0 {
 				v = 0
@@ -161,19 +178,20 @@ func main() {
 			fyne.Do(func() { levelBar.SetValue(v) })
 		}
 		if err := e.Start(); err != nil {
-			status.SetText("错误：" + err.Error())
+			status.SetText("Error: " + err.Error())
 			return
 		}
 		eng = e
-		toggle.SetText("停止")
+		toggle.SetText("Stop")
 	})
 	toggle.Importance = widget.HighImportance
 
 	w.SetContent(container.NewVBox(
 		widget.NewForm(
-			widget.NewFormItem("接收端", targetEntry),
-			widget.NewFormItem("麦克风", micSelect),
+			widget.NewFormItem("Receiver", targetEntry),
+			widget.NewFormItem("Microphone", micSelect),
 		),
+		hearCheck,
 		toggle,
 		levelBar,
 		status,

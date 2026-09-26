@@ -3,30 +3,32 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>RelayMic</string>
+    <string>RemoteVisio</string>
     <key>LSUIElement</key>
     <true/>
     <key>CFBundleIconFile</key>
     <string>favicon</string>
     <key>CFBundleIdentifier</key>
-    <string>com.relaymic.receiver</string>
+    <string>com.remotevisio.app</string>
     <key>CFBundleName</key>
-    <string>RelayMic</string>
+    <string>Remote Visio</string>
     <key>CFBundleDisplayName</key>
-    <string>RelayMic</string>
+    <string>Remote Visio</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>2.0</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>5</string>
     <key>LSMinimumSystemVersion</key>
-    <string>11.0</string>
+    <string>14.2</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>RelayMic relays audio and may need access to the microphone.</string>
+    <string>Remote Visio relays audio and may need access to the microphone.</string>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>RelayMic receives audio from other devices on your local network.</string>
+    <string>Remote Visio receives audio from other devices on your local network.</string>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>Remote Visio sends this Mac's system audio back to the device you are speaking from.</string>
 </dict>
 </plist>

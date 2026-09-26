@@ -1,9 +1,11 @@
-// sender 是原生发送端的命令行入口：把本机麦克风推给接收端。
+// sender is the command-line entry point of the native sender: it pushes the
+// local microphone to the receiver.
 //
-// 它取代浏览器网页的理由是控制权。浏览器那条路上，降噪、自动增益、
-// DTX 都攥在 Chrome 手里，出了问题只能靠 SDP 隔空遥控；这里编码器
-// 在自己手里，每个开关都是明拨的。核心逻辑在 internal/sender，
-// 与图形界面版（cmd/sender-gui）共用。
+// It exists alongside the browser page for the sake of control. On the browser
+// path noise suppression, auto gain and DTX are all in Chrome's hands, and when
+// something goes wrong the only lever is SDP at a distance; here the encoder is
+// ours and every switch is set explicitly. The core logic lives in
+// internal/sender, shared with the GUI version (cmd/sender-gui).
 package main
 
 import (
@@ -18,12 +20,13 @@ import (
 )
 
 func main() {
-	target := flag.String("target", "", "接收端地址，多个用逗号分隔；留空则纯靠自动发现")
-	discover := flag.Bool("discover", true, "自动发现 tailnet 内的接收端并加入广播")
-	deviceName := flag.String("device", "", "输入设备名（子串匹配），留空用系统默认麦克风")
-	bitrate := flag.Int("bitrate", 96000, "Opus 码率（bps）")
-	listDevices := flag.Bool("list", false, "列出输入设备后退出")
-	meter := flag.Bool("meter", false, "每秒打印一次采集电平")
+	target := flag.String("target", "", "receiver addresses, comma-separated; leave empty to rely on auto-discovery only")
+	discover := flag.Bool("discover", true, "auto-discover receivers on the tailnet and add them to the broadcast")
+	deviceName := flag.String("device", "", "input device name (substring match); empty = system default microphone")
+	bitrate := flag.Int("bitrate", 96000, "Opus bitrate (bps)")
+	listDevices := flag.Bool("list", false, "list input devices and exit")
+	meter := flag.Bool("meter", false, "print the capture level once a second")
+	speaker := flag.Bool("speaker", true, "receive the remote Mac's system audio and play it on the local default output (no echo cancellation; headphones recommended)")
 	flag.Parse()
 
 	log.SetFlags(log.Ltime)
@@ -40,7 +43,7 @@ func main() {
 	}
 
 	if *target == "" && !*discover {
-		die(fmt.Errorf("要么指定 -target，要么开着 -discover"))
+		die(fmt.Errorf("specify -target or keep -discover on"))
 	}
 
 	targets := []string{}
@@ -54,10 +57,11 @@ func main() {
 		Discover: *discover,
 		Device:   *deviceName,
 		Bitrate:  *bitrate,
+		Speaker:  *speaker,
 	})
 	eng.OnState = func(target, s string) { log.Println(target, s) }
 	if *meter {
-		eng.OnLevel = func(db float64) { log.Printf("电平 %6.1f dBFS", db) }
+		eng.OnLevel = func(db float64) { log.Printf("level %6.1f dBFS", db) }
 	}
 
 	if err := eng.Start(); err != nil {
@@ -71,6 +75,6 @@ func main() {
 }
 
 func die(err error) {
-	fmt.Fprintln(os.Stderr, "错误:", err)
+	fmt.Fprintln(os.Stderr, "error:", err)
 	os.Exit(1)
 }

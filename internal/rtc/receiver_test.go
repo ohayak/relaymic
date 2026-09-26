@@ -1,9 +1,11 @@
 package rtc
 
 import (
+	"math"
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pion/webrtc/v4"
 )
@@ -11,22 +13,22 @@ import (
 func TestIsCGNAT(t *testing.T) {
 	cases := map[string]bool{
 		"100.100.100.100": true,  // Tailscale
-		"100.64.0.0":      true,  // 段首
-		"100.127.255.255": true,  // 段尾
-		"100.63.255.255":  false, // 段外
-		"100.128.0.1":     false, // 段外
-		"192.168.31.82":   false, // 局域网
-		"8.8.8.8":         false, // 公网
-		// Tailscale 的 IPv6：漏掉这段的话 ICE 会从 v6 绕过去
+		"100.64.0.0":      true,  // range start
+		"100.127.255.255": true,  // range end
+		"100.63.255.255":  false, // outside range
+		"100.128.0.1":     false, // outside range
+		"192.168.31.82":   false, // LAN
+		"8.8.8.8":         false, // public
+		// Tailscale's IPv6: without this range ICE sneaks around over v6
 		"fd7a:115c:a1e0::bb38:735a": true,
 		"fd7a:115c:a1e0:ab12::1":    true,
-		"fd7b:115c:a1e0::1":         false, // 相邻前缀，不该误伤
-		"2001:4860:4860::8888":      false, // 公网 v6
-		"::1":                       false, // 环回
+		"fd7b:115c:a1e0::1":         false, // adjacent prefix, must not be caught
+		"2001:4860:4860::8888":      false, // public v6
+		"::1":                       false, // loopback
 	}
 	for ip, want := range cases {
 		if got := isCGNAT(net.ParseIP(ip)); got != want {
-			t.Errorf("isCGNAT(%s) = %v, 期望 %v", ip, got, want)
+			t.Errorf("isCGNAT(%s) = %v, want %v", ip, got, want)
 		}
 	}
 }
@@ -43,51 +45,135 @@ func TestStripCGNATCandidates(t *testing.T) {
 
 	out, dropped := stripCGNATCandidates(sdp)
 	if dropped != 2 {
-		t.Fatalf("剔除数 = %d, 期望 2（v4 和 v6 各一条）", dropped)
+		t.Fatalf("dropped = %d, want 2 (one v4 and one v6)", dropped)
 	}
 	if strings.Contains(out, "fd7a:115c:a1e0") {
-		t.Error("Tailscale 的 IPv6 候选没有被剔除")
+		t.Error("Tailscale IPv6 candidate was not stripped")
 	}
 	if strings.Contains(out, "100.100.100.100") {
-		t.Error("Tailscale 候选没有被剔除")
+		t.Error("Tailscale candidate was not stripped")
 	}
 	for _, keep := range []string{"192.168.31.82 51234", "203.0.113.7", "v=0", "a=mid:0"} {
 		if !strings.Contains(out, keep) {
-			t.Errorf("误删了应保留的内容: %s", keep)
+			t.Errorf("content that should have been kept was removed: %s", keep)
 		}
 	}
 }
 
-// TestAnswerRequestsFECAndDTX 锁住 answer 里的两个 Opus 开关。
+// TestAnswerRequestsFECAndDTX pins the two Opus switches in the answer.
 //
-// 这个测试的价值在于它验的是 answer 而不是 offer：fmtp 表达的是"接收方要求
-// 发送方怎么发"，浏览器照着 answer 里的这份去配它的编码器。发送端 offer 里
-// 写了什么都不算数 —— 下面造的 offer 就故意不带 usedtx，answer 里仍须有。
+// The value of this test is that it checks the answer, not the offer: fmtp
+// means "how the receiver asks the sender to send", and the browser configures
+// its encoder from the answer. Whatever the sender's offer says does not
+// count; the offer built below deliberately omits usedtx, and the answer must
+// still contain it.
 func TestAnswerRequestsFECAndDTX(t *testing.T) {
 	r := New(nil, nil)
-	r.SetICEServers(nil) // 不查 STUN，只收 host 候选：测试不该依赖外网
+	r.SetICEServers(nil) // no STUN, host candidates only: the test must not depend on the internet
 	defer r.Close()
 
-	answer, err := r.Answer(senderOffer(t))
+	pc := senderPeer(t, webrtc.RTPTransceiverDirectionSendonly)
+	defer pc.Close()
+	answer, err := r.Answer(*pc.LocalDescription(), false)
 	if err != nil {
-		t.Fatalf("协商失败: %v", err)
+		t.Fatalf("negotiation failed: %v", err)
 	}
 	for _, want := range []string{"useinbandfec=1", "usedtx=1"} {
 		if !strings.Contains(answer.SDP, want) {
-			t.Errorf("answer 缺少 %s，浏览器不会照做\n%s", want, answer.SDP)
+			t.Errorf("answer lacks %s, the browser will not honor it\n%s", want, answer.SDP)
 		}
 	}
 }
 
-// senderOffer 造一个只推音频的 offer，模仿浏览器那一端。
-func senderOffer(t *testing.T) webrtc.SessionDescription {
+// TestSendonlyOfferGetsNoSpeaker pins compatibility: older pages only send
+// (sendonly), so even with the return path enabled on the receiver the answer
+// must be a clean recvonly and negotiation must not fail.
+func TestSendonlyOfferGetsNoSpeaker(t *testing.T) {
+	r := New(nil, nil)
+	r.SetICEServers(nil)
+	defer r.Close()
+
+	pc := senderPeer(t, webrtc.RTPTransceiverDirectionSendonly)
+	defer pc.Close()
+	answer, err := r.Answer(*pc.LocalDescription(), true)
+	if err != nil {
+		t.Fatalf("negotiation failed: %v", err)
+	}
+	if !strings.Contains(answer.SDP, "a=recvonly") || strings.Contains(answer.SDP, "a=sendrecv") {
+		t.Errorf("answer to a sendonly offer should be recvonly\n%s", answer.SDP)
+	}
+	if r.speakerTrack() != nil {
+		t.Error("sender does not accept the return path; no return-path track should be attached")
+	}
+}
+
+// TestSpeakerReachesSender exercises the full return path: the sender's offer
+// is sendrecv, the answer carries the return-path track, and audio fed into
+// Speaker really comes out of the sender's OnTrack. Both ends live in this
+// process and use host candidates over loopback only.
+func TestSpeakerReachesSender(t *testing.T) {
+	r := New(nil, nil)
+	r.SetICEServers(nil)
+	defer r.Close()
+	spk, err := r.NewSpeaker(64000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer spk.Close()
+
+	pc := senderPeer(t, webrtc.RTPTransceiverDirectionSendrecv)
+	defer pc.Close()
+	got := make(chan struct{})
+	pc.OnTrack(func(track *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
+		if _, _, err := track.ReadRTP(); err == nil {
+			close(got)
+		}
+	})
+
+	answer, err := r.Answer(*pc.LocalDescription(), true)
+	if err != nil {
+		t.Fatalf("negotiation failed: %v", err)
+	}
+	if !strings.Contains(answer.SDP, "a=sendrecv") {
+		t.Fatalf("answer must be sendrecv to carry the return path\n%s", answer.SDP)
+	}
+	if err := pc.SetRemoteDescription(*answer); err != nil {
+		t.Fatalf("sender set remote description: %v", err)
+	}
+	if r.speakerTrack() == nil {
+		t.Fatal("no return-path track attached after negotiation")
+	}
+
+	// Keep feeding a sine tone until the sender receives its first RTP packet.
+	tone := make([]int16, speakerFrame)
+	for i := 0; i < speakerFrame/Channels; i++ {
+		v := int16(8000 * math.Sin(2*math.Pi*440*float64(i)/SampleRate))
+		tone[i*Channels], tone[i*Channels+1] = v, v
+	}
+	tick := time.NewTicker(speakerFrameMS * time.Millisecond)
+	defer tick.Stop()
+	deadline := time.After(15 * time.Second)
+	for {
+		select {
+		case <-got:
+			return
+		case <-deadline:
+			t.Fatalf("sender received no return-path packet within 15s (connection state %s)", pc.ConnectionState())
+		case <-tick.C:
+			spk.Feed(tone)
+		}
+	}
+}
+
+// senderPeer builds an audio-pushing sender that mimics the browser side; direction decides whether it accepts the return path.
+// The returned PeerConnection has its local description set and candidates gathered; the caller must Close it.
+func senderPeer(t *testing.T, direction webrtc.RTPTransceiverDirection) *webrtc.PeerConnection {
 	t.Helper()
 
 	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
-		t.Fatalf("创建发送端: %v", err)
+		t.Fatalf("create sender: %v", err)
 	}
-	defer pc.Close()
 
 	track, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{
 		MimeType:  webrtc.MimeTypeOpus,
@@ -95,20 +181,20 @@ func senderOffer(t *testing.T) webrtc.SessionDescription {
 		Channels:  Channels,
 	}, "audio", "probe")
 	if err != nil {
-		t.Fatalf("创建音轨: %v", err)
+		t.Fatalf("create track: %v", err)
 	}
-	if _, err := pc.AddTrack(track); err != nil {
-		t.Fatalf("添加音轨: %v", err)
+	if _, err := pc.AddTransceiverFromTrack(track, webrtc.RTPTransceiverInit{Direction: direction}); err != nil {
+		t.Fatalf("add track: %v", err)
 	}
 
 	offer, err := pc.CreateOffer(nil)
 	if err != nil {
-		t.Fatalf("创建 offer: %v", err)
+		t.Fatalf("create offer: %v", err)
 	}
 	if err := pc.SetLocalDescription(offer); err != nil {
-		t.Fatalf("设置本端描述: %v", err)
+		t.Fatalf("set local description: %v", err)
 	}
 	<-webrtc.GatheringCompletePromise(pc)
 
-	return *pc.LocalDescription()
+	return pc
 }

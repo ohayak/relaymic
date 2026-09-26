@@ -1,4 +1,4 @@
-/* RelayMic 落地页样式。
+/* Remote Visio 落地页样式。
    设计语言取自音频设备本身：深墨面板、丝印标签、电平表刻度。
    强调色不是随便挑的品牌色 —— 绿/琥珀/红就是 VU 表 LED 的三段刻度，
    所以颜色在这个页面上一直在说同一件事：信号有多强、通没通。 */
@@ -147,11 +147,7 @@ h2 {
   margin-right: auto;
 }
 /* 品牌记号是一个三格电平表，不是又一个抽象几何图形 */
-.brand-mark { display: flex; align-items: flex-end; gap: 2px; height: 15px; }
-.brand-mark i { width: 3px; background: var(--fg-3); display: block; }
-.brand-mark i:nth-child(1) { height: 6px; }
-.brand-mark i:nth-child(2) { height: 11px; background: var(--signal); }
-.brand-mark i:nth-child(3) { height: 15px; }
+.brand-mark { display: block; width: 22px; height: 22px; }
 
 .nav-links { display: flex; gap: 22px; }
 .nav-links a {
@@ -400,7 +396,7 @@ h1 {
   line-height: 1.8;
 }
 
-/* 右侧：Mac 的系统输入设备列表 —— 卖点就是 RelayMic 出现在这张表里 */
+/* 右侧：Mac 的系统输入设备列表 —— 卖点就是 Remote Visio 出现在这张表里 */
 .devices { display: flex; flex-direction: column; gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
 .device {
   display: flex;

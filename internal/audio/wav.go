@@ -6,15 +6,16 @@ import (
 	"sync"
 )
 
-// WAVWriter 把 int16 PCM 追加进一个 WAV 文件，Close 时回填长度。
+// WAVWriter appends int16 PCM to a WAV file and patches the lengths on Close.
 //
-// 这是诊断工具，不是产品功能：当"听感有杂音"和"统计全绿"打架时，
-// 唯一的仲裁者是波形本身。录下处理链某一点的原始样本，
-// 拼接跳变、驱动门的硬边缘、削顶，在波形里全都一目了然。
+// This is a diagnostic tool, not a product feature: when "it sounds noisy"
+// and "all stats are green" disagree, the only arbiter is the waveform.
+// Record the raw samples at one point in the chain and splice steps, hard
+// driver-gate edges and clipping are all plainly visible.
 type WAVWriter struct {
 	mu   sync.Mutex
 	f    *os.File
-	data int // 已写数据字节数
+	data int // data bytes written so far
 }
 
 func NewWAVWriter(path string, sampleRate, channels int) (*WAVWriter, error) {
@@ -22,7 +23,7 @@ func NewWAVWriter(path string, sampleRate, channels int) (*WAVWriter, error) {
 	if err != nil {
 		return nil, err
 	}
-	// 44 字节标准头，长度字段先占位，Close 时回填。
+	// Standard 44-byte header; the length fields are placeholders patched on Close.
 	h := make([]byte, 44)
 	copy(h[0:], "RIFF")
 	copy(h[8:], "WAVEfmt ")
@@ -62,7 +63,7 @@ func (w *WAVWriter) Close() error {
 	if w.f == nil {
 		return nil
 	}
-	// 回填 RIFF 总长和 data 段长
+	// Patch the RIFF total length and the data chunk length.
 	b4 := make([]byte, 4)
 	binary.LittleEndian.PutUint32(b4, uint32(36+w.data))
 	w.f.WriteAt(b4, 4)

@@ -1,8 +1,9 @@
-# 编译 Windows 版原生发送端。
+# Build the native Windows sender.
 #
-# 为什么在 CI 编：sender 依赖 CGO（libopus + malgo），从 Mac 交叉编译
-# 要自己配 mingw 工具链再从源码编一份 Windows 版 libopus；
-# 而 MSYS2 有现成的 mingw-w64 opus 包，在 Windows runner 上装一下就完。
+# Why build in CI: sender depends on CGO (libopus + malgo), and cross-compiling
+# from a Mac means setting up a mingw toolchain and building a Windows libopus
+# from source; MSYS2 has a ready-made mingw-w64 opus package that installs in
+# one step on a Windows runner.
 name: build-sender
 
 on:
@@ -38,21 +39,24 @@ jobs:
         run: |
           export GOROOT=/mingw64/lib/go
           export PATH=/mingw64/bin:$PATH
-          # 静态链接 opus，用户拿到单个 exe，不用带 DLL。
-          # nolibopusfile：只用编解码，不链 opusfile（那是读 .opus 文件用的）
-          go build -tags nolibopusfile -ldflags "-extldflags -static" -o relaymic-sender.exe ./cmd/sender
-          # GUI 版：-H windowsgui 不弹黑色控制台窗口
-          go build -tags nolibopusfile -ldflags "-H windowsgui -extldflags -static" -o 远程麦克风.exe ./cmd/sender-gui
+          # Link opus statically so the user gets a single exe with no DLL to ship.
+          # nolibopusfile: only the codec is used, do not link opusfile (that is for reading .opus files)
+          go build -tags nolibopusfile -ldflags "-extldflags -static" -o remotevisio-sender.exe ./cmd/sender
+          # GUI version: -H windowsgui suppresses the black console window. The
+          # .syso carries the exe icon (Explorer, taskbar); Go links it in by name.
+          go run github.com/akavel/rsrc@v0.10.2 -ico icons/RemoteVisio.ico -o cmd/sender-gui/rsrc_windows_amd64.syso
+          go build -tags nolibopusfile -ldflags "-H windowsgui -extldflags -static" -o RemoteVisio.exe ./cmd/sender-gui
 
       - uses: actions/upload-artifact@v4
         with:
-          name: relaymic-sender-windows
+          name: remotevisio-sender-windows
           path: |
-            relaymic-sender.exe
-            远程麦克风.exe
+            remotevisio-sender.exe
+            RemoteVisio.exe
 
-  # 接收端 macOS 二进制：静态链接 opus，产物单文件免依赖，
-  # 多台 Mac mini 部署时目标机只需要装 BlackHole，不用装 Go/brew opus。
+  # Receiver macOS binary: opus linked statically, so the artifact is a single
+  # dependency-free file. When deploying to several Mac minis the target only
+  # needs the Remote Visio driver, not Go or brew opus.
   mac-receiver:
     runs-on: macos-latest
     steps:
@@ -63,15 +67,15 @@ jobs:
       - name: Build
         run: |
           brew list opus >/dev/null 2>&1 || brew install opus
-          # 把 .a 直接给链接器 + 剔除无引用 dylib = 强制静态链接 opus
+          # Hand the .a straight to the linker + strip unreferenced dylibs = opus is forced static
           CGO_ENABLED=1 \
           CGO_LDFLAGS="$(brew --prefix opus)/lib/libopus.a -Wl,-dead_strip_dylibs" \
-          go build -tags nolibopusfile -o relaymic-receiver ./cmd/receiver
-          # 守卫：产物必须不依赖任何 brew 库，否则分发到别的机器就起不来
-          if otool -L relaymic-receiver | grep -q /opt/homebrew; then
-            echo "静态链接失败，产物仍依赖 brew 库："; otool -L relaymic-receiver; exit 1
+          go build -tags nolibopusfile -o remotevisio-receiver ./cmd/receiver
+          # Guard: the artifact must not depend on any brew library, or it will not start on other machines
+          if otool -L remotevisio-receiver | grep -q /opt/homebrew; then
+            echo "static link failed; the binary still depends on Homebrew libraries:"; otool -L remotevisio-receiver; exit 1
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: relaymic-receiver-macos
-          path: relaymic-receiver
+          name: remotevisio-receiver-macos
+          path: remotevisio-receiver

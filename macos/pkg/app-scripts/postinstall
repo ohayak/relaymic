@@ -1,0 +1,13 @@
+#!/bin/sh
+# Runs as root after RemoteVisio.app lands in /Applications: register it with
+# LaunchServices and start it for the person at the console. The app
+# registers itself to start at login on its first run from /Applications.
+LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+"$LSREGISTER" -f /Applications/RemoteVisio.app >/dev/null 2>&1 || true
+
+user=$(stat -f %Su /dev/console 2>/dev/null || true)
+if [ -n "$user" ] && [ "$user" != "root" ]; then
+    uid=$(id -u "$user")
+    launchctl asuser "$uid" sudo -u "$user" open -a /Applications/RemoteVisio.app >/dev/null 2>&1 || true
+fi
+exit 0

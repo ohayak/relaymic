@@ -1,9 +1,12 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>远程麦克风</title>
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="/favicon-96.png" sizes="96x96" type="image/png">
+<link rel="apple-touch-icon" href="/favicon-96.png">
+<title>Remote Visio</title>
 <style>
   :root {
     --bg: #0f1115;
@@ -81,6 +84,17 @@
     font-weight: 600;
   }
 
+  .hear {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--dim);
+    margin-bottom: 12px;
+    cursor: pointer;
+  }
+  .hear input { margin: 0; }
+
   .micstate { font-size: 13px; color: var(--dim); min-height: 18px; margin-bottom: 8px; }
   .conns {
     font-size: 13px;
@@ -107,52 +121,226 @@
 </head>
 <body>
 <main>
-  <h1>远程麦克风</h1>
+  <h1 data-i18n="title">Remote Visio</h1>
   <div class="target" id="target">—</div>
 
   <div class="profiles" id="profiles"></div>
+  <label class="hear"><input type="checkbox" id="hear"> <span data-i18n="hear">Hear the remote Mac (meeting audio, alerts)</span></label>
 
-  <button id="toggle">开始说话</button>
+  <button id="toggle" data-i18n="start">Start talking</button>
   <div class="meter"><i id="level"></i></div>
 
   <div id="micstate" class="micstate"></div>
-  <div id="conns" class="conns"><div class="empty">未连接</div></div>
+  <div id="conns" class="conns"><div class="empty" data-i18n="not_connected">Not connected</div></div>
 
-  <!-- AGPL-3.0 第 13 条：通过网络与本程序交互的用户，必须能拿到对应版本的源码。
-       发送端就是这个网页，所以链接放在这儿，不是可选的装饰。
-       你要是改了这份代码再给别人用，请把这个链接指向你自己那份。 -->
+  <!-- AGPL-3.0 section 13: users interacting with this program over a network must be able to get
+       the matching source. The sender is this page, so the link lives here; it is not optional decoration.
+       If you modify this code and serve it to others, point this link at your own copy. -->
   <footer class="src">
-    RelayMic · <a href="https://github.com/hueshu/relaymic" target="_blank" rel="noopener">源码 (AGPL-3.0)</a>
+    Remote Visio · <a href="https://github.com/hueshu/relaymic" target="_blank" rel="noopener" data-i18n="source">Source (AGPL-3.0)</a>
   </footer>
 </main>
 
 <script>
 const $ = id => document.getElementById(id);
+
+// UI language: follow the browser's language, fall back to English. ?lang=xx forces one (for debugging).
+const STRINGS = {
+  en: {
+    title: 'Remote Visio',
+    target: 'Auto-discovering receivers (entered via {host})',
+    profile_denoise: 'Denoise', profile_clean: 'Clean', profile_raw: 'Raw',
+    hear: 'Hear the remote Mac (meeting audio, alerts)',
+    start: 'Start talking', stop: 'Stop',
+    not_connected: 'Not connected',
+    source: 'Source (AGPL-3.0)',
+    mic_waiting: 'Waiting for microphone permission: check the prompt at the left of the address bar',
+    connecting: 'Connecting...', establishing: 'Establishing connection...', negotiating: 'Negotiating...',
+    connected: 'Connected', hiccup: 'Network hiccup, waiting to recover...',
+    failed: 'Connection failed', closed: 'Connection closed', not_recovered: 'Did not recover',
+    retry: '{why}, reconnecting in {s}s',
+    cert_before: 'Unreachable - the first time, ', cert_link: 'open it once', cert_after: ' to accept the certificate',
+    relay: 'relay', playing: 'Playing audio from this Mac',
+    mic_denied: 'Microphone denied: click the icon at the left of the address bar and allow it',
+    mic_notfound: 'No microphone found on this device',
+    mic_busy: 'Microphone is in use by another program: close meeting/recording apps and other tabs',
+    mic_constraints: 'Microphone does not support the required settings',
+    mic_other: 'Could not get the microphone: {reason}', unknown: 'unknown reason',
+  },
+  es: {
+    title: 'Remote Visio',
+    target: 'Buscando receptores automáticamente (entrada por {host})',
+    profile_denoise: 'Reducir ruido', profile_clean: 'Limpio', profile_raw: 'Original',
+    hear: 'Escuchar el Mac remoto (audio de reuniones, avisos)',
+    start: 'Empezar a hablar', stop: 'Detener',
+    not_connected: 'Sin conexión',
+    source: 'Código fuente (AGPL-3.0)',
+    mic_waiting: 'Esperando el permiso del micrófono: mira el aviso a la izquierda de la barra de direcciones',
+    connecting: 'Conectando...', establishing: 'Estableciendo la conexión...', negotiating: 'Negociando...',
+    connected: 'Conectado', hiccup: 'Fallo de red, esperando a que se recupere...',
+    failed: 'Conexión fallida', closed: 'Conexión cerrada', not_recovered: 'No se recuperó',
+    retry: '{why}, reconectando en {s} s',
+    cert_before: 'Inaccesible: la primera vez, ', cert_link: 'ábrelo una vez', cert_after: ' para aceptar el certificado',
+    relay: 'relé', playing: 'Reproduciendo el audio de este Mac',
+    mic_denied: 'Micrófono denegado: haz clic en el icono a la izquierda de la barra de direcciones y permítelo',
+    mic_notfound: 'No se encontró ningún micrófono en este dispositivo',
+    mic_busy: 'Otro programa está usando el micrófono: cierra las apps de reuniones o grabación y las otras pestañas',
+    mic_constraints: 'El micrófono no admite la configuración necesaria',
+    mic_other: 'No se pudo acceder al micrófono: {reason}', unknown: 'motivo desconocido',
+  },
+  fr: {
+    title: 'Remote Visio',
+    target: 'Recherche automatique des récepteurs (entrée via {host})',
+    profile_denoise: 'Réduction du bruit', profile_clean: 'Propre', profile_raw: 'Brut',
+    hear: 'Entendre le Mac distant (son des réunions, alertes)',
+    start: 'Commencer à parler', stop: 'Arrêter',
+    not_connected: 'Non connecté',
+    source: 'Code source (AGPL-3.0)',
+    mic_waiting: "En attente de l'autorisation du micro : regardez l'invite à gauche de la barre d'adresse",
+    connecting: 'Connexion...', establishing: 'Établissement de la connexion...', negotiating: 'Négociation...',
+    connected: 'Connecté', hiccup: 'Perturbation réseau, en attente de reprise...',
+    failed: 'Connexion échouée', closed: 'Connexion fermée', not_recovered: 'Pas de reprise',
+    retry: '{why}, nouvelle tentative dans {s} s',
+    cert_before: 'Inaccessible : la première fois, ', cert_link: 'ouvrez-le une fois', cert_after: ' pour accepter le certificat',
+    relay: 'relais', playing: 'Lecture du son de ce Mac',
+    mic_denied: "Micro refusé : cliquez sur l'icône à gauche de la barre d'adresse et autorisez-le",
+    mic_notfound: 'Aucun micro trouvé sur cet appareil',
+    mic_busy: "Le micro est utilisé par un autre programme : fermez les apps de réunion ou d'enregistrement et les autres onglets",
+    mic_constraints: 'Le micro ne prend pas en charge les réglages requis',
+    mic_other: "Impossible d'accéder au micro : {reason}", unknown: 'raison inconnue',
+  },
+  zh: {
+    title: 'Remote Visio',
+    target: '自动发现接收端（从 {host} 进入）',
+    profile_denoise: '降噪', profile_clean: '纯净', profile_raw: '原始',
+    hear: '听远程 Mac 的声音（会议、提示音）',
+    start: '开始说话', stop: '停止',
+    not_connected: '未连接',
+    source: '源码 (AGPL-3.0)',
+    mic_waiting: '等待麦克风授权：看一下地址栏左侧的权限提示',
+    connecting: '连接中…', establishing: '建立连接…', negotiating: '协商中…',
+    connected: '已连接', hiccup: '网络波动，等待恢复…',
+    failed: '连接失败', closed: '连接关闭', not_recovered: '长时间未恢复',
+    retry: '{why}，{s}s 后重连',
+    cert_before: '无法访问 —— 首次需', cert_link: '点此打开一次', cert_after: '接受证书',
+    relay: '中继', playing: '正在播放这台 Mac 的声音',
+    mic_denied: '麦克风被拒绝：点地址栏左侧图标改成允许',
+    mic_notfound: '这台机器上没找到麦克风',
+    mic_busy: '麦克风被别的程序占着：关掉会议/录音软件和其他标签页',
+    mic_constraints: '麦克风不支持所需参数',
+    mic_other: '拿不到麦克风：{reason}', unknown: '未知原因',
+  },
+  de: {
+    title: 'Remote Visio',
+    target: 'Empfänger werden automatisch gesucht (Zugang über {host})',
+    profile_denoise: 'Rauschunterdrückung', profile_clean: 'Sauber', profile_raw: 'Roh',
+    hear: 'Den entfernten Mac hören (Meeting-Ton, Hinweise)',
+    start: 'Sprechen starten', stop: 'Stopp',
+    not_connected: 'Nicht verbunden',
+    source: 'Quellcode (AGPL-3.0)',
+    mic_waiting: 'Warte auf die Mikrofon-Berechtigung: siehe die Abfrage links in der Adressleiste',
+    connecting: 'Verbinde...', establishing: 'Verbindung wird aufgebaut...', negotiating: 'Aushandlung...',
+    connected: 'Verbunden', hiccup: 'Netzwerkstörung, warte auf Wiederherstellung...',
+    failed: 'Verbindung fehlgeschlagen', closed: 'Verbindung geschlossen', not_recovered: 'Keine Wiederherstellung',
+    retry: '{why}, neuer Versuch in {s} s',
+    cert_before: 'Nicht erreichbar - beim ersten Mal ', cert_link: 'einmal öffnen', cert_after: ', um das Zertifikat zu akzeptieren',
+    relay: 'Relay', playing: 'Ton dieses Macs wird wiedergegeben',
+    mic_denied: 'Mikrofon verweigert: auf das Symbol links in der Adressleiste klicken und erlauben',
+    mic_notfound: 'Auf diesem Gerät wurde kein Mikrofon gefunden',
+    mic_busy: 'Das Mikrofon wird von einem anderen Programm benutzt: Meeting-/Aufnahme-Apps und andere Tabs schließen',
+    mic_constraints: 'Das Mikrofon unterstützt die nötigen Einstellungen nicht',
+    mic_other: 'Mikrofon nicht verfügbar: {reason}', unknown: 'unbekannter Grund',
+  },
+  it: {
+    title: 'Remote Visio',
+    target: 'Ricerca automatica dei ricevitori (ingresso da {host})',
+    profile_denoise: 'Riduzione rumore', profile_clean: 'Pulito', profile_raw: 'Grezzo',
+    hear: 'Ascolta il Mac remoto (audio delle riunioni, avvisi)',
+    start: 'Inizia a parlare', stop: 'Ferma',
+    not_connected: 'Non connesso',
+    source: 'Codice sorgente (AGPL-3.0)',
+    mic_waiting: 'In attesa del permesso per il microfono: guarda la richiesta a sinistra della barra degli indirizzi',
+    connecting: 'Connessione...', establishing: 'Creazione della connessione...', negotiating: 'Negoziazione...',
+    connected: 'Connesso', hiccup: 'Problema di rete, in attesa del ripristino...',
+    failed: 'Connessione fallita', closed: 'Connessione chiusa', not_recovered: 'Nessun ripristino',
+    retry: '{why}, nuovo tentativo tra {s} s',
+    cert_before: 'Non raggiungibile: la prima volta, ', cert_link: 'aprilo una volta', cert_after: ' per accettare il certificato',
+    relay: 'relay', playing: "Riproduzione dell'audio di questo Mac",
+    mic_denied: "Microfono negato: fai clic sull'icona a sinistra della barra degli indirizzi e consentilo",
+    mic_notfound: 'Nessun microfono trovato su questo dispositivo',
+    mic_busy: 'Il microfono è usato da un altro programma: chiudi le app di riunioni o registrazione e le altre schede',
+    mic_constraints: 'Il microfono non supporta le impostazioni richieste',
+    mic_other: 'Impossibile usare il microfono: {reason}', unknown: 'motivo sconosciuto',
+  },
+  hi: {
+    title: 'Remote Visio',
+    target: 'रिसीवर अपने आप खोजे जा रहे हैं ({host} से प्रवेश)',
+    profile_denoise: 'शोर कम करें', profile_clean: 'साफ़', profile_raw: 'मूल',
+    hear: 'दूर वाले Mac की आवाज़ सुनें (मीटिंग की आवाज़, सूचनाएँ)',
+    start: 'बोलना शुरू करें', stop: 'रोकें',
+    not_connected: 'कनेक्ट नहीं है',
+    source: 'सोर्स कोड (AGPL-3.0)',
+    mic_waiting: 'माइक्रोफ़ोन की अनुमति का इंतज़ार है: एड्रेस बार के बाईं ओर दिख रहे संकेत को देखें',
+    connecting: 'कनेक्ट हो रहा है...', establishing: 'कनेक्शन बनाया जा रहा है...', negotiating: 'बातचीत जारी है...',
+    connected: 'कनेक्ट हो गया', hiccup: 'नेटवर्क में रुकावट, ठीक होने का इंतज़ार...',
+    failed: 'कनेक्शन विफल', closed: 'कनेक्शन बंद', not_recovered: 'ठीक नहीं हुआ',
+    retry: '{why}, {s} सेकंड में फिर से कनेक्ट होगा',
+    cert_before: 'पहुँच नहीं हो पा रही - पहली बार ', cert_link: 'इसे एक बार खोलें', cert_after: ' और प्रमाणपत्र स्वीकार करें',
+    relay: 'रिले', playing: 'इस Mac की आवाज़ चल रही है',
+    mic_denied: 'माइक्रोफ़ोन की अनुमति नहीं मिली: एड्रेस बार के बाईं ओर के आइकन पर क्लिक करके अनुमति दें',
+    mic_notfound: 'इस डिवाइस पर कोई माइक्रोफ़ोन नहीं मिला',
+    mic_busy: 'माइक्रोफ़ोन किसी और प्रोग्राम के पास है: मीटिंग/रिकॉर्डिंग ऐप और दूसरे टैब बंद करें',
+    mic_constraints: 'माइक्रोफ़ोन ज़रूरी सेटिंग्स का समर्थन नहीं करता',
+    mic_other: 'माइक्रोफ़ोन नहीं मिल सका: {reason}', unknown: 'अज्ञात कारण',
+  },
+};
+
+function pickLang() {
+  const forced = new URLSearchParams(location.search).get('lang');
+  const wanted = forced ? [forced] : (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || 'en']);
+  for (const w of wanted) {
+    const primary = String(w).toLowerCase().split(/[-_]/)[0];
+    if (STRINGS[primary]) return primary;
+  }
+  return 'en';
+}
+const LANG = pickLang();
+document.documentElement.lang = LANG;
+
+// t looks up a string in the current language, falling back to English. {name} placeholders are filled from vars.
+function t(key, vars) {
+  let s = (STRINGS[LANG] && STRINGS[LANG][key]) || STRINGS.en[key] || key;
+  if (vars) for (const [k, v] of Object.entries(vars)) s = s.split('{' + k + '}').join(v);
+  return s;
+}
+document.title = t('title');
+for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
+
 let stream = null, statsTimer = null, rafId = null, audioCtx = null;
 let live = false, discoverTimer = null;
 
-// 每个接收端一条独立连接：各自协商、各自重连，一台挂了不影响其他台。
-// conns: origin 串 -> { target, pc, retry, retryTimer, healTimer, state, cls, rtt, needCert }
+// One independent connection per receiver: each negotiates and reconnects on its own, so one going down doesn't affect the rest.
+// conns: origin string -> { target, pc, retry, retryTimer, healTimer, state, cls, rtt, needCert }
 const conns = new Map();
 
-$('target').textContent = '自动发现接收端（从 ' + location.host + ' 进入）';
+$('target').textContent = t('target', { host: location.host });
 
 $('toggle').onclick = () => (live ? stop() : start());
 
-// 音质模式：一键整组切换，不再一个参数一个参数地调。
-// 三档覆盖了排查中真实出现过的三种病：降噪的水泡音、底噪、增益不当。
+// Audio profiles: switch a whole group of settings at once instead of tuning one knob at a time.
+// The three tiers cover three real problems seen while troubleshooting: bubbly noise-suppression artifacts, background hiss, bad gain.
 const PROFILES = {
-  denoise: { label: '降噪', ns: true,  agc: true  }, // 环境吵、麦克风电平正常
-  clean:   { label: '纯净', ns: false, agc: true  }, // 降噪出水泡音时用
-  raw:     { label: '原始', ns: false, agc: false }, // 全交给接收端 AGC 处理
+  denoise: { label: 'profile_denoise', ns: true,  agc: true  }, // noisy room, mic level fine
+  clean:   { label: 'profile_clean',   ns: false, agc: true  }, // use when noise suppression sounds bubbly
+  raw:     { label: 'profile_raw',     ns: false, agc: false }, // leave everything to the receiver's AGC
 };
 let profile = localStorage.getItem('profile');
-// 兼容旧的 ?ns=0 用法
+// Backwards compatibility with the old ?ns=0 usage
 if (!PROFILES[profile]) profile = new URLSearchParams(location.search).get('ns') === '0' ? 'clean' : 'denoise';
 
 for (const [key, p] of Object.entries(PROFILES)) {
   const b = document.createElement('button');
-  b.textContent = p.label;
+  b.textContent = t(p.label);
   b.dataset.key = key;
   b.onclick = () => switchProfile(key);
   $('profiles').appendChild(b);
@@ -163,14 +351,41 @@ function renderProfiles() {
   for (const b of $('profiles').children) b.classList.toggle('on', b.dataset.key === profile);
 }
 
-// 正在说话时切换：重新拿一路新约束的音轨，replaceTrack 无缝换上，
-// 连接不动、不用重新协商。没在说话就只记下选择，下次开播生效。
+// Switching while live: grab a new track with the new constraints and swap it in via replaceTrack,
+// so the connection stays up with no renegotiation. When not live, just remember the choice for the next start.
 async function switchProfile(key) {
   if (key === profile) return;
   profile = key;
   localStorage.setItem('profile', key);
   renderProfiles();
   if (!live) return;
+  await reacquireMic();
+}
+
+// Return path: the remote Mac's system audio (other people in a meeting, alerts, video) plays out here,
+// so the remote-desktop software's audio transport can be turned off. On by default.
+let hear = localStorage.getItem('hear') !== '0';
+$('hear').checked = hear;
+$('hear').onchange = () => toggleHear($('hear').checked);
+
+async function toggleHear(on) {
+  hear = on;
+  localStorage.setItem('hear', on ? '1' : '0');
+  if (!live) return;
+  // The mic's echo cancellation follows this switch (replaceTrack, seamless); but whether we receive the
+  // return path lives in the m-line direction, so the connection must be rebuilt, with a brief drop -- this toggle is rarely used.
+  // Lock the checkbox during the rebuild so a double click can't start two rebuilds that trample each other.
+  $('hear').disabled = true;
+  try {
+    await reacquireMic();
+    for (const c of conns.values()) connectOne(c);
+  } finally {
+    $('hear').disabled = false;
+  }
+}
+
+// reacquireMic re-acquires the mic with the current settings and swaps it seamlessly into every connection.
+async function reacquireMic() {
   try {
     const next = await getMic();
     if (!live) { next.getTracks().forEach(t => t.stop()); return; }
@@ -186,38 +401,40 @@ async function switchProfile(key) {
   }
 }
 
-// getMic 按当前模式拿麦克风。
-// 增益交给接收端统一处理，这头只要原始一点的信号。
-// 回声消除恒关：远端的声音不会绕回本地，开着只是白白增加延迟。
+// getMic acquires the microphone for the current profile.
+// Gain is handled centrally by the receiver; this side only wants a fairly raw signal.
+// Echo cancellation is on only while hearing the return path: the remote audio plays from the local
+// speakers, the mic would send it straight back, and the browser's AEC knows exactly what it played.
+// Without the return path nothing can loop back, so leaving it on only adds latency.
 function getMic() {
   const p = PROFILES[profile];
   return withTimeout(
     navigator.mediaDevices.getUserMedia({
       audio: {
-        echoCancellation: false,
+        echoCancellation: hear,
         noiseSuppression: p.ns,
         autoGainControl: p.agc,
       },
     }),
     20000,
-    '麦克风一直没有响应');
+    'The microphone never responded');
 }
 
 async function start() {
   live = true;
-  $('toggle').textContent = '停止';
+  $('toggle').textContent = t('stop');
   $('toggle').classList.add('live');
 
-  // 麦克风授权和网络协商互不依赖，串行等于把两段耗时相加。
-  // 先把发现和连接跑起来（音轨后补），同时去要麦克风。
+  // Mic permission and network negotiation are independent; running them serially just adds their latencies.
+  // Kick off discovery and connections first (track attached later) while asking for the mic in parallel.
   discover();
   discoverTimer = setInterval(discover, 30000);
 
   try {
-    // 迟迟拿不到，多半是权限提示还等在地址栏那儿，或者麦克风被别的程序占着。
-    // 卡在这里却不给原因，用户只会以为产品坏了。
+    // If it takes long, the permission prompt is probably still waiting in the address bar, or another app holds the mic.
+    // Stalling here with no explanation would just make the user think the product is broken.
     const hint = setTimeout(() => {
-      $('micstate').textContent = '等待麦克风授权：看一下地址栏左侧的权限提示';
+      $('micstate').textContent = t('mic_waiting');
     }, 2500);
 
     stream = await getMic();
@@ -232,8 +449,8 @@ async function start() {
   attachMic();
 }
 
-// discover 找到所有接收端：进入页面的这台 + 它替我们扫出来的其他台。
-// 浏览器自己够不到 Tailscale 设备表，这一步由接收端代劳（/api/receivers）。
+// discover finds all receivers: the one that served this page plus the others it scanned for us.
+// The browser can't reach the Tailscale device list itself, so the receiver does it (/api/receivers).
 async function discover() {
   if (!live) return;
   ensureConn(location.origin);
@@ -242,13 +459,13 @@ async function discover() {
     if (res.ok) {
       for (const t of await res.json()) ensureConn(t);
     }
-  } catch { /* 拿不到列表就只连本台 */ }
+  } catch { /* no list: connect to this receiver only */ }
 }
 
 function ensureConn(target) {
   const key = hostOf(target);
   for (const c of conns.values()) if (hostOf(c.target) === key) return;
-  const c = { target, retry: 0, state: '连接中…', cls: 'warn', rtt: '' };
+  const c = { target, retry: 0, state: t('connecting'), cls: 'warn', rtt: '' };
   conns.set(target, c);
   renderConns();
   connectOne(c);
@@ -258,8 +475,8 @@ function hostOf(target) {
   try { return new URL(target).hostname; } catch { return target; }
 }
 
-// attachMic 把麦克风音轨塞进所有已建好的连接。replaceTrack 不触发重新
-// 协商，所以连接可以先行建立，音轨到了直接开始推流。
+// attachMic pushes the mic track into every established connection. replaceTrack doesn't trigger
+// renegotiation, so connections can be built first and start streaming as soon as the track arrives.
 function attachMic() {
   if (!stream) return;
   for (const c of conns.values()) {
@@ -269,32 +486,52 @@ function attachMic() {
   }
 }
 
-// 每台接收端有自己的 /ice-config（同一套 TURN），跨域取。
+// Each receiver serves its own /ice-config (same TURN set); fetched cross-origin.
 async function loadICE(target) {
   try {
     const res = await fetch(target + '/ice-config');
     if (res.ok) return await res.json();
-  } catch { /* 兜底 */ }
+  } catch { /* fall back to the default below */ }
   return { iceServers: [{ urls: 'stun:stun.miwifi.com:3478' }] };
 }
 
-// connectOne 维持到一台接收端的连接。断了就退避重连 —— 网络恢复、
-// 接收端重启、电脑睡醒，都走这一条路径，不需要人再点一次按钮。
+// connectOne maintains the connection to one receiver. On loss it reconnects with backoff -- network
+// recovery, receiver restart, and waking from sleep all go through this path with no extra button press.
 async function connectOne(c) {
   if (!live) return;
   clearTimeout(c.retryTimer); c.retryTimer = null;
   if (c.pc) { c.pc.close(); c.pc = null; }
+  detachSpeaker(c);
+  // A retry and the return-path toggle may both trigger a rebuild of the same connection. Last one wins:
+  // each entry bumps a generation token, and an earlier run bails after any await once it sees it is stale --
+  // no orphaned connections, and no stray retry scheduled in its catch on behalf of the newer one.
+  const gen = c.gen = (c.gen || 0) + 1;
+  const stale = () => c.gen !== gen || !live;
 
   try {
-    setConnState(c, '建立连接…', 'warn');
+    setConnState(c, t('establishing'), 'warn');
     const cfg = await loadICE(c.target);
+    if (stale()) return;
     if (cfg.name) { c.name = cfg.name; }
     const pc = new RTCPeerConnection({ iceServers: cfg.iceServers });
     c.pc = pc;
-    // 先声明一条只发的音轨占住 m-line，ICE 收集立即开始；
-    // 麦克风到手后由 attachMic 补上真实音轨。重连时麦克风已在手，直接塞。
-    const tx = pc.addTransceiver('audio', { direction: 'sendonly' });
+    // Declare an audio transceiver up front to claim the m-line so ICE gathering starts right away; attachMic
+    // fills in the real track once the mic is ready. On reconnect the mic is already in hand, so attach it now.
+    // With the return path on, this m-line is sendrecv and the receiver sends the remote Mac's system audio back over it.
+    const tx = pc.addTransceiver('audio', { direction: hear ? 'sendrecv' : 'sendonly' });
     if (stream) tx.sender.replaceTrack(stream.getAudioTracks()[0]);
+    pc.ontrack = e => {
+      if (c.pc !== pc) return;
+      detachSpeaker(c);
+      const el = document.createElement('audio');
+      el.autoplay = true;
+      el.playsInline = true;
+      el.srcObject = new MediaStream([e.track]);
+      document.body.appendChild(el);
+      el.play().catch(() => { /* a user gesture already happened, so this is rarely blocked */ });
+      c.speaker = el;
+      renderConns();
+    };
     pc.oniceconnectionstatechange = () => {
       if (c.pc !== pc) return;
       const s = pc.iceConnectionState;
@@ -302,28 +539,28 @@ async function connectOne(c) {
         clearTimeout(c.healTimer); c.healTimer = null;
         c.retry = 0;
         c.needCert = false;
-        setConnState(c, '已连接', 'ok');
+        setConnState(c, t('connected'), 'ok');
       } else if (s === 'checking') {
-        setConnState(c, '连接中…', 'warn');
+        setConnState(c, t('connecting'), 'warn');
       } else if (s === 'disconnected') {
-        // disconnected 只是"暂时收不到对方的包"，ICE 自己会重试并且多半能恢复。
-        setConnState(c, '网络波动，等待恢复…', 'warn');
+        // 'disconnected' only means "no packets from the peer for now"; ICE retries on its own and usually recovers.
+        setConnState(c, t('hiccup'), 'warn');
         if (!c.healTimer) {
           c.healTimer = setTimeout(() => {
             c.healTimer = null;
             const now = c.pc && c.pc.iceConnectionState;
-            if (now !== 'connected' && now !== 'completed') scheduleRetry(c, '长时间未恢复');
+            if (now !== 'connected' && now !== 'completed') scheduleRetry(c, t('not_recovered'));
           }, 8000);
         }
       } else if (s === 'failed' || s === 'closed') {
         clearTimeout(c.healTimer); c.healTimer = null;
-        scheduleRetry(c, s === 'failed' ? '连接失败' : '连接关闭');
+        scheduleRetry(c, s === 'failed' ? t('failed') : t('closed'));
       }
     };
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    // 等候选收集，但最多等 3 秒：STUN 不通时别陪浏览器等满 10 秒。
+    // Wait for candidate gathering, but at most 3 s: when STUN is unreachable, don't sit through the browser's full 10 s.
     await new Promise(done => {
       if (pc.iceGatheringState === 'complete') return done();
       const cap = setTimeout(done, 3000);
@@ -331,20 +568,24 @@ async function connectOne(c) {
         if (pc.iceGatheringState === 'complete') { clearTimeout(cap); done(); }
       };
     });
+    if (stale()) { pc.close(); return; }
 
-    setConnState(c, '协商中…', 'warn');
+    setConnState(c, t('negotiating'), 'warn');
     const res = await fetch(c.target + '/offer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(pc.localDescription),
     });
+    if (stale()) { pc.close(); return; }
     if (!res.ok) throw new Error(await res.text());
     await pc.setRemoteDescription(await res.json());
+    if (stale()) { pc.close(); return; }
 
     if (!statsTimer) statsTimer = setInterval(poll, 1000);
   } catch (err) {
-    // 跨域 fetch 直接炸（TypeError）而目标不是本台：八成是那台的
-    // 自签证书还没被这个浏览器接受过 —— 提示点开一次，重连会自己接上。
+    if (stale()) return; // a stale attempt's failure doesn't count; don't schedule a retry on behalf of the newer one
+    // A cross-origin fetch blowing up (TypeError) on a target other than this receiver most likely means
+    // its self-signed cert hasn't been accepted in this browser yet -- prompt to open it once; the retry picks it up.
     if (err instanceof TypeError && hostOf(c.target) !== location.hostname) {
       c.needCert = true;
     }
@@ -352,11 +593,19 @@ async function connectOne(c) {
   }
 }
 
+// detachSpeaker stops and removes a connection's return-path playback.
+function detachSpeaker(c) {
+  if (!c.speaker) return;
+  c.speaker.srcObject = null;
+  c.speaker.remove();
+  c.speaker = null;
+}
+
 function scheduleRetry(c, why) {
   if (!live || c.retryTimer) return;
   const delay = Math.min(1000 * 2 ** c.retry, 15000);
   c.retry++;
-  setConnState(c, `${why}，${Math.round(delay / 1000)}s 后重连`, 'warn');
+  setConnState(c, t('retry', { why, s: Math.round(delay / 1000) }), 'warn');
   c.retryTimer = setTimeout(() => { c.retryTimer = null; connectOne(c); }, delay);
 }
 
@@ -370,10 +619,11 @@ function stop() {
     clearTimeout(c.retryTimer);
     clearTimeout(c.healTimer);
     if (c.pc) c.pc.close();
+    detachSpeaker(c);
   }
   conns.clear();
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-  $('toggle').textContent = '开始说话';
+  $('toggle').textContent = t('start');
   $('toggle').classList.remove('live');
   $('level').style.width = '0';
   $('micstate').textContent = '';
@@ -389,14 +639,14 @@ function setConnState(c, text, cls) {
 function renderConns() {
   const box = $('conns');
   if (conns.size === 0) {
-    box.innerHTML = '<div class="empty">未连接</div>';
+    box.innerHTML = `<div class="empty">${t('not_connected')}</div>`;
     return;
   }
   box.innerHTML = [...conns.values()].map(c => `
     <div class="conn">
-      <span class="host">${c.name ? c.name + ' · ' : ''}${hostOf(c.target)}</span>
+      <span class="host">${c.name ? c.name + ' · ' : ''}${hostOf(c.target)}${c.speaker ? ` <span title="${t('playing')}">🔊</span>` : ''}</span>
       <span class="st ${c.cls}">${c.needCert
-        ? `无法访问 —— 首次需<a href="${c.target}" target="_blank">点此打开一次</a>接受证书`
+        ? `${t('cert_before')}<a href="${c.target}" target="_blank">${t('cert_link')}</a>${t('cert_after')}`
         : c.state}</span>
       <span class="rtt">${c.rtt}</span>
     </div>`).join('');
@@ -409,17 +659,17 @@ function withTimeout(promise, ms, message) {
   ]);
 }
 
-// 浏览器的原始报错对用户毫无意义，翻译成"该去动哪里"。
+// Raw browser errors mean nothing to the user; translate them into "what to go fix".
 function explainMicError(err) {
   const name = err.name || '';
-  if (name === 'NotAllowedError') return '麦克风被拒绝：点地址栏左侧图标改成允许';
-  if (name === 'NotFoundError') return '这台机器上没找到麦克风';
-  if (name === 'NotReadableError') return '麦克风被别的程序占着：关掉会议/录音软件和其他标签页';
-  if (name === 'OverconstrainedError') return '麦克风不支持所需参数';
-  return '拿不到麦克风：' + (err.message || name || '未知原因');
+  if (name === 'NotAllowedError') return t('mic_denied');
+  if (name === 'NotFoundError') return t('mic_notfound');
+  if (name === 'NotReadableError') return t('mic_busy');
+  if (name === 'OverconstrainedError') return t('mic_constraints');
+  return t('mic_other', { reason: err.message || name || t('unknown') });
 }
 
-// 本地电平表：先确认自己这头真的在采到声音，再去怀疑网络。
+// Local level meter: confirm this side is actually capturing audio before suspecting the network.
 function meter(stream) {
   audioCtx = new AudioContext();
   const analyser = audioCtx.createAnalyser();
@@ -436,7 +686,7 @@ function meter(stream) {
   })();
 }
 
-// poll 每秒扫一遍所有连接的统计，把 RTT（和中继标记）写进各自的行。
+// poll scans every connection's stats once a second and writes the RTT (and relay marker) into its row.
 async function poll() {
   let dirty = false;
   for (const c of conns.values()) {
@@ -450,7 +700,7 @@ async function poll() {
       const local = stats.get(pair.localCandidateId);
       const rem = stats.get(pair.remoteCandidateId);
       const relayed = local?.candidateType === 'relay' || rem?.candidateType === 'relay';
-      const txt = Math.round(pair.currentRoundTripTime * 1000) + 'ms' + (relayed ? ' 中继' : '');
+      const txt = Math.round(pair.currentRoundTripTime * 1000) + 'ms' + (relayed ? ' ' + t('relay') : '');
       if (txt !== c.rtt) { c.rtt = txt; dirty = true; }
     }
   }

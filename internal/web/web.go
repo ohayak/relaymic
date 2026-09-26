@@ -1,4 +1,4 @@
-// Package web 打包发送端页面，让接收端编译成单个二进制。
+// Package web embeds the sender page so the receiver builds into a single binary.
 package web
 
 import (
@@ -6,14 +6,15 @@ import (
 	"io/fs"
 )
 
-//go:embed index.html
+//go:embed index.html favicon-32.png favicon-96.png
 var files embed.FS
 
-// FS 返回可直接交给 http.FileServer 的文件系统。
+// FS returns a filesystem that can be handed directly to http.FileServer.
 func FS() fs.FS { return files }
 
-// MonitorHTML 是接收端自用的监控页。它不跟发送端页面共用一个 FileServer：
-// 那个 FileServer 挂在根路径上，任何进去的文件都会被当成发送端资源暴露出去。
+// MonitorHTML is the receiver's own monitor page. It does not share the sender
+// page's FileServer: that one is mounted at the root, and any file placed in
+// it would be exposed as a sender resource.
 //
 //go:embed monitor.html
 var MonitorHTML []byte

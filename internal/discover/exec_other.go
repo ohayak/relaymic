@@ -4,5 +4,5 @@ package discover
 
 import "os/exec"
 
-// hideWindow 在非 Windows 平台无事可做。
+// hideWindow has nothing to do on non-Windows platforms.
 func hideWindow(cmd *exec.Cmd) {}

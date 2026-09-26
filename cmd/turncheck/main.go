@@ -1,7 +1,9 @@
-// turncheck 向 TURN 服务器申请一次中继分配，并验证中继地址真的能收发数据。
+// turncheck requests one relay allocation from a TURN server and verifies that
+// the relay address can really send and receive data.
 //
-// STUN 通了不代表 TURN 能用：分配请求走 3478，实际中继却走另一段端口，
-// 那段端口没放行的话，ICE 会拿到 relay 候选却永远连不通。
+// STUN working does not mean TURN works: the allocation request goes over 3478,
+// but the actual relaying uses a separate port range, and if that range is not
+// opened ICE gets a relay candidate that never connects.
 package main
 
 import (
@@ -15,20 +17,20 @@ import (
 )
 
 func main() {
-	server := flag.String("server", "", "TURN 服务器 host:port")
-	user := flag.String("user", "", "用户名")
-	pass := flag.String("pass", "", "密码")
+	server := flag.String("server", "", "TURN server host:port")
+	user := flag.String("user", "", "username")
+	pass := flag.String("pass", "", "password")
 	realm := flag.String("realm", "", "realm")
 	flag.Parse()
 
 	if *server == "" || *user == "" {
-		fmt.Fprintln(os.Stderr, "用法: turncheck -server host:3478 -user U -pass P -realm R")
+		fmt.Fprintln(os.Stderr, "usage: turncheck -server host:3478 -user U -pass P -realm R")
 		os.Exit(2)
 	}
 
 	conn, err := net.ListenPacket("udp4", "0.0.0.0:0")
 	if err != nil {
-		die("创建本地 socket", err)
+		die("create local socket", err)
 	}
 	defer conn.Close()
 
@@ -41,35 +43,36 @@ func main() {
 		Realm:          *realm,
 	})
 	if err != nil {
-		die("创建 TURN 客户端", err)
+		die("create TURN client", err)
 	}
 	defer client.Close()
 
 	if err := client.Listen(); err != nil {
-		die("启动监听", err)
+		die("start listening", err)
 	}
 
 	start := time.Now()
 	mapped, err := client.SendBindingRequest()
 	if err != nil {
-		die("STUN 绑定请求", err)
+		die("STUN binding request", err)
 	}
-	fmt.Printf("STUN 绑定   ✓  看到的外部地址 %s  (%v)\n", mapped, time.Since(start).Round(time.Millisecond))
+	fmt.Printf("STUN binding    OK  external address seen %s  (%v)\n", mapped, time.Since(start).Round(time.Millisecond))
 
 	start = time.Now()
 	relay, err := client.Allocate()
 	if err != nil {
-		die("TURN 分配（认证失败或中继端口段未放行）", err)
+		die("TURN allocation (auth failed or relay port range not open)", err)
 	}
 	defer relay.Close()
-	fmt.Printf("TURN 分配   ✓  中继地址 %s  (%v)\n", relay.LocalAddr(), time.Since(start).Round(time.Millisecond))
+	fmt.Printf("TURN allocation OK  relay address %s  (%v)\n", relay.LocalAddr(), time.Since(start).Round(time.Millisecond))
 
-	// 真正的验证：再要一个中继地址，让两个中继互发。
-	// 两端都是服务器的公网地址，不会被 denied-peer-ip 规则挡下 ——
-	// 用本机内网地址做对端测不出结果，那是配置在正确工作。
+	// The real test: request a second relay and have the two relays exchange data.
+	// Both ends are the server's public address, so the denied-peer-ip rule does not
+	// block them; using a local private address as the peer proves nothing, since
+	// blocking it is the configuration working correctly.
 	peerConn, err := net.ListenPacket("udp4", "0.0.0.0:0")
 	if err != nil {
-		die("创建第二个 socket", err)
+		die("create second socket", err)
 	}
 	defer peerConn.Close()
 
@@ -82,42 +85,42 @@ func main() {
 		Realm:          *realm,
 	})
 	if err != nil {
-		die("创建第二个 TURN 客户端", err)
+		die("create second TURN client", err)
 	}
 	defer peerClient.Close()
 	if err := peerClient.Listen(); err != nil {
-		die("第二个客户端监听", err)
+		die("second client listen", err)
 	}
 	peerRelay, err := peerClient.Allocate()
 	if err != nil {
-		die("第二次 TURN 分配", err)
+		die("second TURN allocation", err)
 	}
 	defer peerRelay.Close()
-	fmt.Printf("第二个中继 ✓  %s\n", peerRelay.LocalAddr())
+	fmt.Printf("second relay    OK  %s\n", peerRelay.LocalAddr())
 
-	payload := []byte("relaymic-turn-probe")
+	payload := []byte("remotevisio-turn-probe")
 	start = time.Now()
 	if _, err := peerRelay.WriteTo(payload, relay.LocalAddr()); err != nil {
-		die("经中继发包", err)
+		die("send through relay", err)
 	}
 
 	buf := make([]byte, 1500)
 	_ = relay.SetReadDeadline(time.Now().Add(6 * time.Second))
 	n, from, err := relay.ReadFrom(buf)
 	if err != nil {
-		fmt.Printf("中继转发   ✗  分配成功但数据不通：%v\n", err)
+		fmt.Printf("relay forward   FAILED  allocation succeeded but no data got through: %v\n", err)
 		os.Exit(1)
 	}
 	if string(buf[:n]) != string(payload) {
-		fmt.Printf("中继转发   ✗  收到的数据不一致\n")
+		fmt.Printf("relay forward   FAILED  received data does not match\n")
 		os.Exit(1)
 	}
-	fmt.Printf("中继转发   ✓  %d 字节原样送达，来自 %s  (%v)\n",
+	fmt.Printf("relay forward   OK  %d bytes delivered intact from %s  (%v)\n",
 		n, from, time.Since(start).Round(time.Millisecond))
-	fmt.Println("\n结论: TURN 完全可用，音频可以经它中继")
+	fmt.Println("\nVerdict: TURN is fully usable; audio can be relayed through it")
 }
 
 func die(what string, err error) {
-	fmt.Fprintf(os.Stderr, "%s 失败: %v\n", what, err)
+	fmt.Fprintf(os.Stderr, "%s failed: %v\n", what, err)
 	os.Exit(1)
 }

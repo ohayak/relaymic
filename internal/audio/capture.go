@@ -8,14 +8,15 @@ import (
 	"github.com/gen2brain/malgo"
 )
 
-// 采集能力只给发送端用。接收端"从不打开输入设备"的防回环约定不变：
-// 它们是两个进程，接收端的代码路径里没有任何指向这里的调用。
+// Capture is for the sender only. The receiver's "never opens an input
+// device" anti-loopback rule still holds: they are two processes, and nothing
+// in the receiver's code path calls into this.
 
-// Captures 列出所有输入设备。
+// Captures lists all input devices.
 func (c *Context) Captures() ([]Device, error) {
 	infos, err := c.ctx.Devices(malgo.Capture)
 	if err != nil {
-		return nil, fmt.Errorf("枚举输入设备: %w", err)
+		return nil, fmt.Errorf("enumerate input devices: %w", err)
 	}
 	out := make([]Device, 0, len(infos))
 	for _, info := range infos {
@@ -28,7 +29,7 @@ func (c *Context) Captures() ([]Device, error) {
 	return out, nil
 }
 
-// FindCapture 按名字子串查找输入设备。空串返回系统默认。
+// FindCapture finds an input device by name substring. An empty string returns the system default.
 func (c *Context) FindCapture(substr string) (Device, error) {
 	devices, err := c.Captures()
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *Context) FindCapture(substr string) (Device, error) {
 		if len(devices) > 0 {
 			return devices[0], nil
 		}
-		return Device{}, fmt.Errorf("这台机器上没有输入设备")
+		return Device{}, fmt.Errorf("no input devices on this machine")
 	}
 	want := normalize(substr)
 	for _, d := range devices {
@@ -55,16 +56,17 @@ func (c *Context) FindCapture(substr string) (Device, error) {
 	for i, d := range devices {
 		names[i] = d.Name
 	}
-	return Device{}, fmt.Errorf("没有找到名字含 %q 的输入设备，当前可用：%s", substr, strings.Join(names, " / "))
+	return Device{}, fmt.Errorf("no input device whose name contains %q; available: %s", substr, strings.Join(names, " / "))
 }
 
-// Capturer 持续从一个输入设备读 PCM。
+// Capturer continuously reads PCM from one input device.
 type Capturer struct {
 	device *malgo.Device
 }
 
-// NewCapturer 在 dev 上开一个采集流，每来一段交错 PCM 就调一次 onPCM。
-// onPCM 运行在实时音频回调里：不许阻塞、不许分配大对象，拷走数据就返回。
+// NewCapturer opens a capture stream on dev and calls onPCM for each chunk of
+// interleaved PCM. onPCM runs in the real-time audio callback: it must not
+// block or allocate large objects; copy the data out and return.
 func (c *Context) NewCapturer(dev Device, sampleRate, channels int, onPCM func([]int16)) (*Capturer, error) {
 	cfg := malgo.DefaultDeviceConfig(malgo.Capture)
 	cfg.Capture.Format = malgo.FormatS16
@@ -72,16 +74,16 @@ func (c *Context) NewCapturer(dev Device, sampleRate, channels int, onPCM func([
 	cfg.Capture.DeviceID = dev.ID.Pointer()
 	cfg.SampleRate = uint32(sampleRate)
 
-	// 回调给的是字节流，转成 int16 后交出去。
-	// 复用同一块 slice：onPCM 的约定就是"用完即弃、要留就拷"。
+	// The callback hands over bytes; convert to int16 before passing on.
+	// The same slice is reused: onPCM's contract is "use it now, copy to keep".
 	var pcm []int16
 
 	type result struct {
 		device *malgo.Device
 		err    error
 	}
-	// InitDevice 是阻塞的 cgo 调用，可能因驱动残留而永久挂起，
-	// 和播放侧同样的问题、同样的对策：超时就放弃。
+	// InitDevice is a blocking cgo call that can hang forever on leftover
+	// driver state. Same problem and same remedy as the playback side: give up on timeout.
 	done := make(chan result, 1)
 	go func() {
 		device, err := malgo.InitDevice(c.ctx.Context, cfg, malgo.DeviceCallbacks{
@@ -103,15 +105,15 @@ func (c *Context) NewCapturer(dev Device, sampleRate, channels int, onPCM func([
 	select {
 	case r := <-done:
 		if r.err != nil {
-			return nil, fmt.Errorf("打开输入设备 %q: %w", dev.Name, r.err)
+			return nil, fmt.Errorf("open input device %q: %w", dev.Name, r.err)
 		}
 		if err := r.device.Start(); err != nil {
 			r.device.Uninit()
-			return nil, fmt.Errorf("启动输入设备 %q: %w", dev.Name, err)
+			return nil, fmt.Errorf("start input device %q: %w", dev.Name, err)
 		}
 		return &Capturer{device: r.device}, nil
 	case <-time.After(OpenTimeout):
-		return nil, fmt.Errorf("打开输入设备 %q 超过 %s 无响应", dev.Name, OpenTimeout)
+		return nil, fmt.Errorf("opening input device %q did not respond within %s", dev.Name, OpenTimeout)
 	}
 }
 

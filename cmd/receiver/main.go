@@ -1,7 +1,8 @@
-// receiver 跑在被远程控制的那台 Mac 上。
+// receiver runs on the Mac that is being remote-controlled.
 //
-// 它做三件事：托管发送端网页、收 WebRTC 音频、把音频写进虚拟麦克风。
-// 用户在任何吃麦克风的软件里选中那个虚拟设备，就能听到本地说的话。
+// It does three things: serve the sender web page, receive WebRTC audio, and
+// write it into the virtual microphone. Select that virtual device in any app
+// that uses a microphone and it hears what is said on the local side.
 package main
 
 import (
@@ -16,7 +17,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -34,124 +34,177 @@ import (
 func defaultCertDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return ".relaymic"
+		return ".remotevisio"
 	}
-	return filepath.Join(home, ".config", "relaymic")
+	return filepath.Join(home, ".config", "remotevisio")
 }
 
 func defaultSegmentsDir() string { return filepath.Join(defaultCertDir(), "recordings") }
 
 func main() {
-	addr := flag.String("addr", ":7420", "监听地址")
-	deviceName := flag.String("device", "blackhole", "输出设备名（子串匹配）")
-	// 150ms 是实测值：80ms 扛不住 WiFi 突发，600ms 白垫延迟。
-	bufferMS := flag.Int("buffer", 150, "抖动缓冲目标深度（毫秒）")
-	plain := flag.Bool("plain", false, "用 http 而非 https（只有从本机访问才够用）")
-	certDir := flag.String("cert-dir", defaultCertDir(), "自签证书存放目录")
-	certHosts := flag.String("cert-hosts", "", "额外写进证书的域名或 IP，逗号分隔")
-	gain := flag.Float64("gain", 0, "固定增益倍数；留空或 0 表示用自动增益（AGC）")
-	meter := flag.Bool("meter", false, "每秒打印一次收到的音频电平，用来诊断音量")
-	// 默认不排除：对称型 NAT 下没有 TURN 就打不通，排掉覆盖网等于自断退路。
-	// 配好 TURN 之后再开这个开关，才能真正甩掉绕地球的中继。
-	noCGNAT := flag.Bool("no-cgnat", false, "排除 100.64.0.0/10 候选，逼 ICE 走公网直连。需先配好 -turn")
-	// 默认用国内可达的 STUN：google 的在国内不通，而 answer 要等收集完才发，
-	// STUN 不通的代价是每次连接白等一个超时，不是"少个候选"那么便宜。
-	stun := flag.String("stun", "stun:stun.l.google.com:19302,stun:stun.cloudflare.com:3478,stun:stun.miwifi.com:3478", "STUN 服务器，逗号分隔")
-	turn := flag.String("turn", "", "TURN 地址，形如 turn:host:3478")
-	turnUser := flag.String("turn-user", "", "TURN 用户名")
-	turnPass := flag.String("turn-pass", "", "TURN 密码")
-	forceRelay := flag.Bool("force-relay", false, "只用 TURN 中继候选，用于验证中继链路")
-	// 默认关：DTX 的 VAD 会把低电平语音误判成静音掐掉，实测每秒断一次。
-	// 语音识别场景带宽根本不是瓶颈，没有理由为省包冒断字的险。
-	dtx := flag.Bool("dtx", false, "让发送端静音时停发包（省带宽，但可能掐掉轻声）")
-	record := flag.String("record", "", "把解码后、处理前的原始 PCM 录成 WAV，用于杂音诊断")
-	segmentsDir := flag.String("segments-dir", defaultSegmentsDir(), "按语音段切片存 WAV 的目录，供监控页回听；留空表示不录")
+	addr := flag.String("addr", ":7420", "listen address")
+	deviceName := flag.String("device", "remotevisio", "output device name (substring match)")
+	// 150ms is a measured value: 80ms cannot ride out WiFi bursts, 600ms only adds latency.
+	bufferMS := flag.Int("buffer", 150, "jitter buffer target depth (milliseconds)")
+	plain := flag.Bool("plain", false, "use http instead of https (only good enough for access from this machine)")
+	certDir := flag.String("cert-dir", defaultCertDir(), "directory for the self-signed certificate")
+	certHosts := flag.String("cert-hosts", "", "extra hostnames or IPs to put in the certificate, comma-separated")
+	gain := flag.Float64("gain", 0, "fixed gain multiplier; empty or 0 means auto gain (AGC)")
+	meter := flag.Bool("meter", false, "print the incoming audio level once a second, for diagnosing volume")
+	// Off by default: behind a symmetric NAT nothing connects without TURN, so
+	// excluding the overlay network would cut off the fallback. Turn this on only
+	// once TURN is configured; then it really does avoid the round-the-world relay.
+	noCGNAT := flag.Bool("no-cgnat", false, "exclude 100.64.0.0/10 candidates to force ICE onto a public direct path; configure -turn first")
+	// The default includes a STUN server reachable from China: Google's is blocked
+	// there, and the answer is only sent once gathering finishes, so an unreachable
+	// STUN costs a full timeout on every connection, not merely one candidate fewer.
+	stun := flag.String("stun", "stun:stun.l.google.com:19302,stun:stun.cloudflare.com:3478,stun:stun.miwifi.com:3478", "STUN servers, comma-separated")
+	turn := flag.String("turn", "", "TURN address, e.g. turn:host:3478")
+	turnUser := flag.String("turn-user", "", "TURN username")
+	turnPass := flag.String("turn-pass", "", "TURN password")
+	forceRelay := flag.Bool("force-relay", false, "use only TURN relay candidates, to verify the relay path")
+	// Off by default: DTX's VAD mistakes quiet speech for silence and cuts it off,
+	// measured at about one dropout per second. Bandwidth is no bottleneck for
+	// speech recognition, so saving packets is not worth the risk of clipped words.
+	dtx := flag.Bool("dtx", false, "let the sender stop sending packets during silence (saves bandwidth, may clip quiet speech)")
+	record := flag.String("record", "", "record the decoded, unprocessed PCM to a WAV file, for noise diagnosis")
+	segmentsDir := flag.String("segments-dir", defaultSegmentsDir(), "directory for per-utterance WAV segments, played back from the monitor page; empty disables")
+	// Return path: send this Mac's system audio back to the sender, so the user
+	// hears the remote Mac's meetings and alerts on their own side and can turn the
+	// remote-desktop software's audio off. The Core Audio process tap (macOS 14.2+)
+	// captures the system output directly: no second BlackHole, and the system
+	// output device is left alone.
+	speaker := flag.Bool("speaker", true, "send this Mac's system audio back to the sender (macOS 14.2+, needs System Audio Recording permission)")
+	speakerBitrate := flag.Int("speaker-bitrate", 64000, "Opus bitrate of the return path (bps)")
+	// The remote Mac is usually playing meeting audio into an empty room. Mute its
+	// own speakers; the return path is unaffected.
+	speakerMute := flag.Bool("speaker-mute", false, "silence this Mac's own speakers while its audio is relayed (the sender still hears everything)")
 	flag.Parse()
 
 	log.SetFlags(log.Ltime)
 
-	// AGPL 说的 "Appropriate Legal Notices"：启动时把版权、无担保、
-	// 以及源码在哪告诉用户一次。命令行程序的惯例做法。
-	log.Println("RelayMic  Copyright (C) 2026 Shu Chunhui")
-	log.Println("本程序不提供任何担保，遵循 AGPL-3.0 发布。")
-	log.Println("源码：https://github.com/hueshu/relaymic")
+	// A non-zero exit code must wait until every defer (recording finalization,
+	// device, context) has run: this defer is registered first, so it runs last.
+	exitCode := 0
+	defer func() {
+		if exitCode != 0 {
+			os.Exit(exitCode)
+		}
+	}()
+
+	// The AGPL's "Appropriate Legal Notices": tell the user once at startup about
+	// the copyright, the lack of warranty and where the source is, as command-line
+	// programs conventionally do.
+	log.Println("Remote Visio  Copyright (C) 2026 Shu Chunhui")
+	log.Println("This program comes with ABSOLUTELY NO WARRANTY; released under AGPL-3.0.")
+	log.Println("Source: https://github.com/hueshu/relaymic")
 
 	actx, err := audio.NewContext()
 	if err != nil {
-		log.Fatalln("音频初始化失败:", err)
+		log.Fatalln("audio initialization failed:", err)
 	}
 	defer actx.Close()
 
 	dev, err := actx.FindPlayback(*deviceName)
 	if err != nil {
-		log.Fatalln(err)
+		log.Println(err)
+		log.Fatalln("the Remote Visio audio device is missing: install it with `make install-driver` in the source tree (asks for your admin password), then start again")
 	}
 
-	// 打开设备失败不退出，进程内重试。
+	// If opening the device fails, retry in-process instead of exiting.
 	//
-	// 之前失败就 Fatalln，靠 launchd 重启 —— 但超时那一刻还挂着一个
-	// 没法取消的 InitDevice cgo 调用，进程退出等于把它强杀在 coreaudiod
-	// 里；"超时→退出→重启"每循环一轮就多攒一个残留，越试越打不开，
-	// 最后只能 sudo killall coreaudiod。留在进程里重试，残留至多一个。
-	//
-	// 每轮先让系统的 say 打开一次设备：macOS 26 上 BlackHole 空置会
-	// 回到"未激活"态，非 Apple 进程首开会挂死；say 能唤醒它。
+	// It used to Fatalln and let launchd restart it, but at the moment of the
+	// timeout an uncancellable InitDevice cgo call is still in flight, and exiting
+	// kills it inside coreaudiod. Every "timeout -> exit -> restart" cycle left one
+	// more leftover, making the device ever harder to open, until only
+	// sudo killall coreaudiod helped. Retrying in-process caps the leftovers at one.
 	var player *audio.Player
 	for {
-		if runtime.GOOS == "darwin" {
-			_ = exec.Command("/usr/bin/say", "-a", dev.Name, " ").Run()
-		}
-		// 解码出来就是立体声交错的 PCM，和 BlackHole 2ch 的格式一致，直接灌进去。
+		// Decoded output is already interleaved stereo PCM, the Remote Visio device's format, so it goes straight in.
 		player, err = actx.NewPlayer(dev, rtc.SampleRate, rtc.Channels, *bufferMS)
 		if err == nil {
 			break
 		}
 		log.Println(err)
-		log.Println("30 秒后重试打开设备（进程不退出，避免累积驱动残留）")
+		log.Println("retrying the device in 30 seconds (staying alive to avoid piling up driver leftovers)")
 		time.Sleep(30 * time.Second)
 	}
 	defer player.Close()
 
-	// 增益补在解码之后、写设备之前。发送端的麦克风音量差异很大，
-	// 而下游的语音识别普遍带静音门限 —— 声音送到了但太小，表现和没送到一样。
+	// Device watchdog. After coreaudiod restarts (driver reinstall, or the system
+	// acting up) every device ID changes and the old device never calls back again,
+	// yet the process stays alive, writing to a device that no longer exists: the
+	// remote microphone goes silently deaf with nobody at the machine. When the
+	// callbacks stop, take the normal exit path with code 3, which tells launchd /
+	// the menu-bar app to start a fresh one.
+	// Sleep/wake also pauses callbacks for a while: the monotonic clock does not
+	// advance during sleep, so compare wall-clock time (Round(0) strips the
+	// monotonic reading) and do not count a tick that skipped a large gap.
+	deviceDead := make(chan struct{})
+	go func() {
+		last := player.Callbacks()
+		lastTick := time.Now()
+		stalled := 0
+		for now := range time.Tick(10 * time.Second) {
+			slept := now.Round(0).Sub(lastTick.Round(0)) > 30*time.Second
+			lastTick = now
+			calls := player.Callbacks()
+			if calls != last || slept {
+				last, stalled = calls, 0
+				continue
+			}
+			if stalled++; stalled >= 3 {
+				close(deviceDead)
+				return
+			}
+		}
+	}()
+
+	// Gain is applied after decoding and before writing to the device. Sender
+	// microphone levels vary widely, and downstream speech recognition usually has
+	// a silence gate: audio that arrives too quiet behaves as if it never arrived.
 	ice := iceServers(*stun, *turn, *turnUser, *turnPass)
 
 	level := newLevelMeter()
 	agc := audio.NewAGC()
 	useAGC := *gain <= 0
 	if useAGC {
-		log.Println("自动增益已启用")
+		log.Println("auto gain enabled")
 	} else {
-		log.Printf("固定增益 %.2gx", *gain)
+		log.Printf("fixed gain %.2gx", *gain)
 	}
-	// 诊断录音挂在链条最前面：录的是解码器吐出的原始样本。
-	// 波形里若已有硬边缘，病在发送端或传输；若这里干净而听感仍炸，
-	// 病在后面的处理和播放。这一刀把整条链切成两半。
+	// The diagnostic recording sits at the very front of the chain: it captures the
+	// raw samples out of the decoder. Hard edges already in this waveform put the
+	// fault on the sender or in transit; if it is clean here yet still sounds broken,
+	// the fault is in the later processing or playback. One cut splits the chain in two.
 	var rec *audio.WAVWriter
 	if *record != "" {
 		var err error
 		if rec, err = audio.NewWAVWriter(*record, rtc.SampleRate, rtc.Channels); err != nil {
-			log.Fatalln("打开录音文件失败:", err)
+			log.Fatalln("failed to open recording file:", err)
 		}
-		log.Println("诊断录音:", *record)
+		log.Println("diagnostic recording:", *record)
 	}
 
-	// 分段录音在增益之后：现场要回答的是"刚才那句为什么没识别出来"，
-	// 要听的就是识别软件真正听到的那份音频，不是解码器吐出来的原始样本。
+	// Segment recording comes after gain: the question in the field is "why was
+	// that sentence not recognized", so it must capture what the recognition
+	// software actually heard, not the raw decoder output.
 	var segs *audio.SegmentRecorder
 	var segCh chan []int16
 	if *segmentsDir != "" {
 		var err error
 		if segs, err = audio.NewSegmentRecorder(*segmentsDir, rtc.SampleRate, rtc.Channels); err != nil {
-			log.Fatalln("打开分段录音目录失败:", err)
+			log.Fatalln("failed to open segment recordings directory:", err)
 		}
 		defer segs.Close()
-		log.Println("分段录音:", *segmentsDir)
+		log.Println("segment recordings:", *segmentsDir)
 
-		// 落盘必须和音频链解耦：SegmentRecorder.Write 是同步磁盘写，
-		// 段边界还要建文件、扫目录。直接在解码协程里调，磁盘一卡
-		// 播放缓冲就被声卡抽干 —— 为了诊断功能把正事搞出欠载，本末倒置。
-		// 队列满就丢帧：录音缺一帧无所谓，音频链一毫秒都不能等。
+		// Disk writes must be decoupled from the audio chain: SegmentRecorder.Write is
+		// a synchronous disk write, and segment boundaries also create files and scan
+		// the directory. Called from the decode goroutine, one disk stall would let the
+		// sound card drain the playback buffer: an underrun caused by a diagnostic
+		// feature. When the queue is full, drop the frame: a missing frame in a
+		// recording is harmless, the audio chain cannot wait a millisecond.
 		segCh = make(chan []int16, 64)
 		go func() {
 			for pcm := range segCh {
@@ -160,18 +213,19 @@ func main() {
 		}()
 	}
 
-	// 最近一次往声卡写入有声样本的时刻，环回 watchdog 的因果依据。
+	// When voiced samples were last written to the sound card; the loopback watchdog's causal reference.
 	var lastPlayVoiced atomic.Int64
 	lastPlayVoiced.Store(time.Now().Unix())
 
-	// 第二路：ring 之后（声卡实际拿到的数据）。和上面那路对比，
-	// 缓冲的欠载断口、拉伸、淡入淡出对音质的影响直接能听出来。
+	// Second tap: after the ring (what the sound card actually received). Compared
+	// with the one above, the effect of underrun gaps, stretching and fades in the
+	// buffer on audio quality is directly audible.
 	var postSegs *audio.SegmentRecorder
 	var postCh chan []int16
 	if *segmentsDir != "" {
 		var err error
 		if postSegs, err = audio.NewSegmentRecorder(filepath.Join(*segmentsDir, "post"), rtc.SampleRate, rtc.Channels); err != nil {
-			log.Fatalln("打开 ring 后录音目录失败:", err)
+			log.Fatalln("failed to open after-ring recordings directory:", err)
 		}
 		defer postSegs.Close()
 		postCh = make(chan []int16, 64)
@@ -191,19 +245,25 @@ func main() {
 			copy(frame, pcm)
 			select {
 			case postCh <- frame:
-			default: // 落盘跟不上就丢帧，绝不拖累声卡回调
+			default: // drop the frame if disk cannot keep up; never hold up the sound card callback
 			}
 		})
 	}
 
-	// 第三路：BlackHole 环回之后 —— 识别软件从设备里读到的就是这份。
-	// 这里破了"接收端从不打开输入设备"的例，但成不了环：读的是自己
-	// 写的 BlackHole，数据只进录音文件，永远不会流回播放缓冲。
+	// Third tap: after the BlackHole loopback, which is exactly what the recognition
+	// software reads from the device. This breaks the "receiver never opens an input
+	// device" rule, but cannot form a loop: it reads the BlackHole we write ourselves,
+	// and the data only goes into recording files, never back into the playback buffer.
+	// closeLoop shuts the loopback capture down on exit, before the player and the
+	// audio context. It used to never close: with the device still open when the
+	// context was torn down, CoreAudio hung there, the process got SIGKILLed, and
+	// BlackHole could not be opened again without restarting coreaudiod.
+	closeLoop := func() {}
 	var loopSegs *audio.SegmentRecorder
 	if *segmentsDir != "" {
 		var err error
 		if loopSegs, err = audio.NewSegmentRecorder(filepath.Join(*segmentsDir, "loop"), rtc.SampleRate, rtc.Channels); err != nil {
-			log.Fatalln("打开环回录音目录失败:", err)
+			log.Fatalln("failed to open loopback recordings directory:", err)
 		}
 		defer loopSegs.Close()
 		loopCh := make(chan []int16, 64)
@@ -214,14 +274,15 @@ func main() {
 		}()
 		capDev, err := actx.FindCapture(*deviceName)
 		if err != nil {
-			log.Println("环回录音不可用（找不到输入侧设备）:", err)
+			log.Println("loopback recording unavailable (input-side device not found):", err)
 		} else {
-			// 进程快速重启时，CoreAudio 偶尔会发一个坏的 capture 流：
-			// 要么回调不来，要么回调照跑、内容却全零。所以判据不能看
-			// "有没有回调"，要看因果：我们明明往 BlackHole 写了有声数据
-			// （lastPlayVoiced 在 tap 里刷新），环回侧却 60 秒收不到一个
-			// 有声样本 —— 环回断了，重开。静音时段两个时间戳都不动，
-			// 不会误报。
+			// On a quick process restart CoreAudio occasionally hands out a bad capture
+			// stream: either no callbacks, or callbacks that run but carry all zeros. So
+			// the test cannot be "are callbacks arriving"; it has to be causal: we did write
+			// voiced data to BlackHole (lastPlayVoiced is refreshed in the tap), yet the
+			// loopback side has not seen a single voiced sample in 60 s, so the loopback is
+			// broken and gets reopened. During silence neither timestamp moves, so no
+			// false alarms.
 			var lastLoopVoiced atomic.Int64
 			lastLoopVoiced.Store(time.Now().Unix())
 			openLoop := func() *audio.Capturer {
@@ -240,35 +301,52 @@ func main() {
 					}
 				})
 				if err != nil {
-					log.Println("环回采集打开失败:", err)
+					log.Println("failed to open loopback capture:", err)
 					return nil
 				}
-				log.Println("环回录音: 从", capDev.Name, "输入侧采集")
+				log.Println("loopback recording: capturing from the input side of", capDev.Name)
 				return c
 			}
+			var loopMu sync.Mutex // the watchdog's reopen and the exit-time close must not overlap
 			loopCap := openLoop()
+			loopDone := false
+			closeLoop = func() {
+				loopMu.Lock()
+				defer loopMu.Unlock()
+				loopDone = true
+				if loopCap != nil {
+					loopCap.Close()
+					loopCap = nil
+				}
+			}
 			go func() {
 				for range time.Tick(15 * time.Second) {
 					now := time.Now().Unix()
-					// 没在写有声数据就没有判断依据，静静等着。
+					// Nothing voiced is being written, so there is nothing to judge by; just wait.
 					if now-lastPlayVoiced.Load() > 60 {
 						continue
 					}
 					if now-lastLoopVoiced.Load() < 60 {
 						continue
 					}
-					log.Println("环回采集失聪（播放有声而环回 60 秒无声），重开")
+					loopMu.Lock()
+					if loopDone {
+						loopMu.Unlock()
+						return
+					}
+					log.Println("loopback capture went deaf (playback had sound, loopback silent for 60 s); reopening")
 					if loopCap != nil {
 						loopCap.Close()
 					}
-					lastLoopVoiced.Store(now) // 重开后重新计时，防连环重开
+					lastLoopVoiced.Store(now) // restart the clock after reopening, so it does not reopen again at once
 					loopCap = openLoop()
+					loopMu.Unlock()
 				}
 			}()
 		}
 	}
 
-	st := &statusState{state: "未连接"}
+	st := &statusState{state: "Not connected"}
 
 	receiver := rtc.New(
 		func(pcm []int16) {
@@ -287,17 +365,17 @@ func main() {
 				copy(frame, pcm)
 				select {
 				case segCh <- frame:
-				default: // 落盘跟不上就丢帧，绝不反压音频链
+				default: // drop the frame if disk cannot keep up; never back-pressure the audio chain
 				}
 			}
 		},
 		func(state webrtc.PeerConnectionState) {
-			log.Println("连接状态:", state)
+			log.Println("connection state:", state)
 			st.setState(state.String())
 		},
 	)
 	receiver.OnPath(func(path string) {
-		log.Println("链路:", path)
+		log.Println("path:", path)
 		st.setPath(path)
 	})
 	receiver.ExcludeCGNAT(*noCGNAT)
@@ -305,26 +383,72 @@ func main() {
 	receiver.SetDTX(*dtx)
 	receiver.ForceRelay(*forceRelay)
 	if *forceRelay {
-		log.Println("强制中继模式：只接受 TURN 候选")
+		log.Println("forced relay mode: only TURN candidates accepted")
 	}
 	if *noCGNAT {
-		log.Println("已排除 CGNAT(100.64/10) 候选：强制公网直连")
+		log.Println("CGNAT (100.64/10) candidates excluded: forcing a public direct path")
 		if *turn == "" {
-			log.Println("警告：没有配 TURN，对称型 NAT 下很可能完全连不上")
+			log.Println("warning: no TURN configured; behind a symmetric NAT this will very likely not connect at all")
 		}
 	}
 	defer receiver.Close()
 
+	// Return path: system audio -> tap -> Opus -> sender. Without permission the tap
+	// does not fail, it just yields silence, which is why the monitor page's return
+	// level sits at -120; the log says so up front.
+	var spk *rtc.Speaker
+	speakerOutput := ""
+	if *speaker {
+		// The global tap follows the default output device. If that is BlackHole itself
+		// (the virtual microphone), nothing but the receiver plays there, so the capture
+		// would be empty; worse, tearing down a tap attached to BlackHole wedges its
+		// driver, and only a coreaudiod restart recovers. In that configuration skip the
+		// tap entirely and say so in the log.
+		out, outErr := actx.DefaultPlayback()
+		if outErr == nil && out.Name == dev.Name {
+			log.Printf("System audio return unavailable: the Mac's default output device is %q, the virtual microphone itself; "+
+				"set the output to the speakers and restart to enable the return path", out.Name)
+		} else if tap, err := actx.OpenSystemTap(*speakerMute); err != nil {
+			log.Println("System audio return unavailable:", err)
+		} else {
+			defer tap.Close()
+			s, err := receiver.NewSpeaker(*speakerBitrate)
+			if err != nil {
+				log.Println("System audio return unavailable:", err)
+			} else if capturer, err := actx.NewCapturer(tap.Device(), rtc.SampleRate, rtc.Channels, s.Feed); err != nil {
+				s.Close()
+				log.Println("System audio return unavailable:", err)
+			} else {
+				defer capturer.Close() // runs before tap.Close (defers are LIFO)
+				defer s.Close()
+				spk = s
+				speakerOutput = tap.Output
+				muted := ""
+				if *speakerMute {
+					muted = ", this Mac's own speakers muted"
+				}
+				log.Printf("System audio return: capturing from \"%s\", %d kbps%s", tap.Output, *speakerBitrate/1000, muted)
+				log.Println("  first run prompts for System Audio Recording permission; without it the sender only hears silence. " +
+					"Enable manually: System Settings > Privacy & Security > Screen & System Audio Recording > System Audio Recording Only")
+			}
+		}
+	}
+
+	ips := localIPv4()
+	// Same-machine detection needs every address (IPv6 included); the certificate SAN only needs IPv4.
+	selfAddrs := localAddrs()
+
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.FS(web.FS())))
-	// 发送端必须用同一套 ICE 配置：只有它也拿到 TURN，
-	// 才会生成中继候选，ICE 才可能选中那条低延迟的路。
-	// 机器名随 ICE 配置一起给发送端：网页/界面上"IP 旁边是哪台电脑"
-	// 由每台自己回答。优先用 Tailscale 里设定的设备名（用户按它管理机器，
-	// 显示别的名字对不上号），退而求其次才是系统的电脑名。
+	// The sender must use the same ICE configuration: only if it also gets TURN does
+	// it generate relay candidates, so that ICE can pick the low-latency path.
+	// The machine name ships with the ICE config: each machine answers "which
+	// computer is next to this IP" on the web page / UI itself. Prefer the device
+	// name set in Tailscale (that is how the user manages the machines; any other
+	// name would not match), falling back to the system computer name.
 	name := discover.SelfName()
 	if name != "" {
-		log.Println("机器名(来自 Tailscale):", name)
+		log.Println("machine name (from Tailscale):", name)
 	}
 	if name == "" {
 		if out, err := exec.Command("/usr/sbin/scutil", "--get", "ComputerName").Output(); err == nil {
@@ -336,7 +460,7 @@ func main() {
 		name = strings.TrimSuffix(name, ".local")
 	}
 	if name != "" {
-		log.Println("机器名:", name)
+		log.Println("machine name:", name)
 	}
 	mux.HandleFunc("/ice-config", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -348,27 +472,35 @@ func main() {
 	})
 	mux.HandleFunc("/offer", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "只接受 POST", http.StatusMethodNotAllowed)
+			http.Error(w, "POST only", http.StatusMethodNotAllowed)
 			return
 		}
 		var offer webrtc.SessionDescription
 		if err := json.NewDecoder(r.Body).Decode(&offer); err != nil {
-			http.Error(w, "offer 解析失败: "+err.Error(), http.StatusBadRequest)
+			http.Error(w, "failed to parse offer: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		answer, err := receiver.Answer(offer)
+		// A sender on this same machine (local testing) would make the return path feed
+		// back: the browser plays it, the tap captures it again, round and round. Such
+		// connections get no return path.
+		local := isLocalSender(r.RemoteAddr, selfAddrs)
+		answer, err := receiver.Answer(offer, spk != nil && !local)
 		if err != nil {
-			log.Println("协商失败:", err)
+			log.Println("negotiation failed:", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		log.Println("发送端已接入", r.RemoteAddr)
+		log.Println("sender connected from", r.RemoteAddr)
+		if spk != nil && local {
+			log.Println("Sender is on this machine; no return path on this connection (would feed back)")
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(answer)
 	})
 
-	// 替浏览器发现接收端：网页拿不到 tailscale 设备表，这台替它扫。
-	// 结果含扫描者自己拿不到的"其他台"；网页把自己的 origin 合并进去。
+	// Discover receivers on the browser's behalf: the web page cannot read the
+	// tailscale device list, so this machine scans for it. The result holds the
+	// "other" machines, not the scanner itself; the page merges its own origin in.
 	var rcvMu sync.Mutex
 	var rcvCache []string
 	var rcvAt time.Time
@@ -377,7 +509,7 @@ func main() {
 		if time.Since(rcvAt) > 30*time.Second {
 			found, err := discover.Receivers()
 			if err != nil {
-				log.Println("接收端扫描失败:", err)
+				log.Println("receiver scan failed:", err)
 			} else {
 				rcvCache = found
 				rcvAt = time.Now()
@@ -396,7 +528,8 @@ func main() {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(web.MonitorHTML)
 	})
-	// 缓冲和 RTP 计数现场取：它们本来就带锁，再抄一份到状态里只会多一处会过期的真相。
+	// Buffer and RTP counters are read live: they already carry their own locks, and
+	// a copy in the status struct would only be one more place to go stale.
 	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
 		buffered, dropped, starved := player.Stats()
 		received, lost, _, _ := receiver.Stats().Snapshot()
@@ -412,10 +545,15 @@ func main() {
 			"starved":    starved,
 			"received":   received,
 			"lost":       lost,
+			"speaker": map[string]any{
+				"on":      spk != nil,
+				"output":  speakerOutput,
+				"levelDb": st.speakerLevel(),
+			},
 		})
 	})
 	toJSON := func(r *audio.SegmentRecorder) []segmentJSON {
-		// 页面按数组渲染，没开分段录音时也得给个空数组而不是 null。
+		// The page renders an array, so with segment recording off return an empty array rather than null.
 		out := []segmentJSON{}
 		if r == nil {
 			return out
@@ -468,8 +606,9 @@ func main() {
 			return
 		}
 		name := r.PathValue("name")
-		// 只放行自己生成的那种文件名。不能只挡 ".."：这个目录在用户家目录下，
-		// 拼进任何一个带路径分隔符的名字都等于把整块盘开放给了局域网。
+		// Only allow the file names we generate ourselves. Blocking ".." alone is not
+		// enough: this directory lives under the user's home, and joining in any name
+		// with a path separator would expose the whole disk to the LAN.
 		if !validSegmentName(name) {
 			http.NotFound(w, r)
 			return
@@ -477,8 +616,9 @@ func main() {
 		http.ServeFile(w, r, filepath.Join(segs.Dir(), name))
 	})
 
-	// 网页发送端从一台打开、同时连所有台：跨源请求必须放行。
-	// 局域网/tailnet 自用服务，没有共享凭据，通配符是安全的。
+	// The web sender is opened from one machine and connects to all of them at
+	// once, so cross-origin requests must be allowed. A private LAN/tailnet service
+	// with no shared credentials: the wildcard is safe.
 	cors := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -494,36 +634,35 @@ func main() {
 
 	_, port, err := net.SplitHostPort(*addr)
 	if err != nil {
-		log.Fatalln("解析监听地址:", err)
+		log.Fatalln("failed to parse listen address:", err)
 	}
-	ips := localIPv4()
 
 	scheme := "http"
 	if !*plain {
-		// 浏览器只在安全上下文里给麦克风权限，所以除了 localhost，
-		// 发送端必须走 https —— 这不是可选项，是能不能用的前提。
+		// Browsers grant microphone access only in a secure context, so apart from
+		// localhost the sender must use https: not optional, a precondition for working at all.
 		hosts := append([]string{"localhost", "127.0.0.1"}, ips...)
 		if *certHosts != "" {
 			hosts = append(hosts, strings.Split(*certHosts, ",")...)
 		}
 		cert, err := tlscert.Ensure(*certDir, hosts)
 		if err != nil {
-			log.Fatalln("准备证书失败:", err)
+			log.Fatalln("failed to prepare certificate:", err)
 		}
 		srv.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
 		scheme = "https"
 	}
 
 	go func() {
-		log.Printf("虚拟麦克风: %s", dev.Name)
-		log.Printf("发送端地址: %s://localhost:%s", scheme, port)
-		log.Printf("监控页面: %s://localhost:%s/monitor", scheme, port)
+		log.Printf("virtual microphone: %s", dev.Name)
+		log.Printf("sender URL: %s://localhost:%s", scheme, port)
+		log.Printf("monitor page: %s://localhost:%s/monitor", scheme, port)
 		for _, ip := range ips {
-			log.Printf("发送端地址: %s://%s:%s", scheme, ip, port)
-			log.Printf("监控页面: %s://%s:%s/monitor", scheme, ip, port)
+			log.Printf("sender URL: %s://%s:%s", scheme, ip, port)
+			log.Printf("monitor page: %s://%s:%s/monitor", scheme, ip, port)
 		}
 		if scheme == "https" {
-			log.Println("自签证书：浏览器首次会警告，点「高级 → 继续前往」，之后会被记住")
+			log.Println("self-signed certificate: the browser warns the first time; click Advanced > Proceed and it is remembered")
 		}
 
 		var err error
@@ -537,22 +676,23 @@ func main() {
 		}
 	}()
 
-	// 每 10 秒报一次缓冲健康度，用来判断要不要调 -buffer。
+	// Report buffer health every 10 s, to judge whether -buffer needs tuning.
 	go func() {
 		lastStarved := 0
 		for range time.Tick(10 * time.Second) {
 			buffered, dropped, starved := player.Stats()
 			recv, lost, reorder, dup := receiver.Stats().Snapshot()
 			if recv > 0 {
-				log.Printf("缓冲=%d(%.0fms) 丢弃=%d 欠载=%d ｜ RTP 收=%d 丢=%d(%.2f%%) 乱序=%d 重复=%d",
+				log.Printf("buffer=%d(%.0fms) dropped=%d underruns=%d | RTP received=%d lost=%d(%.2f%%) reordered=%d duplicate=%d",
 					buffered, float64(buffered)*1000/float64(rtc.SampleRate*rtc.Channels),
 					dropped, starved, recv, lost,
 					float64(lost)*100/float64(recv+lost), reorder, dup)
-				// 欠载又涨了就把见底现场打出来："缓冲够深却见底"这种
-				// 矛盾，靠 10 秒采样永远解释不了，只能靠现场数字。
+				// When underruns grow, print the numbers from the moment it ran dry: a
+				// "buffer deep enough yet empty" contradiction can never be explained by
+				// 10 s samples, only by the figures from the event itself.
 				if starved > lastStarved {
 					size, want := player.LastStarve()
-					log.Printf("  最近欠载现场：缓冲剩 %d 样本(%.0fms)，声卡要 %d",
+					log.Printf("  last underrun: %d samples (%.0fms) left in buffer, sound card asked for %d",
 						size, float64(size)*1000/float64(rtc.SampleRate*rtc.Channels), want)
 				}
 				lastStarved = starved
@@ -560,17 +700,21 @@ func main() {
 		}
 	}()
 
-	// 电平表只有一个消费者：takeDBFS 会清零，监控页和 -meter 各取一次的话，
-	// 两边都只能看到半截读数。这里统一取，再决定要不要打日志。
+	// The level meter has a single consumer: takeDBFS resets it, so if the monitor
+	// page and -meter each took a reading, both would see half. Read it once here,
+	// then decide whether to log.
 	go func() {
 		for range time.Tick(time.Second) {
+			if spk != nil {
+				st.setSpeakerLevel(spk.TakePeakDBFS())
+			}
 			g := *gain
 			if useAGC {
 				g = agc.Gain()
 			}
 			db, ok := level.takeDBFS()
 			if !ok {
-				// 这一秒一个样本都没来，等同于静音，否则页面会一直挂着上一次的读数。
+				// No samples this second counts as silence; otherwise the page would keep showing the last reading.
 				st.setLevel(-120, g)
 				continue
 			}
@@ -579,28 +723,61 @@ func main() {
 				continue
 			}
 			if useAGC {
-				log.Printf("电平 %6.1f dBFS %s  增益 %.1fx", db, bar(db), agc.Gain())
+				log.Printf("level %6.1f dBFS %s  gain %.1fx", db, bar(db), agc.Gain())
 			} else {
-				log.Printf("电平 %6.1f dBFS %s", db, bar(db))
+				log.Printf("level %6.1f dBFS %s", db, bar(db))
 			}
 		}
 	}()
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-	<-stop
-	log.Println("退出")
+	select {
+	case <-stop:
+		log.Println("exiting")
+	case <-deviceDead:
+		log.Println("the audio device stopped calling back for 30 s (coreaudiod restarted?); exiting so the supervisor starts a fresh receiver")
+		exitCode = 3
+		// The device is already dead and CoreAudio may hang while closing it; give
+		// cleanup 5 s, then exit hard. Recording files are finalized earlier and are
+		// usually long done by then.
+		time.AfterFunc(5*time.Second, func() {
+			log.Println("cleanup did not finish in 5 s; exiting anyway")
+			os.Exit(3)
+		})
+	}
 	_ = srv.Close()
+	// Teardown order: close the connection first (decoding stops, nothing writes to
+	// the player any more), then the loopback capture, and only then the deferred
+	// recording finalization, return-path capture, player and audio context. The
+	// devices must be fully closed before the context so the process exits within
+	// seconds instead of being cut off midway by the wrapper app's SIGKILL.
+	receiver.Close()
+	closeLoop()
 }
 
-// statusState 是 /api/status 里那几个"只有回调和定时器知道"的值。
-// 写它的是 ICE 回调和电平协程，读它的是 HTTP 处理器，全在不同的协程上。
+// statusState holds the /api/status values that only callbacks and timers know.
+// ICE callbacks and the level goroutine write it, HTTP handlers read it, all on
+// different goroutines.
 type statusState struct {
-	mu      sync.Mutex
-	state   string
-	path    string
-	levelDB float64
-	gain    float64
+	mu        sync.Mutex
+	state     string
+	path      string
+	levelDB   float64
+	gain      float64
+	speakerDB float64 // return path (system audio) level
+}
+
+func (s *statusState) setSpeakerLevel(db float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.speakerDB = db
+}
+
+func (s *statusState) speakerLevel() float64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.speakerDB
 }
 
 func (s *statusState) setState(state string) {
@@ -627,7 +804,7 @@ func (s *statusState) snapshot() (state, path string, levelDB, gain float64) {
 	return s.state, s.path, s.levelDB, s.gain
 }
 
-// segmentJSON 是 audio.SegmentInfo 的传输形态，字段名对齐监控页。
+// segmentJSON is the wire form of audio.SegmentInfo; field names match the monitor page.
 type segmentJSON struct {
 	Name   string    `json:"name"`
 	Time   time.Time `json:"time"`
@@ -635,8 +812,9 @@ type segmentJSON struct {
 	PeakDB float64   `json:"peakDb"`
 }
 
-// validSegmentName 只认分段录音自己生成的文件名："20060102-150405[-N].wav"。
-// 白名单而非黑名单：够用，而且不必去想还有哪几种写法能绕过。
+// validSegmentName accepts only the names segment recording generates itself:
+// "20060102-150405[-N].wav". An allowlist rather than a denylist: it suffices,
+// and there is no need to think about which other spellings might slip through.
 func validSegmentName(name string) bool {
 	base, ok := strings.CutSuffix(name, ".wav")
 	if !ok || base == "" {
@@ -650,7 +828,7 @@ func validSegmentName(name string) bool {
 	return true
 }
 
-// iceServers 组装 STUN/TURN 列表。TURN 只在填了地址时加入。
+// iceServers assembles the STUN/TURN list. TURN is added only when an address is given.
 func iceServers(stun, turn, user, pass string) []webrtc.ICEServer {
 	var out []webrtc.ICEServer
 	for _, u := range strings.Split(stun, ",") {
@@ -668,11 +846,14 @@ func iceServers(stun, turn, user, pass string) []webrtc.ICEServer {
 	return out
 }
 
-// applyGain 就地放大 PCM，并在会削顶时先按整帧的峰值收回增益。
+// applyGain amplifies PCM in place, first pulling the gain back by the frame's
+// peak when it would clip.
 //
-// 不能把超过 int16 范围的样本简单钉在边界：那会把响一点的元音、
-// 爆破音切成平顶波，听起来就是杂音，语音识别也会丢字。整帧等比例
-// 预限幅保留了波形形状；正常偏小的语音仍然得到完整的固定增益。
+// Samples beyond the int16 range cannot simply be pinned at the limit: that
+// flattens louder vowels and plosives into square tops, which sounds like noise
+// and makes speech recognition drop words. Pre-limiting the whole frame
+// proportionally keeps the waveform's shape; normal, quieter speech still gets
+// the full fixed gain.
 func applyGain(pcm []int16, gain float64) {
 	if len(pcm) == 0 || gain == 1.0 {
 		return
@@ -685,7 +866,7 @@ func applyGain(pcm []int16, gain float64) {
 			peak = v
 		}
 	}
-	// 留约 1 dB 的余量，避免后续设备转换时再次碰到满刻度。
+	// Leave about 1 dB of headroom so later device conversion does not hit full scale again.
 	const ceiling = 0.8912509381337456 * math.MaxInt16
 	if peak > 0 && peak*gain > ceiling {
 		gain = ceiling / peak
@@ -701,7 +882,8 @@ func applyGain(pcm []int16, gain float64) {
 	}
 }
 
-// levelMeter 累计一秒内的峰值，供诊断"声音到底有没有到、够不够大"。
+// levelMeter accumulates the peak over one second, to diagnose "is audio
+// arriving at all, and is it loud enough".
 type levelMeter struct {
 	mu    sync.Mutex
 	peak  int16
@@ -724,7 +906,7 @@ func (m *levelMeter) observe(pcm []int16) {
 	m.count += len(pcm)
 }
 
-// takeDBFS 返回过去一段时间的峰值电平并复位。没有样本时返回 false。
+// takeDBFS returns the peak level since the last call and resets. Returns false when no samples arrived.
 func (m *levelMeter) takeDBFS() (float64, bool) {
 	m.mu.Lock()
 	peak, count := m.peak, m.count
@@ -740,7 +922,7 @@ func (m *levelMeter) takeDBFS() (float64, bool) {
 	return 20 * math.Log10(float64(peak)/math.MaxInt16), true
 }
 
-// bar 把 dBFS 画成一条方便扫一眼的横条。-60dB 以下基本等于静音。
+// bar draws dBFS as a horizontal bar readable at a glance. Below -60dB is effectively silence.
 func bar(db float64) string {
 	n := int((db + 60) / 3)
 	if n < 0 {
@@ -752,7 +934,46 @@ func bar(db float64) string {
 	return strings.Repeat("█", n)
 }
 
-// localIPv4 列出本机对外可达的 IPv4，用来生成证书 SAN 和提示访问地址。
+// isLocalSender reports whether the sender is this machine itself: a loopback
+// address, or one of the local addresses. The return path is enabled only when
+// the two ends are different machines; otherwise the tap would recapture the
+// return audio the sender plays back.
+func isLocalSender(remoteAddr string, self []string) bool {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		host = remoteAddr
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	if ip.IsLoopback() {
+		return true
+	}
+	for _, s := range self {
+		if ip.Equal(net.ParseIP(s)) {
+			return true
+		}
+	}
+	return false
+}
+
+// localAddrs lists every local interface address (IPv4 and IPv6), for same-machine detection.
+func localAddrs() []string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, a := range addrs {
+		if ipnet, ok := a.(*net.IPNet); ok {
+			out = append(out, ipnet.IP.String())
+		}
+	}
+	return out
+}
+
+// localIPv4 lists the externally reachable local IPv4 addresses, for the certificate SAN and the printed URLs.
 func localIPv4() []string {
 	ifaces, err := net.Interfaces()
 	if err != nil {

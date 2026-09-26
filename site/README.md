@@ -1,6 +1,6 @@
 # relaymic.com 落地页
 
-RelayMic 的项目主页：讲清楚它补的是哪个空档，然后把人送到 GitHub。
+Remote Visio 的项目主页：讲清楚它补的是哪个空档，然后把人送到 GitHub。
 静态页 + 一个只做 www 收敛的 Worker，跑在 Cloudflare Workers 上，零成本。
 
 ## 结构
@@ -31,7 +31,7 @@ npm run dev      # http://localhost:8788
 npm run deploy
 ```
 
-**已上线**：https://relaymic.com 。Worker 名 `relaymic-site`，自定义域在 `routes` 里
+**已上线**：https://relaymic.com 。Worker 名 `remotevisio-site`，自定义域在 `routes` 里
 声明，`wrangler deploy` 会一并接好，不用去控制台点。
 
 `www.relaymic.com` 也绑了，但由 Worker 301 到根域 —— 两个域都能打开会把外链和搜索

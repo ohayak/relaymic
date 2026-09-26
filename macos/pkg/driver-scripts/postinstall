@@ -1,0 +1,23 @@
+#!/bin/sh
+# Runs as root after RemoteVisio.driver is copied into /Library/Audio/Plug-Ins/HAL.
+# coreaudiod only scans that folder when it starts, so restart it. killall
+# rather than launchctl kickstart: SIP refuses kickstart on system daemons,
+# and launchd brings coreaudiod back by itself within a second. System audio
+# pauses for about that long.
+# A previous install under the old RelayMic name must not stay alongside.
+rm -rf /Library/Audio/Plug-Ins/HAL/RelayMic.driver
+pkgutil --forget com.relaymic.driver >/dev/null 2>&1 || true
+killall coreaudiod 2>/dev/null || true
+
+# Not fatal if it takes longer; the app retries opening the device on its own.
+i=0
+while [ $i -lt 10 ]; do
+    if system_profiler SPAudioDataType 2>/dev/null | grep -q "Remote Visio"; then
+        echo "Remote Visio device is available"
+        exit 0
+    fi
+    sleep 1
+    i=$((i + 1))
+done
+echo "Remote Visio device not listed yet; coreaudiod may still be starting"
+exit 0

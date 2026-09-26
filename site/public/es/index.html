@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RelayMic — un micrófono real para el Mac al que te conectas</title>
-<meta name="description" content="Código abierto: el escritorio remoto lleva tu pantalla, tu teclado y tu ratón, no tu voz. RelayMic convierte cualquier navegador en un micrófono del sistema en el Mac que controlas. Funciona junto a TeamViewer, AnyDesk, Parsec, RustDesk y Jump Desktop.">
+<title>Remote Visio — un micrófono real para el Mac al que te conectas</title>
+<meta name="description" content="Código abierto: el escritorio remoto lleva tu pantalla, tu teclado y tu ratón, no tu voz. Remote Visio convierte cualquier navegador en un micrófono del sistema en el Mac que controlas. Funciona junto a TeamViewer, AnyDesk, Parsec, RustDesk y Jump Desktop.">
 <link rel="canonical" href="https://relaymic.com/es/">
 <link rel="alternate" hreflang="en" href="https://relaymic.com/">
 <link rel="alternate" hreflang="es" href="https://relaymic.com/es/">
@@ -15,12 +15,14 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://relaymic.com/es/">
 <meta property="og:locale" content="es_ES">
-<meta property="og:title" content="RelayMic — un micrófono real para el Mac al que te conectas">
+<meta property="og:title" content="Remote Visio — un micrófono real para el Mac al que te conectas">
 <meta property="og:description" content="Habla a un navegador desde donde estés. El Mac que controlas lo oye como un dispositivo de entrada del sistema.">
 <meta property="og:image" content="https://relaymic.com/assets/og.png">
 <meta name="twitter:card" content="summary_large_image">
 
-<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="/assets/favicon-96.png" sizes="96x96" type="image/png">
+<link rel="apple-touch-icon" href="/assets/favicon-96.png">
 <link rel="preload" href="/assets/fonts/archivo-var.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/site.css">
 
@@ -28,9 +30,9 @@
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  "name": "RelayMic",
+  "name": "Remote Visio",
   "applicationCategory": "UtilitiesApplication",
-  "operatingSystem": "macOS 12+",
+  "operatingSystem": "macOS 14.2+",
   "description": "Convierte cualquier navegador en un micrófono del sistema en un Mac remoto, sea cual sea el software de escritorio remoto que uses.",
   "license": "https://www.gnu.org/licenses/agpl-3.0.html",
   "isAccessibleForFree": true
@@ -44,8 +46,8 @@
 <header class="nav">
   <div class="wrap nav-in">
     <a class="brand" href="/es/">
-      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-      RelayMic
+      <img class="brand-mark" src="/assets/brand.png" alt="" width="22" height="22">
+      Remote Visio
     </a>
     <nav class="nav-links">
       <a href="#how">Cómo funciona</a>
@@ -63,7 +65,7 @@
   <p class="eyebrow">Micrófono para el Mac que controlas a distancia</p>
   <h1>Habla con un Mac <br class="brk"><span class="amber">que no está en la sala.</span></h1>
   <p class="lede">
-    El escritorio remoto lleva tu pantalla, tu teclado y tu ratón. Tu voz no. RelayMic sí — como un
+    El escritorio remoto lleva tu pantalla, tu teclado y tu ratón. Tu voz no. Remote Visio sí — como un
     micrófono real del sistema en el Mac que controlas, así que el dictado, Zoom y todo lo demás
     simplemente lo encuentran en la lista de entradas.
   </p>
@@ -73,7 +75,7 @@
     <a class="btn" href="https://github.com/hueshu/relaymic/blob/main/SETUP.md">Cómo instalarlo</a>
   </div>
 
-  <p class="hero-meta">macOS 12+ en el Mac que recibe &middot; envía cualquier navegador &middot; licencia AGPL-3.0, gratis siempre</p>
+  <p class="hero-meta">macOS 14.2+ en el Mac que recibe &middot; envía cualquier navegador &middot; licencia AGPL-3.0, gratis siempre</p>
 </section>
 
 <!-- ── 规格条 ───────────────────────────────────────── -->
@@ -118,7 +120,7 @@
           <div class="devices">
             <div class="device"><span class="tick"></span>Micrófono del MacBook Pro</div>
             <div class="device is-on">
-              <span class="tick">▸</span>BlackHole 2ch
+              <span class="tick">▸</span>Remote Visio
               <span class="mini" id="mini" aria-hidden="true"></span>
             </div>
             <div class="device"><span class="tick"></span>Dispositivo agregado</div>
@@ -160,14 +162,14 @@
         <tr><th scope="row">Jump Desktop</th><td class="yes">Sí</td><td class="col-mic no">No</td></tr>
         <tr><th scope="row">Compartir pantalla de macOS</th><td class="yes">Sí</td><td class="col-mic no">No</td></tr>
         <tr><th scope="row">Microsoft RDP <em>(y al otro lado hay Windows)</em></th><td class="yes">Sí</td><td class="col-mic yes">Sí — incluido, y se acaba en Windows</td></tr>
-        <tr class="is-us"><th scope="row">RelayMic</th><td>Eso se lo deja a tu herramienta remota</td><td class="col-mic yes">Sí — como dispositivo de entrada del sistema</td></tr>
+        <tr class="is-us"><th scope="row">Remote Visio</th><td>Eso se lo deja a tu herramienta remota</td><td class="col-mic yes">Sí — como dispositivo de entrada del sistema</td></tr>
       </tbody>
     </table>
 
     <p class="footnote">
       Los propios foros de TeamViewer confirman que una sesión remota captura el audio del micrófono
       de la máquina remota, no del tuyo; la petición para transmitir tu micrófono local sigue
-      abierta. RelayMic no sustituye a tu herramienta de escritorio remoto: funciona al lado de la
+      abierta. Remote Visio no sustituye a tu herramienta de escritorio remoto: funciona al lado de la
       que ya usas.
     </p>
   </div>
@@ -177,32 +179,39 @@
 <section class="band band-pad" id="how">
   <div class="wrap">
     <p class="eyebrow">La instalación, por orden</p>
-    <h2>Se instala una vez en el Mac. A partir de ahí son seis dígitos.</h2>
+    <h2>Se instala una vez en el Mac. A partir de ahí es una dirección en el navegador.</h2>
 
     <div class="steps">
       <div class="step">
         <span class="step-n">01</span>
         <h3>Instálalo en el Mac al que te conectas</h3>
         <p>
-          Un paquete firmado. Deja puesto un dispositivo de audio virtual y un pequeño servicio en
-          segundo plano, y te enseña un código de seis dígitos. Nada que configurar, ningún puerto
-          que abrir.
+          Entrega el repositorio y su <code>SETUP.md</code> a tu asistente de IA, o síguelo tú
+          mismo: pon las dos máquinas en Tailscale, ejecuta <code>make install-driver</code> desde
+          Terminal (compila el controlador de audio Remote Visio con el clang de las Xcode Command Line
+          Tools, lo instala en /Library/Audio/Plug-Ins/HAL con una contraseña de administrador y
+          reinicia coreaudiod &mdash; el audio del sistema se detiene alrededor de un segundo),
+          compila el receptor y arráncalo. Imprime la dirección que hay que abrir. Funciona en
+          macOS 14.2 o posterior.
         </p>
       </div>
       <div class="step">
         <span class="step-n">02</span>
-        <h3>Abre relaymic.com donde estés</h3>
+        <h3>Abre la dirección del receptor donde estés</h3>
         <p>
           Un portátil con Windows, un iPad, un equipo prestado en una oficina — cualquier navegador
-          que tenga micrófono. Escribe el código. La conexión va directa entre los dos dispositivos.
+          que tenga micrófono. Abre la dirección <code>https://&lt;mac&gt;:7420</code> que imprimió el
+          receptor (por Tailscale o cualquier red donde ese puerto sea alcanzable), acepta una vez el
+          certificado autofirmado y pulsa Start talking. La conexión va directa entre los dos
+          dispositivos.
         </p>
       </div>
       <div class="step">
         <span class="step-n">03</span>
-        <h3>Elige RelayMic como entrada</h3>
+        <h3>Elige Remote Visio como entrada</h3>
         <p>
           En Zoom, en el dictado, en Audacity, en lo que tengas abierto allí. Para el Mac es un
-          micrófono corriente, así que nada necesita saber que RelayMic existe.
+          micrófono corriente, así que nada necesita saber que Remote Visio existe.
         </p>
       </div>
     </div>
@@ -215,7 +224,7 @@
     <p class="eyebrow">Dónde está el trabajo de verdad</p>
     <h2>Enviar audio es fácil. Los últimos 200 milisegundos no lo son.</h2>
     <p class="lede">
-      RelayMic empezó como una herramienta que su autor necesitaba a diario, en tres Macs, y cada
+      Remote Visio empezó como una herramienta que su autor necesitaba a diario, en tres Macs, y cada
       parámetro de aquí abajo está porque algo se rompía sin él.
     </p>
 
@@ -257,10 +266,10 @@
       <details>
         <summary>¿Importa qué software de escritorio remoto use?</summary>
         <p>
-          No. RelayMic no se engancha a TeamViewer, AnyDesk, Parsec, RustDesk, Jump Desktop ni a
+          No. Remote Visio no se engancha a TeamViewer, AnyDesk, Parsec, RustDesk, Jump Desktop ni a
           ningún otro — lleva el audio por su propia conexión y presenta un micrófono en el Mac. Tu
           herramienta remota sigue con la pantalla y los mandos, sin enterarse de nada. También
-          puedes usar RelayMic sin ninguna herramienta de escritorio remoto.
+          puedes usar Remote Visio sin ninguna herramienta de escritorio remoto.
         </p>
       </details>
       <details>
@@ -283,15 +292,22 @@
       <details>
         <summary>¿Qué es el dispositivo de audio virtual que instala?</summary>
         <p>
-          BlackHole, un controlador de audio de macOS de código abierto. RelayMic lo instala desde
-          su paquete oficial en lugar de llevar una copia dentro, y se desinstala limpiamente. Es lo
-          que permite que cualquier app del Mac vea RelayMic como una entrada corriente.
+          Un controlador propio: un plug-in HAL de Core Audio que forma parte del repositorio
+          (<code>driver/RemoteVisio.c</code>), compilado con el clang de las Xcode Command Line Tools —
+          sin Xcode ni paquetes de Homebrew. <code>make install-driver</code> lo compila, lo copia a
+          /Library/Audio/Plug-Ins/HAL/RemoteVisio.driver (pide la contraseña de administrador una vez)
+          y reinicia coreaudiod, así que el audio del sistema se detiene alrededor de un segundo.
+          Aparece como un dispositivo de entrada llamado «Remote Visio» y, a propósito, no se puede
+          elegir como salida de sonido del Mac, así que instalarlo nunca te secuestra los altavoces.
+          <code>make uninstall-driver</code> lo quita limpiamente. Si vienes de una versión anterior y
+          aún tienes BlackHole, puedes quitarlo con <code>brew uninstall --cask blackhole-2ch</code>;
+          Remote Visio lo ignora de todos modos.
         </p>
       </details>
       <details>
         <summary>Estoy en Windows y me conecto a Windows. ¿Necesito esto?</summary>
         <p>
-          No — Microsoft RDP ya redirige tu micrófono, y gratis. RelayMic existe porque esa función
+          No — Microsoft RDP ya redirige tu micrófono, y gratis. Remote Visio existe porque esa función
           no tiene equivalente cuando al otro lado hay un Mac. Usa lo gratuito donde funciona.
         </p>
       </details>
@@ -299,7 +315,7 @@
         <summary>Mi iPhone y mi Mac están en la misma habitación. ¿Necesito esto?</summary>
         <p>
           Probablemente no. Continuidad de Apple ya deja que un iPhone cercano haga de micrófono del
-          Mac, gratis. RelayMic es para la distancia: otro edificio, otra ciudad, otro país.
+          Mac, gratis. Remote Visio es para la distancia: otro edificio, otra ciudad, otro país.
         </p>
       </details>
       <details>
@@ -322,8 +338,9 @@
       <details>
         <summary>Siendo sinceros, ¿qué tan tosco es?</summary>
         <p>
-          Es la herramienta que el autor usa a diario, abierta al público. Línea de comandos, sin
-          instalador, textos en chino en la interfaz, y necesitas Tailscale (o equivalente) para
+          Es la herramienta que el autor usa a diario, abierta al público. Una app de barra de menús y un paquete
+          instalador que compilas tú mismo (firmado y notarizado con tu propio Developer ID),
+          interfaz en siete idiomas, registros y documentación en inglés, y necesitas Tailscale (o equivalente) para
           que el navegador que envía alcance al Mac. La parte madura es la cadena de audio: tres
           Macs la usan todos los días, y los parámetros de búfer y ganancia están así porque algo
           se rompía sin ellos.
@@ -351,7 +368,7 @@
 </main>
 
 <footer class="wrap foot">
-  <span>&copy; 2026 RelayMic</span>
+  <span>&copy; 2026 Remote Visio</span>
   <a href="/es/privacy">Privacidad</a>
   <a href="/es/terms">Términos</a>
   <a href="mailto:hey@relaymic.com">hey@relaymic.com</a>

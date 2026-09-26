@@ -17,11 +17,7 @@ body { margin: 0; }
     font-size: 26px;
     letter-spacing: -.03em;
   }
-  .og-brand .brand-mark { height: 21px; }
-  .og-brand .brand-mark i { width: 4px; }
-  .og-brand .brand-mark i:nth-child(1) { height: 8px; }
-  .og-brand .brand-mark i:nth-child(2) { height: 15px; }
-  .og-brand .brand-mark i:nth-child(3) { height: 21px; }
+  .og-brand .brand-mark { width: 30px; height: 30px; }
   .og h1 { font-size: 92px; line-height: .92; letter-spacing: -.045em; }
   .og-foot {
     display: flex;

@@ -3,14 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>条款 — RelayMic</title>
-<meta name="description" content="RelayMic 是 AGPL-3.0 开源软件。这对你意味着什么。">
+<title>条款 — Remote Visio</title>
+<meta name="description" content="Remote Visio 是 AGPL-3.0 开源软件。这对你意味着什么。">
 <link rel="canonical" href="https://relaymic.com/zh/terms">
 <link rel="alternate" hreflang="en" href="https://relaymic.com/terms">
 <link rel="alternate" hreflang="es" href="https://relaymic.com/es/terms">
 <link rel="alternate" hreflang="zh" href="https://relaymic.com/zh/terms">
 <link rel="alternate" hreflang="x-default" href="https://relaymic.com/terms">
-<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="/assets/favicon-96.png" sizes="96x96" type="image/png">
+<link rel="apple-touch-icon" href="/assets/favicon-96.png">
 <link rel="stylesheet" href="/assets/site.css">
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-RMG8MNGGZQ"></script>
 <script src="/assets/ga.js"></script>
@@ -20,8 +22,8 @@
 <header class="nav">
   <div class="wrap nav-in">
     <a class="brand" href="/zh/">
-      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-      RelayMic
+      <img class="brand-mark" src="/assets/brand.png" alt="" width="22" height="22">
+      Remote Visio
     </a>
     <a class="btn" href="/zh/">返回首页</a>
   </div>
@@ -32,7 +34,7 @@
   <p class="updated">最后更新：2026 年 8 月 22 日</p>
 
   <p>
-    RelayMic 采用 <a href="https://github.com/hueshu/relaymic/blob/main/LICENSE">GNU
+    Remote Visio 采用 <a href="https://github.com/hueshu/relaymic/blob/main/LICENSE">GNU
     AGPL-3.0</a> 开源。那份许可证才是真正的约定，下面只是把它说成人话。
   </p>
 
@@ -64,7 +66,7 @@
 
   <h2>你自己负责的部分</h2>
   <p>
-    在你有权装软件的机器上装软件。RelayMic 会引导你从官方渠道安装一个第三方开源音频驱动（BlackHole），那个项目有它自己的许可证和作者。
+    在你有权装软件的机器上装软件。Remote Visio 会把自己的虚拟音频设备（一个 Core Audio HAL 插件，源码在仓库的 driver/ 目录，同样是 AGPL-3.0）装进系统目录 /Library/Audio/Plug-Ins/HAL，安装时会要求管理员密码。
   </p>
   <p>
     还有：你对着它说的话。<strong>一个能通到另一栋楼的麦克风，仍然是个麦克风</strong>
@@ -85,7 +87,7 @@
 </main>
 
 <footer class="wrap foot">
-  <span>&copy; 2026 RelayMic</span>
+  <span>&copy; 2026 Remote Visio</span>
   <a href="/zh/">首页</a>
   <a href="/zh/privacy">隐私</a>
   <a href="https://github.com/hueshu/relaymic">GitHub</a>

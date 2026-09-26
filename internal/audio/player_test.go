@@ -6,12 +6,13 @@ import (
 )
 
 func TestRingCapsLatency(t *testing.T) {
-	// 目标 100 样本，容量 400
+	// target 100 samples, capacity 400
 	r := newRing(400, 100, 1)
-	r.write(make([]int16, 100)) // 先攒够，进入正常播放
+	r.write(make([]int16, 100)) // reach prefill first, entering normal playback
 
-	// 模拟真实的时钟漂移：声卡匀速取 20，发送端每次给 21（快 5%）。
-	// 没有收缩机制的话，延迟会一路涨到缓冲上限。
+	// Simulate real clock drift: the sound card pulls 20 at a steady rate, the
+	// sender delivers 21 each time (5% fast). Without trimming, latency would
+	// climb all the way to the buffer cap.
 	out := make([]byte, 40)
 	maxSeen := 0
 	for i := 0; i < 500; i++ {
@@ -24,17 +25,17 @@ func TestRingCapsLatency(t *testing.T) {
 
 	size, _, _ := r.stats()
 	if maxSeen > 260 {
-		t.Errorf("延迟失控：峰值堆到 %d 样本（目标 100）", maxSeen)
+		t.Errorf("latency ran away: peaked at %d samples (target 100)", maxSeen)
 	}
 	if size < 50 {
-		t.Errorf("压过头了：%d 样本，会造成断续", size)
+		t.Errorf("trimmed too far: %d samples, would cause dropouts", size)
 	}
 }
 
 func TestRingTrimsGently(t *testing.T) {
-	// 单次收缩绝不能大到听得出来：上限是目标的十分之一。
+	// A single trim must never be large enough to hear: capped at a tenth of the target.
 	r := newRing(4000, 1000, 1)
-	r.write(make([]int16, 3500)) // 一次性灌到远超阈值
+	r.write(make([]int16, 3500)) // flood far past the threshold in one go
 
 	before, _, _ := r.stats()
 	r.write(make([]int16, 20))
@@ -42,15 +43,15 @@ func TestRingTrimsGently(t *testing.T) {
 
 	trimmed := before + 20 - after
 	if trimmed > 100 {
-		t.Errorf("单次丢弃 %d 样本，超过目标的 1/10，会听成跳字", trimmed)
+		t.Errorf("dropped %d samples in one trim, more than a tenth of the target, would be heard as a skipped word", trimmed)
 	}
 }
 
 func TestRingPrefillBeforePlayback(t *testing.T) {
 	r := newRing(400, 100, 1)
-	out := make([]byte, 40) // 20 样本
+	out := make([]byte, 40) // 20 samples
 
-	// 还没攒够 prefill，应当输出静音而不是不完整的数据
+	// Below prefill it should output silence rather than partial data.
 	r.write(make([]int16, 10))
 	for i := range out {
 		out[i] = 0xFF
@@ -58,60 +59,62 @@ func TestRingPrefillBeforePlayback(t *testing.T) {
 	r.readInto(out, 20)
 	for _, b := range out {
 		if b != 0 {
-			t.Fatal("攒够之前不应输出数据")
+			t.Fatal("must not output data before prefill is reached")
 		}
 	}
 
-	// 攒够之后正常出数
+	// Once prefilled, data flows normally.
 	r.write(make([]int16, 200))
 	r.readInto(out, 20)
 	if size, _, _ := r.stats(); size == 0 {
-		t.Error("攒够后应当正常消费")
+		t.Error("should consume normally once prefilled")
 	}
 }
 
 func TestRingSilenceIsNotStarvation(t *testing.T) {
-	// 发送端开了 DTX，静音期不发包。声卡照样每隔几毫秒来要一次数据，
-	// 缓冲当然是空的 —— 但那是没人说话，不是链路出问题。
-	// 全算进欠载的话，说话停两秒就能记上几百次，这个数字就废了。
+	// The sender runs DTX and sends nothing during silence. The sound card
+	// still asks for data every few milliseconds and the buffer is of course
+	// empty, but that is nobody talking, not a link problem. Counting it as
+	// underrun would log hundreds per two-second pause and make the number useless.
 	r := newRing(400, 100, 1)
-	out := make([]byte, 40) // 20 样本
+	out := make([]byte, 40) // 20 samples
 
-	r.write(make([]int16, 100)) // 攒够起播
+	r.write(make([]int16, 100)) // reach prefill and start
 	for i := 0; i < 5; i++ {
-		r.readInto(out, 20) // 正好消费完
+		r.readInto(out, 20) // consumes exactly everything
 	}
 
 	for i := 0; i < 200; i++ {
-		r.readInto(out, 20) // 源头静默
+		r.readInto(out, 20) // source is silent
 	}
 
 	if _, _, starved := r.stats(); starved > 1 {
-		t.Errorf("静音期记了 %d 次欠载，这个诊断数字会被冲垮", starved)
+		t.Errorf("logged %d underruns during silence, this diagnostic would be swamped", starved)
 	}
 }
 
 func TestRingStillCountsRealStarvation(t *testing.T) {
-	// 反过来：数据一直在来却总是接不上，才是真欠载。
-	// 漏报比误报更糟 —— 会让人以为链路是好的。
+	// The converse: data keeps arriving but never keeps up is a real underrun.
+	// Missing it is worse than a false alarm, since it makes the link look healthy.
 	r := newRing(400, 100, 1)
 	out := make([]byte, 40)
 
 	for i := 0; i < 10; i++ {
 		r.write(make([]int16, 100))
 		for j := 0; j < 6; j++ {
-			r.readInto(out, 20) // 第 6 次必然见底
+			r.readInto(out, 20) // the 6th read must hit bottom
 		}
 	}
 
 	if _, _, starved := r.stats(); starved < 5 {
-		t.Errorf("真欠载只记了 %d 次，漏报会掩盖链路问题", starved)
+		t.Errorf("only %d real underruns logged, missing them hides link problems", starved)
 	}
 }
 
 func TestRingFadesOutOnSilence(t *testing.T) {
-	// 波形从任意值硬切到零是一次宽频脉冲，听感就是短促的"biu"。
-	// 见底后的输出必须从最后的样本值衰减下来，而不是直接归零。
+	// A waveform hard-cut from any value to zero is a broadband impulse heard
+	// as a short "blip". Output after hitting bottom must decay from the last
+	// sample value rather than drop straight to zero.
 	r := newRing(400, 100, 1)
 	loud := make([]int16, 100)
 	for i := range loud {
@@ -119,28 +122,29 @@ func TestRingFadesOutOnSilence(t *testing.T) {
 	}
 	r.write(loud)
 	out := make([]byte, 200)
-	r.readInto(out, 100) // 全部耗尽（末段已过淡入，达到全幅）
+	r.readInto(out, 100) // drain everything (the tail is past the fade-in, at full amplitude)
 
-	r.readInto(out, 100) // 见底：应出衰减尾音
+	r.readInto(out, 100) // bottomed out: should emit a decaying tail
 	first := int16(binary.LittleEndian.Uint16(out))
 	last := int16(binary.LittleEndian.Uint16(out[198:]))
 	if first < 4000 {
-		t.Errorf("见底后第一个样本 %d，几乎是硬切到零，会响一声", first)
+		t.Errorf("first sample after bottoming out is %d, nearly a hard cut to zero, would click", first)
 	}
 	if last >= first {
-		t.Errorf("尾音没有在衰减：首 %d 末 %d", first, last)
+		t.Errorf("tail is not decaying: first %d last %d", first, last)
 	}
 
 	for i := 0; i < 10; i++ {
 		r.readInto(out, 100)
 	}
 	if v := int16(binary.LittleEndian.Uint16(out[198:])); v > 8 {
-		t.Errorf("衰减一秒后仍有 %d，应基本归零", v)
+		t.Errorf("still %d after a second of decay, should be about zero", v)
 	}
 }
 
 func TestRingFadesInAfterSilence(t *testing.T) {
-	// 起播（含 DTX 静音后的恢复）要淡入：从零直接跳进波形中段同样是脉冲。
+	// Playback start (including resuming after DTX silence) must fade in:
+	// jumping from zero into mid-waveform is an impulse too.
 	r := newRing(400, 100, 1)
 	loud := make([]int16, 200)
 	for i := range loud {
@@ -150,42 +154,43 @@ func TestRingFadesInAfterSilence(t *testing.T) {
 	out := make([]byte, 40)
 	r.readInto(out, 20)
 	if first := int16(binary.LittleEndian.Uint16(out)); first > 2000 {
-		t.Errorf("起播第一个样本 %d，没有淡入，会有脉冲", first)
+		t.Errorf("first sample at start is %d, no fade-in, would click", first)
 	}
 	for i := 0; i < 5; i++ {
-		r.readInto(out, 20) // 累计 120 帧，淡入(96帧)已结束
+		r.readInto(out, 20) // 120 frames total, fade-in (96 frames) is over
 	}
 	if last := int16(binary.LittleEndian.Uint16(out[38:])); last != 8000 {
-		t.Errorf("淡入结束后应回到全幅 8000，得到 %d", last)
+		t.Errorf("should be back at full amplitude 8000 after fade-in, got %d", last)
 	}
 }
 
 func TestRingStretchesWhenLow(t *testing.T) {
-	// 缓冲跌破目标一半时要轻微拖时间（重复帧），让缓冲回升，
-	// 而不是滑到见底断一次。0.5% 的变速换掉 150ms 的断口。
+	// Below half the target the buffer must stall slightly (repeat frames) so
+	// it climbs back, instead of sliding to a bottom-out gap. A 0.5% speed
+	// change replaces a 150ms gap.
 	r := newRing(4000, 1000, 1)
-	r.write(make([]int16, 1000)) // 起播
-	out := make([]byte, 800)     // 每次 400 帧
+	r.write(make([]int16, 1000)) // start playback
+	out := make([]byte, 800)     // 400 frames per read
 
-	// 消费到低于 prefill/2
+	// Consume down below prefill/2.
 	r.readInto(out, 400)
-	r.readInto(out, 400) // 剩 200 < 500
+	r.readInto(out, 400) // 200 left < 500
 	r.write(make([]int16, 250))
 
 	before, _, _ := r.stats()
-	r.readInto(out, 400) // 400 帧，应触发两次重复，消费 398
+	r.readInto(out, 400) // 400 frames should trigger two repeats, consuming 398
 	after, _, _ := r.stats()
 	consumed := before - after
 	if consumed >= 400 {
-		t.Fatalf("低水位没有拉伸：消费了 %d/400", consumed)
+		t.Fatalf("no stretch at low level: consumed %d/400", consumed)
 	}
 	if 400-consumed > 4 {
-		t.Fatalf("拉伸过猛：只消费 %d/400，会听出变速", consumed)
+		t.Fatalf("stretched too hard: only consumed %d/400, the speed change would be audible", consumed)
 	}
 }
 
 func TestRingNoStretchWhenHealthy(t *testing.T) {
-	// 水位健康时绝不能拉伸——那是白白增加延迟。
+	// At a healthy level it must never stretch: that only adds latency.
 	r := newRing(4000, 1000, 1)
 	r.write(make([]int16, 2000))
 	out := make([]byte, 800)
@@ -193,6 +198,6 @@ func TestRingNoStretchWhenHealthy(t *testing.T) {
 	r.readInto(out, 400)
 	after, _, _ := r.stats()
 	if before-after != 400 {
-		t.Fatalf("健康水位却拉伸了：消费 %d/400", before-after)
+		t.Fatalf("stretched at a healthy level: consumed %d/400", before-after)
 	}
 }

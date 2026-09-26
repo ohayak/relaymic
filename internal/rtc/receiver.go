@@ -1,4 +1,4 @@
-// Package rtc 负责 WebRTC 侧：接受浏览器的 offer，收 Opus，解成 PCM。
+// Package rtc handles the WebRTC side: accept the browser's offer, receive Opus, decode to PCM.
 package rtc
 
 import (
@@ -16,20 +16,22 @@ import (
 )
 
 const (
-	// WebRTC 的 Opus 恒定跑在 48kHz。
+	// Opus in WebRTC always runs at 48kHz.
 	SampleRate = 48000
-	// SDP 里的 Opus 恒定声明为 opus/48000/2，跟实际传单声道还是立体声无关 ——
-	// 真实声道数编在 Opus 包内部。这里按协商值解码：发来的若是单声道包，
-	// libopus 会自己复制成左右两路，正好对上 BlackHole 2ch。
+	// SDP always declares Opus as opus/48000/2 regardless of whether mono or
+	// stereo is actually sent; the real channel count is encoded inside each Opus
+	// packet. We decode at the negotiated value: for mono packets libopus copies
+	// the signal to both channels, matching the two channels of the Remote Visio device.
 	Channels = 2
-	// Opus 单帧最长 120ms，按最坏情况给解码缓冲。
+	// An Opus frame is at most 120ms; size the decode buffer for the worst case.
 	maxFrameSamples = SampleRate / 1000 * 120
 )
 
-// Receiver 持有一条到发送端的连接。
+// Receiver holds one connection to the sender.
 //
-// 每次收到新的 offer 就重建连接 —— 发送端刷新页面、换机器、断线重来，
-// 都走同一条路径，不需要额外的重连逻辑。
+// Every new offer rebuilds the connection: a page refresh, a machine switch
+// and a reconnect after a drop all take the same path, so no separate
+// reconnect logic is needed.
 type Receiver struct {
 	onPCM   func([]int16)
 	onState func(webrtc.PeerConnectionState)
@@ -45,9 +47,15 @@ type Receiver struct {
 
 	mu sync.Mutex
 	pc *webrtc.PeerConnection
+
+	// Return-path track: sends this Mac's system audio back to the sender (see speaker.go).
+	// A fresh one is created per negotiation and replaced along with the connection;
+	// same principle as the sender, tracks are never reused across connections.
+	spkMu    sync.Mutex
+	spkTrack *webrtc.TrackLocalStaticSample
 }
 
-// New 创建接收器。onPCM 会被解码协程反复调用，传入 48kHz 交错立体声 PCM。
+// New creates a receiver. onPCM is called repeatedly from the decode goroutine with 48kHz interleaved stereo PCM.
 func New(onPCM func([]int16), onState func(webrtc.PeerConnectionState)) *Receiver {
 	return &Receiver{
 		onPCM:   onPCM,
@@ -59,38 +67,41 @@ func New(onPCM func([]int16), onState func(webrtc.PeerConnectionState)) *Receive
 	}
 }
 
-// SetDTX 决定要不要让发送端在静音时停发包。
+// SetDTX controls whether the sender is asked to stop sending packets during silence.
 func (r *Receiver) SetDTX(on bool) { r.dtx = on }
 
-// SetICEServers 覆盖默认的 STUN/TURN 配置。
+// SetICEServers overrides the default STUN/TURN configuration.
 func (r *Receiver) SetICEServers(servers []webrtc.ICEServer) { r.iceServers = servers }
 
-// ForceRelay 让 ICE 只使用 TURN 中继候选。
-// 直连候选一律不参与，用来确认中继链路本身是通的。
+// ForceRelay restricts ICE to TURN relay candidates.
+// Direct candidates are excluded entirely, to verify that the relay path itself works.
 func (r *Receiver) ForceRelay(on bool) { r.forceRelay = on }
 
-// ExcludeCGNAT 决定要不要把 100.64.0.0/10 排除在候选之外。
+// ExcludeCGNAT controls whether 100.64.0.0/10 is excluded from candidates.
 //
-// 那个网段是 CGNAT 保留段，Tailscale 之类的覆盖网络就建在上面。
-// 它对 ICE 伪装成"本地地址"、优先级高于公网反射地址，于是会被优先选中；
-// 但那条路可能落到对方的中继节点上，绕上半个地球。排除它，
-// 才能逼 ICE 去走真正的公网直连。
+// That range is reserved for CGNAT, and overlay networks like Tailscale are
+// built on it. To ICE it looks like a "local address" with higher priority
+// than a server-reflexive one, so it gets picked first; but that path may go
+// through the overlay's relay node halfway around the world. Excluding it
+// forces ICE onto a real public-internet direct connection.
 //
-// 代价是：一旦公网打洞失败，又没有 TURN 兜底，就彻底连不上。
+// The cost: if public hole punching fails and there is no TURN fallback,
+// the connection fails outright.
 func (r *Receiver) ExcludeCGNAT(on bool) {
 	r.excludeCGNAT = on
-	r.api = nil // 下次协商时按新设置重建
+	r.api = nil // rebuilt with the new setting on the next negotiation
 }
 
-// 覆盖网地址段。这些地址看着像"本地直连"，ICE 会给它们很高的优先级，
-// 实际却可能落到对方的中继节点上绕半个地球。
+// Overlay network ranges. These look like "local direct" addresses and ICE
+// gives them high priority, yet they may route via the overlay's relay node
+// halfway around the world.
 //
-// 两个段都要挡：只挡 IPv4 的话，ICE 会从 IPv6 那条路溜过去 ——
-// 实测就撞见过 fd7a:... 的候选被选中，RTT 1100ms。
+// Both ranges must be blocked: blocking only IPv4 lets ICE slip through over
+// IPv6; in practice an fd7a:... candidate got selected with an RTT of 1100ms.
 var overlayNets = []*net.IPNet{
-	// RFC 6598 运营商级 NAT，Tailscale 的 IPv4 建在这上面
+	// RFC 6598 carrier-grade NAT; Tailscale's IPv4 lives here
 	{IP: net.IPv4(100, 64, 0, 0).To4(), Mask: net.CIDRMask(10, 32)},
-	// Tailscale 的 IPv6 ULA 前缀 fd7a:115c:a1e0::/48
+	// Tailscale's IPv6 ULA prefix fd7a:115c:a1e0::/48
 	{IP: net.IP{0xfd, 0x7a, 0x11, 0x5c, 0xa1, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		Mask: net.CIDRMask(48, 128)},
 }
@@ -110,10 +121,10 @@ func isCGNAT(ip net.IP) bool {
 	return false
 }
 
-// stripCGNATCandidates 删掉对端 SDP 里 CGNAT 段的候选。
+// stripCGNATCandidates removes CGNAT-range candidates from the remote SDP.
 //
-// 只在本端过滤是不够的：浏览器那头照样会宣告它自己的覆盖网地址，
-// 我们不主动剔除就仍会去尝试那条路。
+// Filtering only our own side is not enough: the browser still advertises its
+// own overlay address, and unless we strip it that path still gets tried.
 func stripCGNATCandidates(sdp string) (string, int) {
 	lines := strings.Split(sdp, "\r\n")
 	kept := make([]string, 0, len(lines))
@@ -133,25 +144,28 @@ func stripCGNATCandidates(sdp string) (string, int) {
 	return strings.Join(kept, "\r\n"), dropped
 }
 
-// buildAPI 按当前设置组装 webrtc.API。用了 SettingEngine 就必须自己
-// 注册编解码器和拦截器，默认的那套不会自动带上。
+// buildAPI assembles a webrtc.API from the current settings. Once a
+// SettingEngine is used, codecs and interceptors must be registered by hand;
+// the defaults are not added automatically.
 func (r *Receiver) buildAPI() (*webrtc.API, error) {
 	if r.api != nil {
 		return r.api, nil
 	}
 	m := &webrtc.MediaEngine{}
 	if err := m.RegisterDefaultCodecs(); err != nil {
-		return nil, fmt.Errorf("注册编解码器: %w", err)
+		return nil, fmt.Errorf("register codecs: %w", err)
 	}
 	ir := &interceptor.Registry{}
 	if err := webrtc.RegisterDefaultInterceptors(m, ir); err != nil {
-		return nil, fmt.Errorf("注册拦截器: %w", err)
+		return nil, fmt.Errorf("register interceptors: %w", err)
 	}
 	se := webrtc.SettingEngine{}
-	// 没有独立信令通道，answer 必须等候选收集完才能交回去（见 Answer）——
-	// 于是 STUN 收集的等待时间会原封不动地变成发送端看到的白屏时间。
-	// pion 默认等 5 秒，STUN 不可达时每次连接都要等满。2 秒还没回来的
-	// STUN，基本就是不通，别再拖着整条协商陪葬。
+	// There is no separate signaling channel, so the answer can only be returned
+	// once candidate gathering completes (see Answer); the STUN wait becomes,
+	// verbatim, the blank-screen time the sender sees. pion defaults to 5s, paid
+	// in full on every connection when STUN is unreachable. A STUN server that
+	// has not replied within 2s is effectively down; do not let it stall the
+	// whole negotiation.
 	se.SetSTUNGatherTimeout(2 * time.Second)
 	if r.excludeCGNAT {
 		se.SetIPFilter(func(ip net.IP) bool { return !isCGNAT(ip) })
@@ -164,25 +178,31 @@ func (r *Receiver) buildAPI() (*webrtc.API, error) {
 	return r.api, nil
 }
 
-// opusParams 组装 answer 里向发送端声明的 Opus 开关。
+// opusParams assembles the Opus switches declared to the sender in the answer.
 //
-//	useinbandfec=1  丢包时把前一帧的低码率副本捎在下一个包里。语音丢一个包
-//	                就是丢一个字，而重传要等一个 RTT —— 等到了也过了该播的时刻。
-//	usedtx=1        静音时停止发包。省带宽是次要的，主要是没人说话时不再往
-//	                BlackHole 灌底噪，识别引擎的静音判断更干净。
-//	                可关：若编码器把轻声误判成静音，字头字尾会被掐掉，
-//	                用 -dtx=false 对比是唯一可靠的排查手段。
+//	useinbandfec=1  Piggyback a low-bitrate copy of the previous frame in the
+//	                next packet. One lost voice packet is one lost word, and a
+//	                retransmit costs an RTT, arriving after its play time.
+//	usedtx=1        Stop sending during silence. Bandwidth is secondary; the
+//	                point is not feeding noise floor into the virtual mic when
+//	                nobody speaks, so the recognizer's silence detection is
+//	                cleaner. Can be turned off: if the encoder mistakes quiet
+//	                speech for silence, word edges get clipped, and comparing
+//	                with -dtx=false is the only reliable way to diagnose it.
 //
-// 必须写在 answer 里：fmtp 的语义是"接收方要求发送方怎么发"，浏览器照着
-// 收到的 answer 去配它的编码器。我们在 offer 里看到的那份是浏览器的自我声明，
-// 改它没有意义。
+// This must go in the answer: fmtp means "how the receiver asks the sender to
+// send", and the browser configures its encoder from the answer it receives.
+// What we see in the offer is the browser's self-declaration; changing it
+// does nothing.
 //
-// 而 pion 生成 answer 时是把 offer 里的 fmtp 原样抄回去的（它只替换 PayloadType
-// 和 rtcp-fb），所以本地 MediaEngine 注册什么 fmtp 都不影响 answer —— 想加参数
-// 只能在这里落到最终 SDP 上。
+// pion copies the offer's fmtp verbatim into the answer (it only replaces
+// PayloadType and rtcp-fb), so whatever fmtp the local MediaEngine registers
+// has no effect on the answer; the only way to add parameters is here, on the
+// final SDP.
 func (r *Receiver) opusParams() []string {
-	// maxaveragebitrate: Chrome 对语音默认只给 ~32kbps，编码噪声会直接
-	// 变成识别错误。这条链路直连 RTT 18ms，96kbps 毫无压力，清晰度优先。
+	// maxaveragebitrate: Chrome defaults to ~32kbps for voice, and coding noise
+	// turns straight into recognition errors. This link is a direct connection
+	// with 18ms RTT; 96kbps is no strain, so clarity wins.
 	params := []string{"useinbandfec=1", "maxaveragebitrate=96000"}
 	if r.dtx {
 		params = append(params, "usedtx=1")
@@ -190,12 +210,12 @@ func (r *Receiver) opusParams() []string {
 	return params
 }
 
-// withOpusParams 把 params 补进 answer 的 Opus fmtp 行。
-// 已经声明过的参数不重复添加，避免出现互相矛盾的重复键。
+// withOpusParams appends params to the answer's Opus fmtp line.
+// Parameters already declared are not added again, to avoid contradictory duplicate keys.
 func withOpusParams(sdp string, params []string) string {
 	lines := strings.Split(sdp, "\r\n")
 
-	// Opus 的 payload type 由发送端决定，不能写死 111。
+	// The Opus payload type is chosen by the sender; 111 cannot be hardcoded.
 	pt := ""
 	for _, l := range lines {
 		if strings.HasPrefix(l, "a=rtpmap:") && strings.Contains(strings.ToLower(l), " opus/") {
@@ -226,15 +246,17 @@ func withOpusParams(sdp string, params []string) string {
 	return sdp
 }
 
-// RTPStats 是 RTP 层的到达质量。
+// RTPStats is the arrival quality at the RTP layer.
 //
-// 抖动缓冲该做多复杂，取决于这几个数字：包基本不丢不乱，简单的固定缓冲就够；
-// 乱序严重才需要重排序，丢包严重才需要补偿。没有这些数据就调缓冲，是在猜。
+// How elaborate the jitter buffer needs to be depends on these numbers: with
+// little loss or reordering a simple fixed buffer is enough; heavy reordering
+// calls for resequencing, heavy loss for concealment. Tuning the buffer
+// without this data is guessing.
 type RTPStats struct {
 	mu       sync.Mutex
 	Received int
-	Lost     int // 序号跳跃推断的丢失数
-	Reorder  int // 迟到包：序号比已见到的最大值还小
+	Lost     int // losses inferred from sequence-number jumps
+	Reorder  int // late packets: sequence number below the max seen so far
 	Dup      int
 }
 
@@ -246,7 +268,7 @@ func (s *RTPStats) observe(seq uint16, first bool, maxSeq uint16) {
 		return
 	}
 	switch diff := int16(seq - maxSeq); {
-	case diff == 1: // 顺序到达
+	case diff == 1: // in order
 	case diff > 1:
 		s.Lost += int(diff) - 1
 	case diff == 0:
@@ -254,27 +276,28 @@ func (s *RTPStats) observe(seq uint16, first bool, maxSeq uint16) {
 	default:
 		s.Reorder++
 		if s.Lost > 0 {
-			s.Lost-- // 之前算作丢失的包其实只是迟到
+			s.Lost-- // a packet counted as lost was merely late
 		}
 	}
 }
 
-// Snapshot 取一份计数快照。
+// Snapshot returns a copy of the counters.
 func (s *RTPStats) Snapshot() (received, lost, reorder, dup int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.Received, s.Lost, s.Reorder, s.Dup
 }
 
-// Stats 返回 RTP 到达质量。
+// Stats returns the RTP arrival quality.
 func (r *Receiver) Stats() *RTPStats { return &r.stats }
 
-// OnPath 注册链路回调，连接建立时告知实际选中的候选对。
-// 这是判断"音频到底走的哪条路"的唯一可靠依据 —— 页面上显示的"直连"
-// 可能是一个 VPN 的虚拟网卡地址，那条路实际上还绕了半个地球。
+// OnPath registers a path callback, invoked on connect with the candidate
+// pair actually selected. It is the only reliable way to know which route
+// the audio takes: a "direct" connection shown on the page may be a VPN's
+// virtual interface address whose path still goes halfway around the world.
 func (r *Receiver) OnPath(fn func(string)) { r.onPath = fn }
 
-// describePath 从 ICE 统计里还原出被选中的那条链路。
+// describePath reconstructs the selected path from the ICE stats.
 func describePath(pc *webrtc.PeerConnection) string {
 	stats := pc.GetStats()
 	for _, s := range stats {
@@ -287,16 +310,26 @@ func describePath(pc *webrtc.PeerConnection) string {
 		if !lok || !rok {
 			continue
 		}
-		return fmt.Sprintf("本端 %s %s:%d ←→ 对端 %s %s:%d  RTT=%.0fms",
+		return fmt.Sprintf("local %s %s:%d <-> remote %s %s:%d  RTT=%.0fms",
 			local.CandidateType, local.IP, local.Port,
 			remote.CandidateType, remote.IP, remote.Port,
 			pair.CurrentRoundTripTime*1000)
 	}
-	return "未能取得候选对"
+	return "no candidate pair found"
 }
 
-// Answer 处理一个来自发送端的 SDP offer，返回 answer。
-func (r *Receiver) Answer(offer webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
+// offerWantsSpeaker reports whether the sender will accept the return path:
+// its audio m-line must be sendrecv. Older pages only send (sendonly), and
+// pion will only pair that with a local recvonly transceiver; forcing a
+// sendrecv transceiver with a track onto it would just sit idle.
+func offerWantsSpeaker(sdp string) bool {
+	return strings.Contains(sdp, "a=sendrecv")
+}
+
+// Answer handles an SDP offer from the sender and returns the answer.
+// When speaker is true and the sender accepts it, the answer carries the
+// return-path track (system audio sent back).
+func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrtc.SessionDescription, error) {
 	if r.excludeCGNAT {
 		stripped, n := stripCGNATCandidates(offer.SDP)
 		if n > 0 {
@@ -314,17 +347,45 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription) (*webrtc.SessionDescr
 	}
 	pc, err := api.NewPeerConnection(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("创建 PeerConnection: %w", err)
+		return nil, fmt.Errorf("create PeerConnection: %w", err)
 	}
 
-	if _, err := pc.AddTransceiverFromKind(webrtc.RTPCodecTypeAudio,
+	// Send and receive share one m-line: with the return path the transceiver is
+	// sendrecv and carries our return-path track; without it, it is the original
+	// receive-only transceiver.
+	var spk *webrtc.TrackLocalStaticSample
+	if speaker && offerWantsSpeaker(offer.SDP) {
+		spk, err = webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{
+			MimeType:  webrtc.MimeTypeOpus,
+			ClockRate: SampleRate,
+			Channels:  Channels,
+		}, "audio", "remotevisio-speaker")
+		if err != nil {
+			pc.Close()
+			return nil, fmt.Errorf("create return-path track: %w", err)
+		}
+		tr, err := pc.AddTransceiverFromTrack(spk,
+			webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendrecv})
+		if err != nil {
+			pc.Close()
+			return nil, fmt.Errorf("add audio send/receive transceiver: %w", err)
+		}
+		go func() { // RTCP on the send side must be drained too
+			buf := make([]byte, 1500)
+			for {
+				if _, _, err := tr.Sender().Read(buf); err != nil {
+					return
+				}
+			}
+		}()
+	} else if _, err := pc.AddTransceiverFromKind(webrtc.RTPCodecTypeAudio,
 		webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly}); err != nil {
 		pc.Close()
-		return nil, fmt.Errorf("添加音频接收通道: %w", err)
+		return nil, fmt.Errorf("add audio receive transceiver: %w", err)
 	}
 
 	pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-		// RTCP 必须持续读走，否则 NACK / 接收报告会被静默丢弃。
+		// RTCP must be drained continuously, or NACKs / receiver reports are silently dropped.
 		go func() {
 			for {
 				if _, _, err := receiver.ReadRTCP(); err != nil {
@@ -346,6 +407,7 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription) (*webrtc.SessionDescr
 			r.mu.Lock()
 			if r.pc == pc {
 				r.pc = nil
+				r.setSpeakerTrack(nil)
 			}
 			r.mu.Unlock()
 			pc.Close()
@@ -354,82 +416,102 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription) (*webrtc.SessionDescr
 
 	if err := pc.SetRemoteDescription(offer); err != nil {
 		pc.Close()
-		return nil, fmt.Errorf("设置远端描述: %w", err)
+		return nil, fmt.Errorf("set remote description: %w", err)
 	}
 
 	answer, err := pc.CreateAnswer(nil)
 	if err != nil {
 		pc.Close()
-		return nil, fmt.Errorf("创建 answer: %w", err)
+		return nil, fmt.Errorf("create answer: %w", err)
 	}
 
-	// 没有独立信令通道，只能等 ICE 收集完再把完整 SDP 一次性交回去。
+	// No separate signaling channel: wait for ICE gathering and return the complete SDP in one go.
 	gathered := webrtc.GatheringCompletePromise(pc)
 	if err := pc.SetLocalDescription(answer); err != nil {
 		pc.Close()
-		return nil, fmt.Errorf("设置本端描述: %w", err)
+		return nil, fmt.Errorf("set local description: %w", err)
 	}
 	<-gathered
 
-	// 新连接建好，旧的让位。
+	// New connection is up; retire the old one. The return-path track follows the new connection (nil if it has none).
 	r.mu.Lock()
 	old := r.pc
 	r.pc = pc
+	r.setSpeakerTrack(spk)
 	r.mu.Unlock()
 	if old != nil {
 		old.Close()
 	}
 
-	// 在交回去的这一刻补上 Opus 开关：SetLocalDescription 之后 pion 不会再
-	// 重新生成 SDP，改这份副本不影响本端已经建好的收流状态。
+	// Add the Opus switches at hand-off time: pion never regenerates the SDP
+	// after SetLocalDescription, so editing this copy does not affect the
+	// receive state already set up locally.
 	final := *pc.LocalDescription()
 	final.SDP = withOpusParams(final.SDP, r.opusParams())
 
 	return &final, nil
 }
 
-// consume 把一条音频轨解码成 PCM，一直读到轨道结束。
+// consume decodes the sender's microphone track to PCM until the track ends.
 func (r *Receiver) consume(track *webrtc.TrackRemote) {
+	Decode(track, &r.stats, r.emit)
+}
+
+// Decode decodes an Opus track to 48kHz interleaved stereo PCM until the track ends.
+// The receiver's mic path and the sender's return path share this loss handling. stats may be nil.
+func Decode(track *webrtc.TrackRemote, stats *RTPStats, onPCM func([]int16)) {
 	dec, err := opus.NewDecoder(SampleRate, Channels)
 	if err != nil {
 		return
+	}
+	emit := func(pcm []int16) {
+		if onPCM != nil && len(pcm) > 0 {
+			onPCM(pcm)
+		}
 	}
 
 	pcm := make([]int16, maxFrameSamples*Channels)
 	fec := make([]int16, maxFrameSamples*Channels)
 
-	// 丢包与乱序的处理原则：只播按序前进的音频，缺口用编码器自带的冗余补。
+	// Loss and reordering policy: only play audio that advances in order, and
+	// fill gaps with the redundancy the encoder already provides.
 	//
-	//   迟到/重复的包（序号不比已见最大值新）直接丢弃。解码输出是顺序流，
-	//   把迟到的 20ms 插在新音频后面，听感就是一声杂音，比丢了更糟。
+	//   Late/duplicate packets (sequence number not newer than the max seen)
+	//   are dropped. The decoder output is a sequential stream; inserting a
+	//   late 20ms after newer audio sounds like a glitch, worse than the loss.
 	//
-	//   恰好缺一个包时，用下一个包里捎带的 FEC 副本把缺帧解出来 ——
-	//   这不是猜出来的音频，是编码器为上一帧存的低码率原件（useinbandfec
-	//   就是为此协商的；只在 SDP 里声明、解码时不取用，等于白花带宽）。
-	//   若缺口真是乱序造成的，副本已顶上原位，迟到的真身到达后照例丢弃，
-	//   两条路径殊途同归，不会重复发声。
+	//   When exactly one packet is missing, the FEC copy carried in the next
+	//   packet reconstructs the missing frame. This is not guessed audio: it
+	//   is the encoder's low-bitrate copy of the previous frame (that is what
+	//   useinbandfec was negotiated for; declaring it in SDP but never using
+	//   it when decoding wastes the bandwidth). If the gap was really
+	//   reordering, the copy has already taken the slot and the late original
+	//   is dropped as usual, so both paths converge and nothing plays twice.
 	//
-	//   缺口更大时不做 PLC 连环脑补，留给播放侧的去咔哒处理软化边界。
+	//   Larger gaps get no chained PLC guesswork; the playback side's
+	//   de-click handling softens the edges.
 	var maxSeq uint16
-	lastN := 0 // 上一帧的每声道样本数，FEC 补帧时按它定缺帧长度
+	lastN := 0 // samples per channel of the last frame; sets the length of a FEC-filled frame
 	first := true
 
 	for {
 		pkt, _, err := track.ReadRTP()
 		if err != nil {
 			if !errors.Is(err, io.EOF) {
-				// 轨道断了，等下一次 offer 重建。
+				// Track ended; wait for the next offer to rebuild.
 			}
 			return
 		}
 
 		diff := int16(pkt.SequenceNumber - maxSeq)
-		r.stats.observe(pkt.SequenceNumber, first, maxSeq)
+		if stats != nil {
+			stats.observe(pkt.SequenceNumber, first, maxSeq)
+		}
 		if first || diff > 0 {
 			maxSeq = pkt.SequenceNumber
 		}
 		if !first && diff <= 0 {
-			continue // 迟到或重复
+			continue // late or duplicate
 		}
 		gap := !first && diff == 2
 		first = false
@@ -439,7 +521,7 @@ func (r *Receiver) consume(track *webrtc.TrackRemote) {
 		}
 		if gap && lastN > 0 {
 			if err := dec.DecodeFEC(pkt.Payload, fec[:lastN*Channels]); err == nil {
-				r.emit(fec[:lastN*Channels])
+				emit(fec[:lastN*Channels])
 			}
 		}
 		n, err := dec.Decode(pkt.Payload, pcm)
@@ -447,7 +529,7 @@ func (r *Receiver) consume(track *webrtc.TrackRemote) {
 			continue
 		}
 		lastN = n
-		r.emit(pcm[:n*Channels])
+		emit(pcm[:n*Channels])
 	}
 }
 
@@ -457,11 +539,12 @@ func (r *Receiver) emit(pcm []int16) {
 	}
 }
 
-// Close 断开当前连接。
+// Close tears down the current connection.
 func (r *Receiver) Close() {
 	r.mu.Lock()
 	pc := r.pc
 	r.pc = nil
+	r.setSpeakerTrack(nil)
 	r.mu.Unlock()
 	if pc != nil {
 		pc.Close()

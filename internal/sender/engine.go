@@ -1,7 +1,8 @@
-// Package sender 是发送端的核心：采集本机麦克风，Opus 编码，WebRTC 推流。
+// Package sender is the core of the sender: capture the local microphone,
+// encode with Opus, and push over WebRTC.
 //
-// CLI（cmd/sender）和 GUI（cmd/sender-gui）共用这一份逻辑，
-// 界面只负责把状态画出来。
+// The CLI (cmd/sender) and the GUI (cmd/sender-gui) share this logic;
+// the interface only renders state.
 package sender
 
 import (
@@ -22,35 +23,43 @@ import (
 
 	"github.com/hueshu/relaymic/internal/audio"
 	"github.com/hueshu/relaymic/internal/discover"
+	"github.com/hueshu/relaymic/internal/rtc"
 )
 
 const (
 	sampleRate = 48000
-	// 采集和编码都用单声道：麦克风本来就是 mono，立体声只是把同样的
-	// 内容发两份。SDP 层仍声明 opus/48000/2 —— 真实声道数编在 Opus
-	// 包内部，接收端的 libopus 会把 mono 自动复制成两路（见 internal/rtc）。
+	// Capture and encode in mono: the microphone is mono anyway, and stereo
+	// would just send the same content twice. SDP still declares opus/48000/2;
+	// the real channel count is encoded inside the Opus packet, and the
+	// receiver's libopus copies mono to both channels (see internal/rtc).
 	channels    = 1
 	frameMS     = 20
 	frameSize   = sampleRate / 1000 * frameMS
 	maxOpusSize = 4000
 )
 
-// Config 是一次推流的全部参数。
+// Config holds all parameters for one streaming session.
 type Config struct {
-	Targets  []string // 接收端地址列表，形如 https://100.x.y.z:7420。全部同时推流
-	Discover bool     // 自动发现：扫描 tailnet 内的接收端并自动加入广播
-	Device   string   // 输入设备名子串，空 = 系统默认
-	Bitrate  int      // Opus 码率，0 = 96000
+	Targets  []string // receiver addresses like https://100.x.y.z:7420; all are streamed to at once
+	Discover bool     // auto-discovery: scan the tailnet for receivers and add them to the broadcast
+	Device   string   // input device name substring; empty = system default
+	Bitrate  int      // Opus bitrate; 0 = 96000
+	// Speaker receives the remote Mac's system audio (return path) and plays it
+	// on the local default output device. The native sender has no echo
+	// cancellation: use headphones with the return path on, or the remote audio
+	// from the speakers gets picked up by the mic and sent back.
+	Speaker bool
 }
 
-// link 是到一个接收端的连接。每个接收端独立打洞、独立重连，
-// 一台挂了不影响其他台。
+// link is the connection to one receiver. Each receiver hole-punches and
+// reconnects independently, so one going down does not affect the others.
 type link struct {
 	target string
 
-	mu    sync.Mutex
-	pc    *webrtc.PeerConnection
-	track *webrtc.TrackLocalStaticSample // 当前活跃连接的音轨
+	mu     sync.Mutex
+	pc     *webrtc.PeerConnection
+	track  *webrtc.TrackLocalStaticSample // track of the currently active connection
+	player *audio.Player                  // return-path player, lives and dies with the connection
 }
 
 func (l *link) currentTrack() *webrtc.TrackLocalStaticSample {
@@ -59,31 +68,37 @@ func (l *link) currentTrack() *webrtc.TrackLocalStaticSample {
 	return l.track
 }
 
-// Engine 管理"采集 → 编码 → 多路连接"的完整生命周期。
-// 采集和编码只做一次，同一帧扇出到所有活跃接收端 —— 用户在多台
-// 机器间走动时不需要切换，每台的虚拟麦克风里都实时有声音。
-// Start 之后各路自己维持重连；Stop 彻底收尾。
+// Engine manages the full "capture -> encode -> multiple connections" lifecycle.
+// Capture and encoding happen once and each frame fans out to every active
+// receiver, so a user moving between machines never has to switch; every
+// machine's virtual mic carries live audio. After Start each link maintains
+// its own reconnects; Stop tears everything down.
 type Engine struct {
 	cfg Config
 
-	// OnState 在某一路连接状态变化时被调（带那一路的地址）；
-	// OnLevel 每秒报一次采集峰值（dBFS）。
-	// 回调来自内部协程，界面侧自己负责切回 UI 线程。
+	// OnState is called when a link's connection state changes (with that link's address);
+	// OnLevel reports the capture peak (dBFS) once per second.
+	// Callbacks come from internal goroutines; the UI side must hop back to its own thread.
 	OnState func(target, state string)
 	OnLevel func(float64)
 
 	mu       sync.Mutex
 	actx     *audio.Context
 	capturer *audio.Capturer
-	links    map[string]*link // 目标集：手动配置 + 自动发现，运行中可增
+	links    map[string]*link // target set: manual config + auto-discovery; can grow while running
 	stopped  chan struct{}
 	running  bool
+	// inflight tracks goroutines using actx inside playSpeaker. Stop waits for
+	// them to exit before tearing down the audio context: a device must not
+	// outlive its context.
+	inflight sync.WaitGroup
 }
 
-// canonicalTarget 把地址归一成 host:port，作为目标集的 key。
-// 手动填的和自动发现的同一台机器，字符串可能差在大小写、空格、
-// 结尾斜杠 —— 归一化后同机必然去重。两条连接指向同一个接收端
-// 会互相顶（接收端单发送端设计），表现就是"永远连接中"。
+// canonicalTarget normalizes an address to host:port as the target-set key.
+// The same machine entered by hand and found by discovery may differ in case,
+// whitespace or a trailing slash; after normalization it always dedupes. Two
+// connections to the same receiver would keep displacing each other (the
+// receiver is single-sender by design), showing up as "connecting forever".
 func canonicalTarget(t string) string {
 	t = strings.TrimSpace(t)
 	u, err := url.Parse(t)
@@ -93,7 +108,7 @@ func canonicalTarget(t string) string {
 	return strings.ToLower(u.Host)
 }
 
-// snapshotLinks 取当前目标集快照，编码协程每帧调用。
+// snapshotLinks returns a snapshot of the target set; the encode goroutine calls it every frame.
 func (e *Engine) snapshotLinks() []*link {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -104,8 +119,8 @@ func (e *Engine) snapshotLinks() []*link {
 	return out
 }
 
-// AddTarget 运行中添加一个接收端（按 host 幂等）。
-// 自动发现和手动添加共用这条路。
+// AddTarget adds a receiver while running (idempotent per host).
+// Auto-discovery and manual additions share this path.
 func (e *Engine) AddTarget(target string) {
 	key := canonicalTarget(target)
 	e.mu.Lock()
@@ -121,7 +136,7 @@ func (e *Engine) AddTarget(target string) {
 	go e.connectLoop(l, e.stopped)
 }
 
-// ListMics 列出输入设备名，供界面做下拉框。
+// ListMics lists input device names for the UI's dropdown.
 func ListMics() ([]string, error) {
 	actx, err := audio.NewContext()
 	if err != nil {
@@ -152,7 +167,7 @@ func (e *Engine) state(target, s string) {
 	}
 }
 
-// Start 打开麦克风并进入连接循环。非阻塞；失败时返回错误且不留资源。
+// Start opens the microphone and enters the connect loops. Non-blocking; on failure it returns an error and holds no resources.
 func (e *Engine) Start() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -169,16 +184,18 @@ func (e *Engine) Start() error {
 		actx.Close()
 		return err
 	}
-	// BlackHole 是接收端的输出容器，不是麦克风。采集它就是把接收端
-	// 播的声音再发回去 —— 一条完美的回环。宁可拒绝启动也不能默默成环。
-	if strings.Contains(strings.ToLower(dev.Name), "blackhole") {
+	// BlackHole is the receiver's output sink, not a microphone. Capturing it
+	// would send the receiver's playback straight back: a perfect loop.
+	// Better to refuse to start than to loop silently.
+	if name := strings.ToLower(dev.Name); strings.Contains(name, "remotevisio") || strings.Contains(name, "blackhole") {
 		actx.Close()
-		return fmt.Errorf("%s 是虚拟回环设备，不是麦克风，请换一个输入设备", dev.Name)
+		return fmt.Errorf("%s is a virtual loopback device, not a microphone; choose another input device", dev.Name)
 	}
 
-	// 编码器的开关一次拨到位，这正是原生发送端存在的意义：
-	//   VoIP 模式 ／ FEC 开 ／ DTX 不开 ——
-	// 静音判断交给下游识别引擎，编码器不该替它做主（浏览器就是在这儿掐掉了轻声）。
+	// Set the encoder switches once and for all; this is why the native sender exists:
+	//   VoIP mode / FEC on / DTX off.
+	// Silence detection belongs to the downstream recognizer, not the encoder
+	// (the browser is exactly where quiet speech got clipped).
 	enc, err := opus.NewEncoder(sampleRate, channels, opus.AppVoIP)
 	if err != nil {
 		actx.Close()
@@ -191,8 +208,9 @@ func (e *Engine) Start() error {
 	_ = enc.SetInBandFEC(true)
 	_ = enc.SetPacketLossPerc(5)
 
-	// 采集回调 → 帧缓冲 → 编码发送。回调是实时线程，只做拷贝；
-	// 攒满 20ms 才编码，编码在普通协程里做。
+	// Capture callback -> frame buffer -> encode and send. The callback is a
+	// realtime thread and only copies; encoding waits for a full 20ms and runs
+	// in a normal goroutine.
 	var bufMu sync.Mutex
 	buf := make([]int16, 0, frameSize*4)
 	level := 0.0
@@ -208,7 +226,7 @@ func (e *Engine) Start() error {
 			buf = buf[frameSize:]
 			select {
 			case pending <- frame:
-			default: // 编码跟不上就丢帧，绝不阻塞实时回调
+			default: // drop the frame if encoding falls behind; never block the realtime callback
 			}
 		}
 		for _, s := range pcm {
@@ -227,12 +245,12 @@ func (e *Engine) Start() error {
 	for _, t := range e.cfg.Targets {
 		key := canonicalTarget(t)
 		if _, ok := links[key]; ok {
-			continue // 同一台机器只留一条连接
+			continue // one connection per machine
 		}
 		links[key] = &link{target: strings.TrimSpace(t)}
 	}
 
-	go func() { // 编码协程：编一次，扇出到所有活跃接收端
+	go func() { // encode goroutine: encode once, fan out to all active receivers
 		out := make([]byte, maxOpusSize)
 		for {
 			select {
@@ -246,10 +264,10 @@ func (e *Engine) Start() error {
 				for _, l := range e.snapshotLinks() {
 					track := l.currentTrack()
 					if track == nil {
-						continue // 这一路还没连上
+						continue // this link is not connected yet
 					}
-					// WriteSample 同步打包发送，不留 Data 引用，
-					// 串行写完即可安全复用 out。
+					// WriteSample packetizes and sends synchronously without keeping a Data
+					// reference; once the serial writes finish, out can be reused safely.
 					_ = track.WriteSample(media.Sample{
 						Data:     out[:n],
 						Duration: frameMS * time.Millisecond,
@@ -259,7 +277,7 @@ func (e *Engine) Start() error {
 		}
 	}()
 
-	go func() { // 电平协程
+	go func() { // level goroutine
 		t := time.NewTicker(time.Second)
 		defer t.Stop()
 		for {
@@ -292,9 +310,11 @@ func (e *Engine) Start() error {
 	e.stopped = stopped
 	e.running = true
 
-	// 自动发现：扫 tailnet 里开着接收端口的机器，出现即加入广播。
-	// 新 Mac 跑完部署脚本，这里 30 秒内自动接上，界面不用填任何东西。
-	// 只加不减：机器下线由该路的退避重连自己扛着，回来就恢复。
+	// Auto-discovery: scan the tailnet for machines with the receiver port open
+	// and add them to the broadcast as they appear. A new Mac that has run the
+	// deploy script connects within 30s with nothing typed into the UI.
+	// Add only, never remove: a machine going offline is handled by that link's
+	// backoff reconnect, which recovers when it returns.
 	if e.cfg.Discover {
 		go func() {
 			for {
@@ -314,36 +334,50 @@ func (e *Engine) Start() error {
 	return nil
 }
 
-// Stop 断开连接并释放麦克风。可重复调用。
+// Stop closes the connections and releases the microphone. Safe to call repeatedly.
 func (e *Engine) Stop() {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 	if !e.running {
+		e.mu.Unlock()
 		return
 	}
+	e.running = false // lower the flag first: playSpeaker registers no new players after this
 	close(e.stopped)
-	for _, l := range e.links {
+	links := e.links
+	e.links = nil
+	e.mu.Unlock()
+
+	for _, l := range links {
 		l.mu.Lock()
 		if l.pc != nil {
 			l.pc.Close()
 			l.pc = nil
 		}
 		l.track = nil
+		if l.player != nil { // must happen before actx.Close
+			l.player.Close()
+			l.player = nil
+		}
 		l.mu.Unlock()
 	}
-	e.links = nil
+	// Closing the connections ends the return-path tracks, so goroutines in
+	// playSpeaker exit and close their own players. Wait for all of them
+	// before tearing down the audio context.
+	e.inflight.Wait()
+
+	e.mu.Lock()
 	e.capturer.Close()
 	e.actx.Close()
-	e.running = false
+	e.mu.Unlock()
 	if e.OnState != nil {
 		for _, t := range e.cfg.Targets {
-			e.OnState(t, "已停止")
+			e.OnState(t, "Stopped")
 		}
 	}
 }
 
-// connectLoop 维持到一个接收端的连接，断了就退避重连。
-// 网络恢复、接收端重启、电脑睡醒，都走同一条路径。
+// connectLoop maintains the connection to one receiver, reconnecting with backoff when it drops.
+// Network recovery, a receiver restart and waking from sleep all take the same path.
 func (e *Engine) connectLoop(l *link, stopped <-chan struct{}) {
 	retry := 0
 	for {
@@ -356,7 +390,7 @@ func (e *Engine) connectLoop(l *link, stopped <-chan struct{}) {
 		if err != nil {
 			delay := backoff(retry)
 			retry++
-			e.state(l.target, fmt.Sprintf("连接失败：%v（%s 后重试）", err, delay))
+			e.state(l.target, fmt.Sprintf("connection failed: %v (retrying in %s)", err, delay))
 			select {
 			case <-time.After(delay):
 				continue
@@ -367,25 +401,28 @@ func (e *Engine) connectLoop(l *link, stopped <-chan struct{}) {
 		retry = 0
 		select {
 		case <-dead:
-			e.state(l.target, "连接断开，重连中…")
+			e.state(l.target, "Disconnected, reconnecting...")
 		case <-stopped:
 			return
 		}
 	}
 }
 
-// connectOnce 建一条到接收端的连接，返回"连接死亡"通知通道。
+// connectOnce builds one connection to the receiver and returns a channel
+// that closes when the connection dies.
 //
-// 音轨每次连接都新建，绝不跨连接复用：把旧音轨重新绑到新 PeerConnection
-// 上，曾出现过 ICE 已连通、RTP 却一个包都不发的静默故障（接收端重启后
-// 的重连场景）。新轨新连接，状态从零开始，没有历史可以出错。
+// The track is created fresh for every connection and never reused across
+// connections: rebinding an old track to a new PeerConnection once produced a
+// silent failure where ICE connected but not a single RTP packet was sent
+// (reconnecting after a receiver restart). New track, new connection, state
+// from zero; no history to go wrong.
 func (e *Engine) connectOnce(l *link, stopped <-chan struct{}) (<-chan struct{}, error) {
-	e.state(l.target, "连接中…")
+	e.state(l.target, "Connecting...")
 	track, err := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{
 			MimeType:  webrtc.MimeTypeOpus,
 			ClockRate: sampleRate,
-			Channels:  2, // SDP 恒定声明，与包内声道数无关
+			Channels:  2, // SDP always declares 2, independent of the channels inside the packet
 		}, "audio", "sender")
 	if err != nil {
 		return nil, err
@@ -402,11 +439,19 @@ func (e *Engine) connectOnce(l *link, stopped <-chan struct{}) (<-chan struct{},
 		}
 	}()
 
-	sender, err := pc.AddTrack(track)
+	// Return path: the receiver sends the remote Mac's system audio back on the
+	// same m-line. If we take it the direction is sendrecv; otherwise say
+	// sendonly explicitly so the receiver does not encode for nothing.
+	dir := webrtc.RTPTransceiverDirectionSendonly
+	if e.cfg.Speaker {
+		dir = webrtc.RTPTransceiverDirectionSendrecv
+	}
+	tr, err := pc.AddTransceiverFromTrack(track, webrtc.RTPTransceiverInit{Direction: dir})
 	if err != nil {
 		return nil, err
 	}
-	go func() { // RTCP 必须读走
+	sender := tr.Sender()
+	go func() { // RTCP must be drained
 		buf := make([]byte, 1500)
 		for {
 			if _, _, err := sender.Read(buf); err != nil {
@@ -414,6 +459,18 @@ func (e *Engine) connectOnce(l *link, stopped <-chan struct{}) (<-chan struct{},
 			}
 		}
 	}()
+	if e.cfg.Speaker {
+		pc.OnTrack(func(remote *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+			go func() {
+				for {
+					if _, _, err := receiver.ReadRTCP(); err != nil {
+						return
+					}
+				}
+			}()
+			e.playSpeaker(l, remote)
+		})
+	}
 
 	connected := make(chan struct{})
 	dead := make(chan struct{})
@@ -421,7 +478,7 @@ func (e *Engine) connectOnce(l *link, stopped <-chan struct{}) (<-chan struct{},
 	pc.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
 		switch s {
 		case webrtc.PeerConnectionStateConnected:
-			e.state(l.target, "已连接")
+			e.state(l.target, "Connected")
 			once.Do(func() { close(connected) })
 		case webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
 			select {
@@ -441,7 +498,7 @@ func (e *Engine) connectOnce(l *link, stopped <-chan struct{}) (<-chan struct{},
 	if err := pc.SetLocalDescription(offer); err != nil {
 		return nil, err
 	}
-	// 候选收集封顶 3 秒：STUN 不通时不陪它等超时。
+	// Cap candidate gathering at 3s: do not wait out the STUN timeout when it is unreachable.
 	select {
 	case <-gathered:
 	case <-time.After(3 * time.Second):
@@ -460,23 +517,69 @@ func (e *Engine) connectOnce(l *link, stopped <-chan struct{}) (<-chan struct{},
 		ok = true
 		l.mu.Lock()
 		l.pc = pc
-		l.track = track // 编码协程从此写这条新轨
+		l.track = track // the encode goroutine writes to this new track from now on
 		l.mu.Unlock()
 		return dead, nil
 	case <-time.After(30 * time.Second):
-		return nil, fmt.Errorf("30s 内没有连上")
+		return nil, fmt.Errorf("not connected within 30s")
 	case <-dead:
-		return nil, fmt.Errorf("连接建立失败")
+		return nil, fmt.Errorf("connection setup failed")
 	case <-stopped:
-		return nil, fmt.Errorf("已停止")
+		return nil, fmt.Errorf("stopped")
 	}
 }
 
-// fetchICE 从接收端拉 STUN/TURN 配置。拉不到就退回纯 STUN ——
-// 两端必须用同一套 TURN，中继候选才配得上对。
+// playSpeaker decodes a return-path track and plays it on the local default output device until the track ends.
+// Each connection gets its own player: return paths from multiple receivers decode separately and the sound card mixes them.
+func (e *Engine) playSpeaker(l *link, remote *webrtc.TrackRemote) {
+	// Register in inflight: Stop closes the connections first, waits for this to
+	// exit, and only then tears down the audio context, so every use of actx
+	// below falls within the context's lifetime.
+	e.mu.Lock()
+	if !e.running {
+		e.mu.Unlock()
+		return
+	}
+	actx := e.actx
+	e.inflight.Add(1)
+	e.mu.Unlock()
+	defer e.inflight.Done()
+
+	dev, err := actx.DefaultPlayback()
+	if err != nil {
+		e.state(l.target, "return path playback unavailable: "+err.Error())
+		return
+	}
+	// Jitter buffer is 150ms like the receiver's: same network, same jitter.
+	player, err := actx.NewPlayer(dev, rtc.SampleRate, rtc.Channels, 150)
+	if err != nil {
+		e.state(l.target, "return path playback unavailable: "+err.Error())
+		return
+	}
+	l.mu.Lock()
+	if old := l.player; old != nil {
+		old.Close()
+	}
+	l.player = player
+	l.mu.Unlock()
+
+	// The track ends as soon as the connection closes and this returns; if Stop
+	// already closed the player, the Close below is a no-op.
+	rtc.Decode(remote, nil, player.Write)
+
+	l.mu.Lock()
+	if l.player == player {
+		l.player = nil
+	}
+	l.mu.Unlock()
+	player.Close()
+}
+
+// fetchICE pulls the STUN/TURN configuration from the receiver, falling back
+// to plain STUN: both ends must use the same TURN for relay candidates to pair.
 func fetchICE(target string) []webrtc.ICEServer {
-	// 兜底列表放多个:ICE 会并行探测,哪个通用哪个。国际与国内各留一条,
-	// 免得换个地区就连不上。
+	// Several fallbacks: ICE probes them in parallel and uses whichever works.
+	// One international and one domestic (China), so changing region does not break connectivity.
 	fallback := []webrtc.ICEServer{{URLs: []string{
 		"stun:stun.l.google.com:19302",
 		"stun:stun.cloudflare.com:3478",
@@ -511,21 +614,22 @@ func negotiate(target string, offer *webrtc.SessionDescription) (*webrtc.Session
 	}
 	resp, err := insecureClient().Post(target+"/offer", "application/json", bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("连接接收端: %w", err)
+		return nil, fmt.Errorf("connect to receiver: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("接收端返回 %s", resp.Status)
+		return nil, fmt.Errorf("receiver returned %s", resp.Status)
 	}
 	var answer webrtc.SessionDescription
 	if err := json.NewDecoder(resp.Body).Decode(&answer); err != nil {
-		return nil, fmt.Errorf("解析 answer: %w", err)
+		return nil, fmt.Errorf("parse answer: %w", err)
 	}
 	return &answer, nil
 }
 
-// insecureClient 跳过证书校验：接收端用的是自签证书，
-// 音频本身走 DTLS-SRTP 加密，这条信令通道要的只是可达。
+// insecureClient skips certificate verification: the receiver uses a
+// self-signed certificate, the audio itself is encrypted by DTLS-SRTP, and
+// this signaling channel only needs to be reachable.
 func insecureClient() *http.Client {
 	return &http.Client{
 		Timeout: 10 * time.Second,

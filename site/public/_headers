@@ -45,7 +45,13 @@
 /assets/og.png
   Cache-Control: public, max-age=86400
 
-/assets/favicon.svg
+/assets/favicon-32.png
+  Cache-Control: public, max-age=86400
+
+/assets/favicon-96.png
+  Cache-Control: public, max-age=86400
+
+/assets/brand.png
   Cache-Control: public, max-age=86400
 
 # 样式和脚本改了要马上能看到效果，缓存给短的

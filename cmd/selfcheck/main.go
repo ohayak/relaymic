@@ -1,7 +1,8 @@
-// selfcheck 冒充一个发送端，把已知的测试音推给接收端。
+// selfcheck impersonates a sender and pushes a known test tone to the receiver.
 //
-// 它存在的理由是：出问题时要能一句话回答"是网络坏了还是音频坏了"。
-// 浏览器那条路要人工授权麦克风，没法用来做回归验证，这个可以。
+// It exists so that, when something breaks, "is it the network or the audio"
+// can be answered in one sentence. The browser path needs a human to grant the
+// microphone, so it cannot serve as a regression check; this can.
 package main
 
 import (
@@ -23,22 +24,22 @@ import (
 
 const (
 	sampleRate = 48000
-	// SDP 里的 Opus 恒定是 opus/48000/2，声道数必须和接收端协商一致。
+	// Opus in SDP is always opus/48000/2; the channel count must match what the receiver negotiates.
 	channels    = 2
 	frameMS     = 20
-	frameSize   = sampleRate / 1000 * frameMS // 每帧每声道样本数
+	frameSize   = sampleRate / 1000 * frameMS // samples per channel per frame
 	toneHz      = 440
-	toneAmpl    = 8000 // int16 满量程的约 1/4，对应 -12dB
+	toneAmpl    = 8000 // about 1/4 of int16 full scale, i.e. -12dB
 	maxOpusSize = 4000
 )
 
 func main() {
-	target := flag.String("target", "https://localhost:7420", "接收端地址")
-	duration := flag.Duration("duration", 8*time.Second, "发送时长")
-	turnURL := flag.String("turn", "", "TURN 地址")
-	turnUser := flag.String("turn-user", "", "TURN 用户名")
-	turnPass := flag.String("turn-pass", "", "TURN 密码")
-	forceRelay := flag.Bool("force-relay", false, "只用 TURN 中继候选")
+	target := flag.String("target", "https://localhost:7420", "receiver address")
+	duration := flag.Duration("duration", 8*time.Second, "how long to send")
+	turnURL := flag.String("turn", "", "TURN address")
+	turnUser := flag.String("turn-user", "", "TURN username")
+	turnPass := flag.String("turn-pass", "", "TURN password")
+	forceRelay := flag.Bool("force-relay", false, "use only TURN relay candidates")
 	flag.Parse()
 
 	log.SetFlags(log.Ltime)
@@ -74,7 +75,7 @@ func main() {
 	if err != nil {
 		die(err)
 	}
-	// 不读走 RTCP 的话，反馈包会堆在缓冲里。
+	// RTCP must be drained, or the feedback packets pile up in the buffer.
 	go func() {
 		buf := make([]byte, 1500)
 		for {
@@ -87,7 +88,7 @@ func main() {
 	connected := make(chan struct{})
 	var once bool
 	pc.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
-		log.Println("连接状态:", s)
+		log.Println("connection state:", s)
 		if s == webrtc.PeerConnectionStateConnected && !once {
 			once = true
 			close(connected)
@@ -112,19 +113,19 @@ func main() {
 		die(err)
 	}
 
-	// 走 TURN 时要先分配中继再做连通性检查，10 秒不够。
+	// Via TURN the relay must be allocated before connectivity checks; 10 s is not enough.
 	connectTimeout := 30 * time.Second
 	select {
 	case <-connected:
 	case <-time.After(connectTimeout):
-		die(fmt.Errorf("%s 内没有连上 %s", connectTimeout, *target))
+		die(fmt.Errorf("no connection to %s within %s", *target, connectTimeout))
 	}
 
-	log.Printf("发送 %dHz 测试音 %s", toneHz, *duration)
+	log.Printf("sending %dHz test tone for %s", toneHz, *duration)
 	if err := sendTone(track, *duration); err != nil {
 		die(err)
 	}
-	log.Println("完成")
+	log.Println("done")
 }
 
 func negotiate(target string, offer *webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
@@ -132,21 +133,21 @@ func negotiate(target string, offer *webrtc.SessionDescription) (*webrtc.Session
 	if err != nil {
 		return nil, err
 	}
-	// 接收端用的是自签证书，自检工具没必要为此配信任链。
+	// The receiver uses a self-signed certificate; a self-check tool need not set up a trust chain for it.
 	client := &http.Client{Transport: &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}}
 	resp, err := client.Post(target+"/offer", "application/json", bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("连接接收端: %w", err)
+		return nil, fmt.Errorf("connect to receiver: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("接收端返回 %s", resp.Status)
+		return nil, fmt.Errorf("receiver returned %s", resp.Status)
 	}
 	var answer webrtc.SessionDescription
 	if err := json.NewDecoder(resp.Body).Decode(&answer); err != nil {
-		return nil, fmt.Errorf("解析 answer: %w", err)
+		return nil, fmt.Errorf("parse answer: %w", err)
 	}
 	return &answer, nil
 }
@@ -154,7 +155,7 @@ func negotiate(target string, offer *webrtc.SessionDescription) (*webrtc.Session
 func sendTone(track *webrtc.TrackLocalStaticSample, duration time.Duration) error {
 	enc, err := opus.NewEncoder(sampleRate, channels, opus.AppVoIP)
 	if err != nil {
-		return fmt.Errorf("创建 Opus 编码器: %w", err)
+		return fmt.Errorf("create Opus encoder: %w", err)
 	}
 
 	pcm := make([]int16, frameSize*channels)
@@ -179,19 +180,19 @@ func sendTone(track *webrtc.TrackLocalStaticSample, duration time.Duration) erro
 		}
 		n, err := enc.Encode(pcm, buf)
 		if err != nil {
-			return fmt.Errorf("Opus 编码: %w", err)
+			return fmt.Errorf("Opus encode: %w", err)
 		}
 		if err := track.WriteSample(media.Sample{
 			Data:     buf[:n],
 			Duration: frameMS * time.Millisecond,
 		}); err != nil {
-			return fmt.Errorf("写入轨道: %w", err)
+			return fmt.Errorf("write track: %w", err)
 		}
 	}
 	return nil
 }
 
 func die(err error) {
-	fmt.Fprintln(os.Stderr, "错误:", err)
+	fmt.Fprintln(os.Stderr, "error:", err)
 	os.Exit(1)
 }

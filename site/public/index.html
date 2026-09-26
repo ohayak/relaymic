@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RelayMic — a real microphone for the Mac you remote into</title>
-<meta name="description" content="Open-source: remote desktop forwards your screen, keyboard and mouse — not your voice. RelayMic turns any browser into a system microphone on the Mac you're controlling. Works alongside TeamViewer, AnyDesk, Parsec, RustDesk and Jump Desktop.">
+<title>Remote Visio — a real microphone for the Mac you remote into</title>
+<meta name="description" content="Open-source: remote desktop forwards your screen, keyboard and mouse — not your voice. Remote Visio turns any browser into a system microphone on the Mac you're controlling. Works alongside TeamViewer, AnyDesk, Parsec, RustDesk and Jump Desktop.">
 <link rel="canonical" href="https://relaymic.com/">
 <link rel="alternate" hreflang="en" href="https://relaymic.com/">
 <link rel="alternate" hreflang="es" href="https://relaymic.com/es/">
@@ -15,12 +15,14 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://relaymic.com/">
 <meta property="og:locale" content="en_US">
-<meta property="og:title" content="RelayMic — a real microphone for the Mac you remote into">
+<meta property="og:title" content="Remote Visio — a real microphone for the Mac you remote into">
 <meta property="og:description" content="Speak into a browser anywhere. The Mac you're remoting into hears it as a system input device.">
 <meta property="og:image" content="https://relaymic.com/assets/og.png">
 <meta name="twitter:card" content="summary_large_image">
 
-<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="/assets/favicon-96.png" sizes="96x96" type="image/png">
+<link rel="apple-touch-icon" href="/assets/favicon-96.png">
 <link rel="preload" href="/assets/fonts/archivo-var.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/site.css">
 
@@ -28,9 +30,9 @@
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  "name": "RelayMic",
+  "name": "Remote Visio",
   "applicationCategory": "UtilitiesApplication",
-  "operatingSystem": "macOS 12+",
+  "operatingSystem": "macOS 14.2+",
   "description": "Turns any browser into a system microphone on a remote Mac, independent of the remote desktop software in use.",
   "license": "https://www.gnu.org/licenses/agpl-3.0.html",
   "isAccessibleForFree": true
@@ -44,8 +46,8 @@
 <header class="nav">
   <div class="wrap nav-in">
     <a class="brand" href="/">
-      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-      RelayMic
+      <img class="brand-mark" src="/assets/brand.png" alt="" width="22" height="22">
+      Remote Visio
     </a>
     <nav class="nav-links">
       <a href="#how">How it works</a>
@@ -64,7 +66,7 @@
   <h1>Speak into a Mac <br class="brk"><span class="amber">that isn't in the room.</span></h1>
   <p class="lede">
     Remote desktop forwards your screen, your keyboard and your mouse. It doesn't forward your
-    voice. RelayMic does — as a real system microphone on the Mac you're controlling, so dictation,
+    voice. Remote Visio does — as a real system microphone on the Mac you're controlling, so dictation,
     Zoom and everything else simply find it in the input list.
   </p>
 
@@ -73,7 +75,7 @@
     <a class="btn" href="https://github.com/hueshu/relaymic/blob/main/SETUP.md">How to install</a>
   </div>
 
-  <p class="hero-meta">macOS 12+ on the receiving Mac &middot; any browser sends &middot; AGPL-3.0, free forever</p>
+  <p class="hero-meta">macOS 14.2+ on the receiving Mac &middot; any browser sends &middot; AGPL-3.0, free forever</p>
 </section>
 
 <!-- ── 规格条 ───────────────────────────────────────── -->
@@ -118,7 +120,7 @@
           <div class="devices">
             <div class="device"><span class="tick"></span>MacBook Pro Microphone</div>
             <div class="device is-on">
-              <span class="tick">▸</span>BlackHole 2ch
+              <span class="tick">▸</span>Remote Visio
               <span class="mini" id="mini" aria-hidden="true"></span>
             </div>
             <div class="device"><span class="tick"></span>Aggregate Device</div>
@@ -160,14 +162,14 @@
         <tr><th scope="row">Jump Desktop</th><td class="yes">Yes</td><td class="col-mic no">No</td></tr>
         <tr><th scope="row">macOS Screen Sharing</th><td class="yes">Yes</td><td class="col-mic no">No</td></tr>
         <tr><th scope="row">Microsoft RDP <em>(and the far end is Windows)</em></th><td class="yes">Yes</td><td class="col-mic yes">Yes — built in, and it stops at Windows</td></tr>
-        <tr class="is-us"><th scope="row">RelayMic</th><td>Leaves that to your remote tool</td><td class="col-mic yes">Yes — as a system input device</td></tr>
+        <tr class="is-us"><th scope="row">Remote Visio</th><td>Leaves that to your remote tool</td><td class="col-mic yes">Yes — as a system input device</td></tr>
       </tbody>
     </table>
 
     <p class="footnote">
       TeamViewer's own community threads confirm a remote session captures audio from the remote
       machine's microphone, not from yours; the feature request for transmitting your local mic is
-      still open. RelayMic doesn't replace your remote desktop tool — it runs beside whichever one
+      still open. Remote Visio doesn't replace your remote desktop tool — it runs beside whichever one
       you already use.
     </p>
   </div>
@@ -177,31 +179,37 @@
 <section class="band band-pad" id="how">
   <div class="wrap">
     <p class="eyebrow">Setup, in order</p>
-    <h2>Install once on the Mac. After that it's a six-digit code.</h2>
+    <h2>Install once on the Mac. After that it's one address in a browser.</h2>
 
     <div class="steps">
       <div class="step">
         <span class="step-n">01</span>
         <h3>Install on the Mac you remote into</h3>
         <p>
-          One signed package. It sets up a virtual audio device and a small background service,
-          then shows you a six-digit pairing code. Nothing to configure, no ports to forward.
+          Hand the repository and its <code>SETUP.md</code> to your AI assistant, or follow it
+          yourself: put both machines on Tailscale, run <code>make install-driver</code> from Terminal
+          (it builds the bundled Remote Visio audio driver with clang from the Xcode Command Line Tools,
+          installs it to /Library/Audio/Plug-Ins/HAL with one admin password and restarts coreaudiod
+          &mdash; system audio pauses for about a second), build the receiver and start it. It prints
+          the address to open. Runs on macOS 14.2 or later.
         </p>
       </div>
       <div class="step">
         <span class="step-n">02</span>
-        <h3>Open relaymic.com wherever you are</h3>
+        <h3>Open the receiver's address wherever you are</h3>
         <p>
           A Windows laptop, an iPad, a borrowed machine in an office — any browser that has a
-          microphone. Type the code. The connection is direct between the two devices.
+          microphone. Open the <code>https://&lt;mac&gt;:7420</code> address the receiver printed
+          (over Tailscale, or any network where that port is reachable), accept the self-signed
+          certificate once, press Start talking. The connection is direct between the two devices.
         </p>
       </div>
       <div class="step">
         <span class="step-n">03</span>
-        <h3>Choose RelayMic as the input</h3>
+        <h3>Choose Remote Visio as the input</h3>
         <p>
           In Zoom, in dictation, in Audacity, in whatever is running over there. To the Mac it is
-          an ordinary microphone, so nothing needs to know RelayMic exists.
+          an ordinary microphone, so nothing needs to know Remote Visio exists.
         </p>
       </div>
     </div>
@@ -214,7 +222,7 @@
     <p class="eyebrow">Where the work actually went</p>
     <h2>Sending audio is easy. The last 200 milliseconds are not.</h2>
     <p class="lede">
-      RelayMic started as a tool its author needed daily, across three Macs, and every parameter
+      Remote Visio started as a tool its author needed daily, across three Macs, and every parameter
       below is there because something broke without it.
     </p>
 
@@ -254,10 +262,10 @@
       <details>
         <summary>Does it matter which remote desktop software I use?</summary>
         <p>
-          No. RelayMic doesn't hook into TeamViewer, AnyDesk, Parsec, RustDesk, Jump Desktop or
+          No. Remote Visio doesn't hook into TeamViewer, AnyDesk, Parsec, RustDesk, Jump Desktop or
           anything else — it carries audio on its own connection and presents a microphone on the
           Mac. Your remote tool keeps doing screen and input, unaware anything changed. You can also
-          use RelayMic with no remote desktop tool at all.
+          use Remote Visio with no remote desktop tool at all.
         </p>
       </details>
       <details>
@@ -280,15 +288,24 @@
       <details>
         <summary>What is the virtual audio device it installs?</summary>
         <p>
-          BlackHole, an open-source macOS audio driver. RelayMic installs it from its official
-          package rather than bundling a copy, and removes cleanly if you uninstall. It's what
-          allows any app on the Mac to see RelayMic as an ordinary input.
+          Remote Visio's own Core Audio HAL plug-in, bundled with the project and built from
+          <code>driver/RemoteVisio.c</code> by <code>make install-driver</code>. It appears as an input
+          device named "Remote Visio" everywhere (Zoom: Settings &rarr; Audio &rarr; Microphone &rarr;
+          Remote Visio; dictation: System Settings &rarr; Sound &rarr; Input &rarr; Remote Visio), and it
+          deliberately cannot be chosen as the Mac's sound output, so installing it never hijacks
+          the Mac's speakers. <code>make uninstall-driver</code> removes it cleanly. Check it is
+          present with <code>system_profiler SPAudioDataType | grep Remote Visio</code>; if it isn't,
+          <code>make install-driver</code> has already printed codesign and coreaudiod diagnostics
+          &mdash; read those, retry <code>sudo killall coreaudiod</code>,
+          or reboot. If you still have BlackHole from an
+          older version you may remove it with <code>brew uninstall --cask blackhole-2ch</code>
+          &mdash; Remote Visio ignores it either way.
         </p>
       </details>
       <details>
         <summary>I'm on Windows connecting to Windows. Do I need this?</summary>
         <p>
-          No — Microsoft RDP already redirects your microphone, at no cost. RelayMic exists because
+          No — Microsoft RDP already redirects your microphone, at no cost. Remote Visio exists because
           that feature has no equivalent when the far end is a Mac. Use what's free where it works.
         </p>
       </details>
@@ -296,7 +313,7 @@
         <summary>My iPhone and my Mac are in the same room. Do I need this?</summary>
         <p>
           Probably not. Apple's Continuity already lets a nearby iPhone act as a Mac microphone for
-          free. RelayMic is for distance: different building, different city, different country.
+          free. Remote Visio is for distance: different building, different city, different country.
         </p>
       </details>
       <details>
@@ -319,8 +336,9 @@
       <details>
         <summary>How rough is it, honestly?</summary>
         <p>
-          It's the author's own tool, opened up. Command line, no installer, Chinese strings in
-          the UI, and you need Tailscale (or an equivalent) so the sending browser can reach the
+          It's the author's own tool, opened up. A menu-bar app and an installer package that you
+          build from source (signed and notarized with your own Developer ID), UI in seven
+          languages, English logs and docs, and you need Tailscale (or an equivalent) so the sending browser can reach the
           Mac. The audio path itself is the mature part — three Macs use it daily, and the buffer
           and gain parameters are what they are because something broke without them.
         </p>
@@ -347,7 +365,7 @@
 </main>
 
 <footer class="wrap foot">
-  <span>&copy; 2026 RelayMic</span>
+  <span>&copy; 2026 Remote Visio</span>
   <a href="/privacy">Privacy</a>
   <a href="/terms">Terms</a>
   <a href="mailto:hey@relaymic.com">hey@relaymic.com</a>

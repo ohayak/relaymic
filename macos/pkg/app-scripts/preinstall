@@ -1,0 +1,32 @@
+#!/bin/sh
+# Runs as root before RemoteVisio.app is replaced. Quit a running copy first and
+# wait for it: swapping the bundle under a live receiver, or starting a new
+# one while the old is still releasing its audio device, leaves coreaudiod in
+# a state only a restart fixes.
+if pkill -TERM -f "RemoteVisio.app/Contents/MacOS/RemoteVisio" 2>/dev/null; then
+    i=0
+    while [ $i -lt 30 ]; do
+        pgrep -f "RemoteVisio.app/Contents/MacOS/" >/dev/null 2>&1 || break
+        sleep 0.5
+        i=$((i + 1))
+    done
+fi
+# Retire a previous install under the old RelayMic name: quit it, drop its
+# login item (as the console user), and remove it.
+if pkill -TERM -f "RelayMic.app/Contents/MacOS/RelayMic" 2>/dev/null; then
+    i=0
+    while [ $i -lt 30 ]; do
+        pgrep -f "RelayMic.app/Contents/MacOS/" >/dev/null 2>&1 || break
+        sleep 0.5
+        i=$((i + 1))
+    done
+fi
+if [ -x /Applications/RelayMic.app/Contents/MacOS/RelayMic ]; then
+    user=$(stat -f %Su /dev/console 2>/dev/null || true)
+    if [ -n "$user" ] && [ "$user" != "root" ]; then
+        launchctl asuser "$(id -u "$user")" sudo -u "$user" /Applications/RelayMic.app/Contents/MacOS/RelayMic --unregister-login-item >/dev/null 2>&1 || true
+    fi
+fi
+rm -rf /Applications/RelayMic.app
+pkgutil --forget com.relaymic.app >/dev/null 2>&1 || true
+exit 0

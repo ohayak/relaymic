@@ -3,14 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Terms — RelayMic</title>
-<meta name="description" content="RelayMic is AGPL-3.0 open source. Here is what that means for you.">
+<title>Terms — Remote Visio</title>
+<meta name="description" content="Remote Visio is AGPL-3.0 open source. Here is what that means for you.">
 <link rel="canonical" href="https://relaymic.com/terms">
 <link rel="alternate" hreflang="en" href="https://relaymic.com/terms">
 <link rel="alternate" hreflang="es" href="https://relaymic.com/es/terms">
 <link rel="alternate" hreflang="zh" href="https://relaymic.com/zh/terms">
 <link rel="alternate" hreflang="x-default" href="https://relaymic.com/terms">
-<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="/assets/favicon-96.png" sizes="96x96" type="image/png">
+<link rel="apple-touch-icon" href="/assets/favicon-96.png">
 <link rel="stylesheet" href="/assets/site.css">
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-RMG8MNGGZQ"></script>
 <script src="/assets/ga.js"></script>
@@ -20,8 +22,8 @@
 <header class="nav">
   <div class="wrap nav-in">
     <a class="brand" href="/">
-      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-      RelayMic
+      <img class="brand-mark" src="/assets/brand.png" alt="" width="22" height="22">
+      Remote Visio
     </a>
     <a class="btn" href="/">Back to the site</a>
   </div>
@@ -32,7 +34,7 @@
   <p class="updated">Last updated 22 August 2026</p>
 
   <p>
-    RelayMic is open source under the <a href="https://github.com/hueshu/relaymic/blob/main/LICENSE">GNU
+    Remote Visio is open source under the <a href="https://github.com/hueshu/relaymic/blob/main/LICENSE">GNU
     AGPL-3.0</a>. That license is the real agreement; everything below is it in plain words.
   </p>
 
@@ -71,9 +73,9 @@
 
   <h2>What you are responsible for</h2>
   <p>
-    Installing software on machines you are allowed to install software on. RelayMic asks you to
-    install a third-party open-source audio driver (BlackHole) from its official package; that
-    project has its own license and its own authors.
+    Installing software on machines you are allowed to install software on. Remote Visio installs its
+    own bundled audio driver (a Core Audio HAL plug-in) into /Library/Audio/Plug-Ins/HAL through
+    make install-driver, which asks for your admin password; make uninstall-driver removes it.
   </p>
   <p>
     Also: whatever you say into it. A microphone that reaches another building is still a
@@ -95,7 +97,7 @@
 </main>
 
 <footer class="wrap foot">
-  <span>&copy; 2026 RelayMic</span>
+  <span>&copy; 2026 Remote Visio</span>
   <a href="/">Home</a>
   <a href="/privacy">Privacy</a>
   <a href="https://github.com/hueshu/relaymic">GitHub</a>
