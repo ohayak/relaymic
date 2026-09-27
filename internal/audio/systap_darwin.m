@@ -2,7 +2,8 @@
 // processes) into an input device private to this process, with no second
 // BlackHole and no change to the system output device.
 //
-// Uses a Core Audio process tap (macOS 14.2+):
+// Uses a Core Audio process tap (macOS 14.2+, the app's minimum; the build
+// targets it with -mmacosx-version-min in systap_darwin.go):
 //   1. create a global tap that excludes this process: the mic audio the
 //      receiver itself writes into BlackHole must never be captured back,
 //      that would be a loopback;
@@ -16,36 +17,12 @@
 // System Audio Recording Only). If denied, the tap only delivers silence.
 #import <Foundation/Foundation.h>
 #import <CoreAudio/CoreAudio.h>
+#import <CoreAudio/AudioHardwareTapping.h>
+#import <CoreAudio/CATapDescription.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include "systap_darwin.h"
-
-// The tap headers only exist in the macOS 14.2+ SDK. On an older SDK the
-// receiver must still build, with the return path reported unavailable.
-#if defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && __MAC_OS_X_VERSION_MAX_ALLOWED >= 140200
-#import <CoreAudio/AudioHardwareTapping.h>
-#import <CoreAudio/CATapDescription.h>
-#define REMOTEVISIO_HAVE_TAP 1
-#else
-#define REMOTEVISIO_HAVE_TAP 0
-#endif
-
-#if !REMOTEVISIO_HAVE_TAP
-
-int systap_open(systap_result *res, int mute) {
-	(void)mute;
-	memset(res, 0, sizeof(*res));
-	snprintf(res->err, sizeof(res->err), "built against an SDK older than macOS 14.2; the return path is unavailable in this build");
-	return -1;
-}
-
-void systap_close(uint32_t tap, uint32_t agg) {
-	(void)tap;
-	(void)agg;
-}
-
-#else
 
 static OSStatus getProp(AudioObjectID obj, AudioObjectPropertySelector sel,
                         UInt32 qualSize, const void *qual, UInt32 *size, void *out) {
@@ -62,7 +39,6 @@ static void cfstr(CFStringRef s, char *out, size_t n) {
 
 int systap_open(systap_result *res, int mute) {
 	memset(res, 0, sizeof(*res));
-	if (@available(macOS 14.2, *)) {
 	@autoreleasepool {
 		OSStatus st;
 		UInt32 size;
@@ -145,10 +121,6 @@ int systap_open(systap_result *res, int mute) {
 		strlcpy(res->uid, aggUID.UTF8String, sizeof(res->uid));
 		return 0;
 	}
-	} else {
-		snprintf(res->err, sizeof(res->err), "the return path needs macOS 14.2 or newer");
-		return -1;
-	}
 }
 
 void systap_close(uint32_t tap, uint32_t agg) {
@@ -156,10 +128,6 @@ void systap_close(uint32_t tap, uint32_t agg) {
 		AudioHardwareDestroyAggregateDevice(agg);
 	}
 	if (tap != kAudioObjectUnknown) {
-		if (@available(macOS 14.2, *)) {
-			AudioHardwareDestroyProcessTap(tap);
-		}
+		AudioHardwareDestroyProcessTap(tap);
 	}
 }
-
-#endif // REMOTEVISIO_HAVE_TAP

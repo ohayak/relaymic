@@ -37,15 +37,5 @@ chmod +x "$APP/Contents/Resources/uninstall.sh"
 # signature seals it. No --deep: each piece gets its own entitlements.
 describe_signing
 sign_code "$APP/Contents/MacOS/remotevisio-receiver" macos/receiver.entitlements
-if [[ -n "$SIGN_ID" ]]; then
-    sign_code "$APP" macos/app.entitlements
-else
-    # Ad-hoc, with the designated requirement pinned to the bundle identifier
-    # instead of the default code hash: TCC remembers the requirement with each
-    # permission grant, and a hash-only one would make every rebuild silently
-    # drop the System Audio Recording and microphone grants. (A Developer ID
-    # signature gets a stable requirement from the team ID on its own.)
-    codesign --force --sign - \
-        -r '=designated => identifier "com.remotevisio.app"' "$APP"
-fi
+sign_code "$APP" macos/app.entitlements
 codesign --verify --deep --strict "$APP" || { echo "!!  RemoteVisio.app signature does not verify" >&2; exit 1; }

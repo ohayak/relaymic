@@ -11,8 +11,8 @@ strokes on a transparent background. From them this makes
   icons/RemoteVisio.ico                     the Windows sender's icon (tiles)
   macos/pkg/resources/background*.png       the installer's corner picture
   site/public/assets/{favicon-*,brand}.png  the landing site
-  internal/web/favicon-*.png                the sender page served by the receiver
-  cmd/sender-gui/icon.png                   the Windows sender's window icon
+  internal/icons/favicon-*.png              the receiver's pages and the Windows
+                                            sender's window icon (embedded in Go)
 
 The menu-bar image is icon-16/icon-32 as they are (the app build copies
 them as MenuIcon.png / MenuIcon@2x.png). A size that has no PNG of its own
@@ -158,9 +158,8 @@ def main():
             save(f'icons/icon-white-{px}.png', px, px, variants[px][1])
             save(f'icons/icon-tile-{px}.png', px, px, variants[px][2])
             save(f'site/public/assets/favicon-{px}.png', px, px, variants[px][2])
-            save(f'internal/web/favicon-{px}.png', px, px, variants[px][2])
+            save(f'internal/icons/favicon-{px}.png', px, px, variants[px][2])
         save('site/public/assets/brand.png', 96, 96, variants[96][1])
-        save('cmd/sender-gui/icon.png', 96, 96, variants[96][2])
         save('macos/pkg/resources/background.png', 128, 128, variants[128][0])
         save('macos/pkg/resources/background-dark.png', 128, 128, variants[128][1])
 

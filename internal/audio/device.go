@@ -41,9 +41,25 @@ func (c *Context) Close() {
 
 // Playbacks lists all output devices.
 func (c *Context) Playbacks() ([]Device, error) {
-	infos, err := c.ctx.Devices(malgo.Playback)
+	return c.devices(malgo.Playback, "output")
+}
+
+// FindPlayback finds an output device by name substring (ignoring case and
+// spaces). "remotevisio" matches "Remote Visio". An empty string returns the
+// system default.
+func (c *Context) FindPlayback(substr string) (Device, error) {
+	devices, err := c.Playbacks()
 	if err != nil {
-		return nil, fmt.Errorf("enumerate output devices: %w", err)
+		return Device{}, err
+	}
+	return findDevice(devices, substr, "output")
+}
+
+// devices lists the devices of one kind; what names the kind in errors ("input" or "output").
+func (c *Context) devices(kind malgo.DeviceType, what string) ([]Device, error) {
+	infos, err := c.ctx.Devices(kind)
+	if err != nil {
+		return nil, fmt.Errorf("enumerate %s devices: %w", what, err)
 	}
 	out := make([]Device, 0, len(infos))
 	for _, info := range infos {
@@ -56,12 +72,19 @@ func (c *Context) Playbacks() ([]Device, error) {
 	return out, nil
 }
 
-// FindPlayback finds an output device by name substring (ignoring case and
-// spaces). "remotevisio" matches "Remote Visio".
-func (c *Context) FindPlayback(substr string) (Device, error) {
-	devices, err := c.Playbacks()
-	if err != nil {
-		return Device{}, err
+// findDevice picks a device by name substring, or with an empty substring the
+// system default, falling back to the first one if none is marked default.
+func findDevice(devices []Device, substr, what string) (Device, error) {
+	if substr == "" {
+		for _, d := range devices {
+			if d.IsDefault {
+				return d, nil
+			}
+		}
+		if len(devices) > 0 {
+			return devices[0], nil
+		}
+		return Device{}, fmt.Errorf("no %s devices on this machine", what)
 	}
 	want := normalize(substr)
 	for _, d := range devices {
@@ -73,24 +96,7 @@ func (c *Context) FindPlayback(substr string) (Device, error) {
 	for i, d := range devices {
 		names[i] = d.Name
 	}
-	return Device{}, fmt.Errorf("no output device whose name contains %q; available: %s", substr, strings.Join(names, " / "))
-}
-
-// DefaultPlayback returns the system default output device, or the first one if none is marked default.
-func (c *Context) DefaultPlayback() (Device, error) {
-	devices, err := c.Playbacks()
-	if err != nil {
-		return Device{}, err
-	}
-	for _, d := range devices {
-		if d.IsDefault {
-			return d, nil
-		}
-	}
-	if len(devices) > 0 {
-		return devices[0], nil
-	}
-	return Device{}, fmt.Errorf("no output devices on this machine")
+	return Device{}, fmt.Errorf("no %s device whose name contains %q; available: %s", what, substr, strings.Join(names, " / "))
 }
 
 func normalize(s string) string {

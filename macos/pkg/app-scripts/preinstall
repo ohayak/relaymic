@@ -1,51 +1,43 @@
 #!/bin/sh
-# Runs as root before RemoteVisio.app is replaced. Quit a running copy first and
-# wait for it: swapping the bundle under a live receiver, or starting a new
-# one while the old is still releasing its audio device, leaves coreaudiod in
-# a state only a restart fixes.
-if pkill -TERM -f "RemoteVisio.app/Contents/MacOS/RemoteVisio" 2>/dev/null; then
+# Runs as root before Installer replaces /Applications/RemoteVisio.app in place
+# (the component is pinned there and takes any identifier or version, see
+# macos/build-pkg.sh). Quit a running copy first and wait for it: swapping
+# the bundle under a live receiver, or starting a new one while the old is
+# still releasing its audio device, leaves coreaudiod in a state only a
+# restart fixes. Its login item is dropped as well, as the console user
+# (login items are per user); the new app registers itself again when
+# postinstall starts it, unless the person opted out. A previous install
+# under the old RelayMic name is retired the same way and removed.
+
+# quit_app NAME: quit a running NAME.app (its menu-bar process) and wait, up to
+# 15 s, until nothing runs from the bundle any more.
+quit_app() {
+    pkill -TERM -f "$1.app/Contents/MacOS/$1" 2>/dev/null || return 0
     i=0
     while [ $i -lt 30 ]; do
-        pgrep -f "RemoteVisio.app/Contents/MacOS/" >/dev/null 2>&1 || break
+        pgrep -f "$1.app/Contents/MacOS/" >/dev/null 2>&1 || break
         sleep 0.5
         i=$((i + 1))
     done
-fi
-# A RemoteVisio.app with another bundle identifier (an install from before the
-# identifier became com.remotevisio.app) is replaced in place (the package's
-# BundleHasStrictIdentifier is off), but its login item still has to go, as
-# does a copy that an earlier package parked in RemoteVisio.localized or
-# RemoteVisio-<n>.localized next to it.
-app=/Applications/RemoteVisio.app
-if [ -d "$app" ]; then
-    id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist" 2>/dev/null || true)
-    if [ "$id" != "com.remotevisio.app" ]; then
-        user=$(stat -f %Su /dev/console 2>/dev/null || true)
-        if [ -n "$user" ] && [ "$user" != "root" ] && [ -x "$app/Contents/MacOS/RemoteVisio" ]; then
-            launchctl asuser "$(id -u "$user")" sudo -u "$user" "$app/Contents/MacOS/RemoteVisio" --unregister-login-item >/dev/null 2>&1 || true
-        fi
-        rm -rf "$app"
-    fi
-fi
-for d in /Applications/RemoteVisio.localized /Applications/RemoteVisio-[0-9]*.localized; do
-    [ -d "$d" ] && rm -rf "$d"
-done
-# Retire a previous install under the old RelayMic name: quit it, drop its
-# login item (as the console user), and remove it.
-if pkill -TERM -f "RelayMic.app/Contents/MacOS/RelayMic" 2>/dev/null; then
-    i=0
-    while [ $i -lt 30 ]; do
-        pgrep -f "RelayMic.app/Contents/MacOS/" >/dev/null 2>&1 || break
-        sleep 0.5
-        i=$((i + 1))
-    done
-fi
-if [ -x /Applications/RelayMic.app/Contents/MacOS/RelayMic ]; then
-    user=$(stat -f %Su /dev/console 2>/dev/null || true)
-    if [ -n "$user" ] && [ "$user" != "root" ]; then
-        launchctl asuser "$(id -u "$user")" sudo -u "$user" /Applications/RelayMic.app/Contents/MacOS/RelayMic --unregister-login-item >/dev/null 2>&1 || true
-    fi
-fi
+}
+
+# drop_login_item BIN: have the app binary BIN unregister its login item, as
+# the person at the console.
+console=$(stat -f %Su /dev/console 2>/dev/null || true)
+[ "$console" != root ] || console=""
+drop_login_item() {
+    [ -n "$console" ] && [ -x "$1" ] || return 0
+    launchctl asuser "$(id -u "$console")" sudo -u "$console" "$1" --unregister-login-item >/dev/null 2>&1 || true
+}
+
+# retire NAME: quit /Applications/NAME.app and drop its login item.
+retire() {
+    quit_app "$1"
+    drop_login_item "/Applications/$1.app/Contents/MacOS/$1"
+}
+
+retire RemoteVisio
+retire RelayMic
 rm -rf /Applications/RelayMic.app
 pkgutil --forget com.relaymic.app >/dev/null 2>&1 || true
 exit 0

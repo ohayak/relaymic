@@ -209,8 +209,8 @@ To remove it later: `make uninstall-driver`. To test the driver without installi
 system_profiler SPAudioDataType | grep "Remote Visio"
 ```
 
-`Remote Visio` must appear. If it doesn't, `make install-driver` has already waited up to 10 s, exited
-with status 1 and printed `codesign` and coreaudiod log diagnostics: read those, retry
+`Remote Visio` must appear. If it doesn't, `make install-driver` has already waited for coreaudiod to
+come back, exited with status 1 and printed `codesign` and coreaudiod log diagnostics: read those, retry
 `sudo killall coreaudiod`, or reboot. Logging out does not
 restart coreaudiod. **Do not continue past a failure here**; everything downstream depends on it.
 

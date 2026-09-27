@@ -1,23 +1,29 @@
 #!/bin/sh
-# Runs as root after RemoteVisio.driver is copied into /Library/Audio/Plug-Ins/HAL.
+# Runs as root after RemoteVisio.driver is copied into /Library/Audio/Plug-Ins/HAL
+# (driver/install.sh runs it too, as its last step, and reads the message).
 # coreaudiod only scans that folder when it starts, so restart it. killall
 # rather than launchctl kickstart: SIP refuses kickstart on system daemons,
 # and launchd brings coreaudiod back by itself within a second. System audio
-# pauses for about that long.
+# pauses for about that long; a receiver that was running restarts itself.
 # A previous install under the old RelayMic name must not stay alongside.
 rm -rf /Library/Audio/Plug-Ins/HAL/RelayMic.driver
 pkgutil --forget com.relaymic.driver >/dev/null 2>&1 || true
+old=$(pgrep -x coreaudiod 2>/dev/null || true)
 killall coreaudiod 2>/dev/null || true
 
-# Not fatal if it takes longer; the app retries opening the device on its own.
+# Wait for the new coreaudiod (bounded: not fatal if it takes longer, the app
+# retries opening the device on its own), then ask system_profiler once; it
+# takes several seconds per call, too slow to poll with.
 i=0
-while [ $i -lt 10 ]; do
-    if system_profiler SPAudioDataType 2>/dev/null | grep -q "Remote Visio"; then
-        echo "Remote Visio device is available"
-        exit 0
-    fi
-    sleep 1
+while [ $i -lt 50 ]; do
+    new=$(pgrep -x coreaudiod 2>/dev/null || true)
+    [ -n "$new" ] && [ "$new" != "$old" ] && break
+    sleep 0.2
     i=$((i + 1))
 done
-echo "Remote Visio device not listed yet; coreaudiod may still be starting"
+if system_profiler SPAudioDataType 2>/dev/null | grep -q "Remote Visio"; then
+    echo "Remote Visio device is available"
+else
+    echo "Remote Visio device not listed yet; coreaudiod may still be starting"
+fi
 exit 0

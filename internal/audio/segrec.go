@@ -2,7 +2,6 @@ package audio
 
 import (
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -108,16 +107,7 @@ func (r *SegmentRecorder) Write(pcm []int16) {
 		return
 	}
 
-	peak := 0
-	for _, s := range pcm {
-		v := int(s)
-		if v < 0 {
-			v = -v
-		}
-		if v > peak {
-			peak = v
-		}
-	}
+	peak := Peak(pcm)
 	voiced := peak > r.threshold
 
 	r.mu.Lock()
@@ -208,7 +198,7 @@ func (r *SegmentRecorder) finish() {
 		Name:   r.name,
 		Time:   r.start,
 		DurMS:  r.durMS(r.written),
-		PeakDB: dbFS(r.peak),
+		PeakDB: DBFS(r.peak),
 	})
 }
 
@@ -389,12 +379,4 @@ func segLess(a, b string) bool {
 		return sa < sb
 	}
 	return ta.Before(tb)
-}
-
-// dbFS converts an int16 peak to dBFS. An all-zero segment gets a floor value, so -Inf never reaches the log.
-func dbFS(peak int) float64 {
-	if peak <= 0 {
-		return -100
-	}
-	return 20 * math.Log10(float64(peak)/math.MaxInt16)
 }

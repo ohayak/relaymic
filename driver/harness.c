@@ -277,8 +277,9 @@ static void TestTopology(void) {
 	CHECK(I->CreateDevice(D, NULL, NULL, ids) == kAudioHardwareUnsupportedOperationError, "CreateDevice");
 }
 
-// Every selector we can think of, on every object, in every scope: HasProperty
-// must agree with GetPropertyDataSize/GetPropertyData, and nothing may crash.
+// Every selector we can think of, on every object, in every scope: HasProperty,
+// GetPropertyDataSize and GetPropertyData must agree on what exists and on how
+// big it is, and nothing may crash.
 static void TestPropertyWalk(void) {
 	static const AudioObjectPropertySelector sels[] = {
 		kAudioObjectPropertyBaseClass, kAudioObjectPropertyClass, kAudioObjectPropertyOwner, kAudioObjectPropertyName,
@@ -317,32 +318,23 @@ static void TestPropertyWalk(void) {
 				for (UInt32 el = 0; el < 3; el += 2) { // main element and a bogus one
 					AudioObjectPropertyAddress a = { sels[s], scopes[c], el };
 					Boolean h = I->HasProperty(D, objs[o], 0, &a);
-					UInt32 size = 0xFFFFFFFF, got = 0xFFFFFFFF;
+					UInt32 size = 0xFFFFFFFF, got = 0xFFFFFFFF, got0 = 0;
 					OSStatus st1 = I->GetPropertyDataSize(D, objs[o], 0, &a, 0, NULL, &size);
 					OSStatus st2 = I->GetPropertyData(D, objs[o], 0, &a, 0, NULL, sizeof(buf), &got, buf);
-					UInt32 got0 = 0;
 					OSStatus st0 = I->GetPropertyData(D, objs[o], 0, &a, 0, NULL, 0, &got0, NULL);
 					(void)st0; // zero-size query must simply not crash
-					if (h) {
-						has++;
-						CHECK(st1 == 0, "has property but size failed: obj %u sel '%c%c%c%c' scope '%c%c%c%c' el %u → %d",
-							objs[o], (char)(sels[s] >> 24), (char)(sels[s] >> 16), (char)(sels[s] >> 8), (char)sels[s],
-							(char)(scopes[c] >> 24), (char)(scopes[c] >> 16), (char)(scopes[c] >> 8), (char)scopes[c], el, (int)st1);
-						CHECK(st2 == 0, "has property but get failed: obj %u sel '%c%c%c%c' scope '%c%c%c%c' → %d",
-							objs[o], (char)(sels[s] >> 24), (char)(sels[s] >> 16), (char)(sels[s] >> 8), (char)sels[s],
-							(char)(scopes[c] >> 24), (char)(scopes[c] >> 16), (char)(scopes[c] >> 8), (char)scopes[c], (int)st2);
-						CHECK(got == size, "size %u vs data %u for obj %u sel '%c%c%c%c'", size, got, objs[o],
-							(char)(sels[s] >> 24), (char)(sels[s] >> 16), (char)(sels[s] >> 8), (char)sels[s]);
-						// Strings were retained for us; release to keep the run leak-free.
-						if (got == sizeof(CFStringRef) && (sels[s] == kAudioObjectPropertyName || sels[s] == kAudioObjectPropertyManufacturer
-							|| sels[s] == kAudioDevicePropertyDeviceUID || sels[s] == kAudioDevicePropertyModelUID
-							|| sels[s] == kAudioPlugInPropertyResourceBundle)) {
-							CFRelease(*(CFStringRef*)buf);
-						}
-					} else {
-						CHECK(st1 != 0 && st2 != 0, "no property but size/get succeeded: obj %u sel '%c%c%c%c' scope '%c%c%c%c' el %u",
-							objs[o], (char)(sels[s] >> 24), (char)(sels[s] >> 16), (char)(sels[s] >> 8), (char)sels[s],
-							(char)(scopes[c] >> 24), (char)(scopes[c] >> 16), (char)(scopes[c] >> 8), (char)scopes[c], el);
+					CHECK(h == (st1 == 0) && h == (st2 == 0), "presence disagrees (has %d, size %d, get %d): obj %u sel '%c%c%c%c' scope '%c%c%c%c' el %u",
+						h, (int)st1, (int)st2, objs[o], (char)(sels[s] >> 24), (char)(sels[s] >> 16), (char)(sels[s] >> 8), (char)sels[s],
+						(char)(scopes[c] >> 24), (char)(scopes[c] >> 16), (char)(scopes[c] >> 8), (char)scopes[c], el);
+					if (!h) continue;
+					has++;
+					CHECK(got == size, "size %u vs data %u for obj %u sel '%c%c%c%c'", size, got, objs[o],
+						(char)(sels[s] >> 24), (char)(sels[s] >> 16), (char)(sels[s] >> 8), (char)sels[s]);
+					// Strings were retained for us; release to keep the run leak-free.
+					if (got == sizeof(CFStringRef) && (sels[s] == kAudioObjectPropertyName || sels[s] == kAudioObjectPropertyManufacturer
+						|| sels[s] == kAudioDevicePropertyDeviceUID || sels[s] == kAudioDevicePropertyModelUID
+						|| sels[s] == kAudioPlugInPropertyResourceBundle)) {
+						CFRelease(*(CFStringRef*)buf);
 					}
 				}
 			}

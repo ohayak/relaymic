@@ -2,7 +2,6 @@ package audio
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/gen2brain/malgo"
@@ -14,19 +13,7 @@ import (
 
 // Captures lists all input devices.
 func (c *Context) Captures() ([]Device, error) {
-	infos, err := c.ctx.Devices(malgo.Capture)
-	if err != nil {
-		return nil, fmt.Errorf("enumerate input devices: %w", err)
-	}
-	out := make([]Device, 0, len(infos))
-	for _, info := range infos {
-		out = append(out, Device{
-			Name:      info.Name(),
-			ID:        info.ID,
-			IsDefault: info.IsDefault != 0,
-		})
-	}
-	return out, nil
+	return c.devices(malgo.Capture, "input")
 }
 
 // FindCapture finds an input device by name substring. An empty string returns the system default.
@@ -35,28 +22,7 @@ func (c *Context) FindCapture(substr string) (Device, error) {
 	if err != nil {
 		return Device{}, err
 	}
-	if substr == "" {
-		for _, d := range devices {
-			if d.IsDefault {
-				return d, nil
-			}
-		}
-		if len(devices) > 0 {
-			return devices[0], nil
-		}
-		return Device{}, fmt.Errorf("no input devices on this machine")
-	}
-	want := normalize(substr)
-	for _, d := range devices {
-		if strings.Contains(normalize(d.Name), want) {
-			return d, nil
-		}
-	}
-	names := make([]string, len(devices))
-	for i, d := range devices {
-		names[i] = d.Name
-	}
-	return Device{}, fmt.Errorf("no input device whose name contains %q; available: %s", substr, strings.Join(names, " / "))
+	return findDevice(devices, substr, "input")
 }
 
 // Capturer continuously reads PCM from one input device.

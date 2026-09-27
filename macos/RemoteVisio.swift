@@ -32,7 +32,7 @@ private let strings: [String: [String: String]] = [
         "uninstall_failed": "Uninstall failed",
         "also_run": "You can also run {path} from Terminal.",
         "missing_script": "The uninstall script is missing from this copy of Remote Visio. Run `make uninstall` in the source tree instead.",
-        "receiver_missing": "remotevisio-receiver was not found in the app bundle, ~/.local/bin, /opt/homebrew/bin, or /usr/local/bin.",
+        "receiver_missing": "The receiver is missing from this copy of Remote Visio. Reinstall the app.",
         "exited": "remotevisio-receiver exited unexpectedly (status {n}). See ~/Library/Logs/RemoteVisio.log.",
         "start_failed": "Could not start remotevisio-receiver: {err}",
     ],
@@ -52,7 +52,7 @@ private let strings: [String: [String: String]] = [
         "uninstall_failed": "La desinstalación falló",
         "also_run": "También puedes ejecutar {path} desde Terminal.",
         "missing_script": "Falta el script de desinstalación en esta copia de Remote Visio. Ejecuta `make uninstall` en el código fuente.",
-        "receiver_missing": "No se encontró remotevisio-receiver en la app ni en ~/.local/bin, /opt/homebrew/bin o /usr/local/bin.",
+        "receiver_missing": "Falta el receptor en esta copia de Remote Visio. Reinstala la app.",
         "exited": "remotevisio-receiver terminó inesperadamente (estado {n}). Consulta ~/Library/Logs/RemoteVisio.log.",
         "start_failed": "No se pudo iniciar remotevisio-receiver: {err}",
     ],
@@ -72,7 +72,7 @@ private let strings: [String: [String: String]] = [
         "uninstall_failed": "Échec de la désinstallation",
         "also_run": "Vous pouvez aussi exécuter {path} dans le Terminal.",
         "missing_script": "Le script de désinstallation manque dans cette copie de Remote Visio. Exécutez `make uninstall` depuis les sources.",
-        "receiver_missing": "remotevisio-receiver est introuvable dans l'app, ~/.local/bin, /opt/homebrew/bin ou /usr/local/bin.",
+        "receiver_missing": "Le récepteur manque dans cette copie de Remote Visio. Réinstallez l'app.",
         "exited": "remotevisio-receiver s'est arrêté de façon inattendue (état {n}). Voir ~/Library/Logs/RemoteVisio.log.",
         "start_failed": "Impossible de démarrer remotevisio-receiver : {err}",
     ],
@@ -92,7 +92,7 @@ private let strings: [String: [String: String]] = [
         "uninstall_failed": "卸载失败",
         "also_run": "也可以在终端里运行 {path}。",
         "missing_script": "这份 Remote Visio 里缺少卸载脚本。请在源码目录里运行 `make uninstall`。",
-        "receiver_missing": "在 App 内、~/.local/bin、/opt/homebrew/bin 或 /usr/local/bin 都没找到 remotevisio-receiver。",
+        "receiver_missing": "这份 Remote Visio 里缺少接收端。请重新安装这个 App。",
         "exited": "remotevisio-receiver 意外退出（状态 {n}）。见 ~/Library/Logs/RemoteVisio.log。",
         "start_failed": "无法启动 remotevisio-receiver：{err}",
     ],
@@ -112,7 +112,7 @@ private let strings: [String: [String: String]] = [
         "uninstall_failed": "Deinstallation fehlgeschlagen",
         "also_run": "Sie können auch {path} im Terminal ausführen.",
         "missing_script": "In dieser Kopie von Remote Visio fehlt das Deinstallationsskript. Führen Sie `make uninstall` im Quellcode aus.",
-        "receiver_missing": "remotevisio-receiver wurde weder in der App noch in ~/.local/bin, /opt/homebrew/bin oder /usr/local/bin gefunden.",
+        "receiver_missing": "In dieser Kopie von Remote Visio fehlt der Empfänger. Installieren Sie die App neu.",
         "exited": "remotevisio-receiver wurde unerwartet beendet (Status {n}). Siehe ~/Library/Logs/RemoteVisio.log.",
         "start_failed": "remotevisio-receiver konnte nicht gestartet werden: {err}",
     ],
@@ -132,7 +132,7 @@ private let strings: [String: [String: String]] = [
         "uninstall_failed": "Disinstallazione non riuscita",
         "also_run": "Puoi anche eseguire {path} dal Terminale.",
         "missing_script": "In questa copia di Remote Visio manca lo script di disinstallazione. Esegui `make uninstall` nel codice sorgente.",
-        "receiver_missing": "remotevisio-receiver non è stato trovato nell'app né in ~/.local/bin, /opt/homebrew/bin o /usr/local/bin.",
+        "receiver_missing": "In questa copia di Remote Visio manca il ricevitore. Reinstalla l'app.",
         "exited": "remotevisio-receiver si è chiuso in modo imprevisto (stato {n}). Vedi ~/Library/Logs/RemoteVisio.log.",
         "start_failed": "Impossibile avviare remotevisio-receiver: {err}",
     ],
@@ -152,7 +152,7 @@ private let strings: [String: [String: String]] = [
         "uninstall_failed": "हटाना विफल रहा",
         "also_run": "आप Terminal से {path} भी चला सकते हैं।",
         "missing_script": "Remote Visio की इस कॉपी में अनइंस्टॉल स्क्रिप्ट नहीं है। सोर्स कोड में `make uninstall` चलाएँ।",
-        "receiver_missing": "remotevisio-receiver ऐप में, ~/.local/bin, /opt/homebrew/bin या /usr/local/bin में नहीं मिला।",
+        "receiver_missing": "Remote Visio की इस कॉपी में रिसीवर नहीं है। ऐप को दोबारा इंस्टॉल करें।",
         "exited": "remotevisio-receiver अप्रत्याशित रूप से बंद हो गया (स्थिति {n})। ~/Library/Logs/RemoteVisio.log देखें।",
         "start_failed": "remotevisio-receiver शुरू नहीं हो सका: {err}",
     ],
@@ -173,19 +173,15 @@ private func L(_ key: String, _ vars: [String: String] = [:]) -> String {
     return s
 }
 
-// Prefer the receiver bundled inside the .app; fall back to a PATH install.
-func receiverCandidates() -> [String] {
-    var paths: [String] = []
-    if let dir = Bundle.main.executableURL?.deletingLastPathComponent() {
-        paths.append(dir.appendingPathComponent("remotevisio-receiver").path)
-    }
-    paths += [
-        NSHomeDirectory() + "/.local/bin/remotevisio-receiver",
-        "/opt/homebrew/bin/remotevisio-receiver",
-        "/usr/local/bin/remotevisio-receiver",
-    ]
-    return paths
-}
+// The receiver ships next to this executable: Contents/MacOS in the bundle,
+// bin/ for a bare build.
+private let receiverPath = Bundle.main.executableURL?.deletingLastPathComponent()
+    .appendingPathComponent("remotevisio-receiver").path ?? ""
+private let logPath = NSHomeDirectory() + "/Library/Logs/RemoteVisio.log"
+// The receiver's built-in default; the wrapper never passes -addr. If the port
+// ever becomes configurable, pass it as -addr from this constant so the menu's
+// endpoints keep matching what the receiver listens on.
+private let receiverPort = 7420
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
@@ -204,7 +200,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             signalSources.append(source)
         }
 
-        guard let path = receiverCandidates().first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
+        guard FileManager.default.isExecutableFile(atPath: receiverPath) else {
             fail(L("receiver_missing"))
             return
         }
@@ -214,12 +210,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // macOS hides it on notched Macs when the menu bar is crowded. AppKit
         // keeps the position under this key (points from the right end of the
         // status area); seed it once, and dragging the icon overrides it.
-        let positionKey = "NSStatusItem Preferred Position RemoteVisioStatus"
+        let autosaveName = "RemoteVisioStatus"
+        let positionKey = "NSStatusItem Preferred Position \(autosaveName)"
         if UserDefaults.standard.object(forKey: positionKey) == nil {
             UserDefaults.standard.set(40, forKey: positionKey)
         }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.autosaveName = "RemoteVisioStatus"
+        item.autosaveName = autosaveName
         if let button = item.button {
             if let icon = Bundle.main.image(forResource: "MenuIcon") {
                 // Black strokes on transparency: as a template image macOS
@@ -230,8 +227,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else if let icon = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Remote Visio") {
                 icon.isTemplate = true
                 button.image = icon
-            } else {
-                button.title = "RM"
             }
             button.toolTip = L("running_tip")
         }
@@ -241,7 +236,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = item
 
         registerLoginItemIfInstalled()
-        launchReceiver(path: path, fresh: true)
+        launchReceiver(fresh: true)
     }
 
     // A remote Mac reboots; the receiver has to come back without anyone at
@@ -264,9 +259,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let on = !UserDefaults.standard.bool(forKey: speakerMuteKey)
         UserDefaults.standard.set(on, forKey: speakerMuteKey)
         stopReceiver()
-        if let path = receiverCandidates().first(where: { FileManager.default.isExecutableFile(atPath: $0) }) {
-            launchReceiver(path: path, fresh: false)
-        }
+        launchReceiver(fresh: false)
     }
 
     @objc private func toggleLoginItem() {
@@ -290,17 +283,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // that is a request to be started again, not a failure. The log is
     // truncated once per app launch and appended to on relaunches, so the line
     // explaining why the previous instance exited survives.
-    private func launchReceiver(path: String, fresh: Bool) {
+    private func launchReceiver(fresh: Bool) {
         let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: path)
+        proc.executableURL = URL(fileURLWithPath: receiverPath)
         proc.arguments = UserDefaults.standard.bool(forKey: speakerMuteKey) ? ["-speaker-mute"] : []
 
-        // Finder launches apps with a minimal PATH that excludes user bin dirs.
+        // Finder launches apps with a minimal PATH that excludes user bin dirs;
+        // the receiver looks up the tailscale CLI on PATH.
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = "\(NSHomeDirectory())/.local/bin:/opt/homebrew/bin:/usr/local/bin:" + (env["PATH"] ?? "/usr/bin:/bin")
         proc.environment = env
 
-        let logPath = NSHomeDirectory() + "/Library/Logs/RemoteVisio.log"
         if fresh || !FileManager.default.fileExists(atPath: logPath) {
             FileManager.default.createFile(atPath: logPath, contents: nil)
         }
@@ -317,7 +310,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.async {
                 self.receiver = nil
                 if p.terminationStatus == 3 {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self.launchReceiver(path: path, fresh: false) }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self.launchReceiver(fresh: false) }
                 } else if p.terminationStatus != 0 {
                     self.fail(L("exited", ["n": String(p.terminationStatus)]))
                 } else {
@@ -343,19 +336,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(url, forType: .string)
-    }
-
-    // The receiver logs its listen URLs at startup; recover the port from
-    // there so a future port change doesn't leave stale endpoints here.
-    fileprivate func detectPort() -> Int {
-        let logPath = NSHomeDirectory() + "/Library/Logs/RemoteVisio.log"
-        if let log = try? String(contentsOfFile: logPath, encoding: .utf8),
-           let range = log.range(of: #"https://[0-9.]+:([0-9]+)"#, options: .regularExpression),
-           let colon = log[range].lastIndex(of: ":"),
-           let port = Int(log[range][log[range].index(after: colon)...]) {
-            return port
-        }
-        return 7420
     }
 
     fileprivate func localIPv4Addresses() -> [String] {
@@ -442,9 +422,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Cancelled at the password dialog (error -128) or failed: put things
         // back the way they were.
         let code = (error?[NSAppleScript.errorNumber] as? Int) ?? 0
-        if let path = receiverCandidates().first(where: { FileManager.default.isExecutableFile(atPath: $0) }) {
-            launchReceiver(path: path, fresh: false)
-        }
+        launchReceiver(fresh: false)
         if code != -128 {
             let message = (error?[NSAppleScript.errorMessage] as? String) ?? "unknown error"
             let alert = NSAlert()
@@ -475,9 +453,8 @@ extension AppDelegate: NSMenuDelegate {
             menu.addItem(NSMenuItem(title: L("no_addr"), action: nil, keyEquivalent: ""))
         } else {
             menu.addItem(NSMenuItem(title: L("endpoint"), action: nil, keyEquivalent: ""))
-            let port = detectPort()
             for ip in ips {
-                let url = "https://\(ip):\(port)"
+                let url = "https://\(ip):\(receiverPort)"
                 let entry = NSMenuItem(title: url, action: #selector(copyEndpoint(_:)), keyEquivalent: "")
                 entry.target = self
                 entry.representedObject = url

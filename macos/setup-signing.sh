@@ -52,7 +52,6 @@ source macos/signing.sh
 
 DIR="${REMOTEVISIO_SIGNING_DIR:-$HOME/.config/remotevisio/signing}"
 [[ "$DIR" == /* ]] || DIR="$CALLER/$DIR"
-NOTARY_PROFILE="${REMOTEVISIO_NOTARY_PROFILE:-remotevisio}"
 PORTAL="https://developer.apple.com/account/resources/certificates/add"
 # Apple's "Developer ID - G2" intermediate, which issues every Developer ID
 # certificate since 2022 and which macOS does not ship (it fetches it on
@@ -146,24 +145,11 @@ has_identity() {
     grep -qx "$(cert_sha1 "$1")" <<<"$ids"
 }
 
-# notary_check: NOTARY becomes ok, missing or unreachable. The only way to
-# check the stored password is to use it, which needs Apple's service.
-notary_check() {
-    local err
-    if err=$(xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" 2>&1 >/dev/null); then
-        NOTARY=ok
-    elif [[ "$err" == *"No Keychain password item"* ]]; then
-        NOTARY=missing
-    else
-        NOTARY=unreachable
-    fi
-}
-
-# describe KIND: the status line for KIND's certificate, from a fresh pick.
+# describe: the status line for the certificate the last pick looked for.
 describe() {
     if [[ -n "$PICK_HASH" ]]; then
         echo "ok  $PICK_NAME"
-    elif [[ -n "$(remotevisio_identities "$1" "" ${LOOKUP[@]+"${LOOKUP[@]}"})" ]]; then
+    elif [[ -n "$PICK_UNTRUSTED" ]]; then
         echo "in the keychain but not trusted (see above)"
     else
         echo "missing"
@@ -171,9 +157,9 @@ describe() {
 }
 
 status() {
-    local app_state pkg_state app_hash pkg_hash pkg_count key_state notary_state keys=0
-    pick "$APP_KIND"; app_hash=$PICK_HASH; app_state=$(describe "$APP_KIND")
-    pick "$PKG_KIND"; pkg_hash=$PICK_HASH; pkg_count=$PICK_COUNT; pkg_state=$(describe "$PKG_KIND")
+    local app_state pkg_state app_hash pkg_hash pkg_name pkg_count key_state notary_state keys=0
+    pick "$APP_KIND"; app_hash=$PICK_HASH; app_state=$(describe)
+    pick "$PKG_KIND"; pkg_hash=$PICK_HASH; pkg_name=$PICK_NAME; pkg_count=$PICK_COUNT; pkg_state=$(describe)
     [[ -f "$(key_of "$APP_KIND")" ]] && keys=$((keys + 1))
     [[ -f "$(key_of "$PKG_KIND")" ]] && keys=$((keys + 1))
     case $keys in
@@ -194,17 +180,14 @@ status() {
     echo "  Notarization credentials  $notary_state"
     echo
     if [[ "$pkg_count" -gt 1 ]]; then
-        echo "Next: $pkg_count \"$PICK_NAME\" certificates are in the keychain and productbuild cannot"
-        echo "  tell them apart. Delete the older one in Keychain Access (My Certificates), or set"
-        echo "  REMOTEVISIO_PKG_SIGN_ID to a distinct identity."
+        echo "Next: $(pkg_sign_clash "$pkg_count" "$pkg_name")"
     elif [[ -n "$app_hash" && -n "$pkg_hash" && "$NOTARY" == ok ]]; then
         echo "Ready: make pkg builds a signed, notarized package."
     elif [[ -n "$app_hash" && -n "$pkg_hash" && "$NOTARY" == unreachable ]]; then
         echo "Next: connect to the network and run this again (notarizing needs it anyway)."
     elif [[ -n "$app_hash" && -n "$pkg_hash" ]]; then
-        echo "Next: store the notarization credentials once. Make an app-specific password at"
-        echo "  https://account.apple.com (Sign-In and Security > App-Specific Passwords), then:"
-        echo "  xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <your Apple ID email> --team-id $REMOTEVISIO_TEAM_ID"
+        echo "Next: the notarization credentials are missing."
+        notary_hint
     elif [[ "$app_state$pkg_state" == *"not trusted"* ]]; then
         echo "Next: Keychain Access (My Certificates) shows why macOS does not trust the certificate."
         echo "  An expired or revoked one is replaced by a new one made at $PORTAL"
@@ -312,19 +295,19 @@ newest() {
     return 0
 }
 
-# add_identity CER KEY: put the certificate and its key in the keychain as one
-# identity. Going through a .p12 gives the key the certificate's name as its
-# label (a bare key import is labelled "Imported Private Key"), which is what
-# Keychain Access shows and what lets the partition list below target this
-# key alone. The -T list lets the signing tools use it. Importing over a
-# certificate that is already there (double-clicked) completes it into an
-# identity rather than duplicating it.
+# add_identity CER KEY CN: put the certificate (its subject is CN) and its key
+# in the keychain as one identity. Going through a .p12 gives the key the
+# certificate's name as its label (a bare key import is labelled "Imported
+# Private Key"), which is what Keychain Access shows and what lets the
+# partition list below target this key alone. The -T list lets the signing
+# tools use it. Importing over a certificate that is already there
+# (double-clicked) completes it into an identity rather than duplicating it.
 add_identity() {
-    local cer=$1 key=$2 tmp pass out
+    local cer=$1 key=$2 cn=$3 tmp pass out
     tmp=$(mktemp -d "${TMPDIR:-/tmp}/remotevisio-p12.XXXXXX")
     pass=$(head -c 18 /dev/urandom | base64 | tr -d '/+=')
     cert_x509 "$cer" -out "$tmp/cert.pem"
-    "$OPENSSL" pkcs12 -export -inkey "$key" -in "$tmp/cert.pem" -name "$(cert_cn "$cer")" \
+    "$OPENSSL" pkcs12 -export -inkey "$key" -in "$tmp/cert.pem" -name "$cn" \
         -passout "pass:$pass" -out "$tmp/identity.p12"
     if ! out=$(security import "$tmp/identity.p12" -k "$KEYCHAIN" -P "$pass" \
             -T /usr/bin/codesign -T /usr/bin/productbuild -T /usr/bin/productsign -T /usr/bin/security 2>&1); then
@@ -332,6 +315,7 @@ add_identity() {
         die "could not import $cer: $out"
     fi
     rm -rf "$tmp"
+    remotevisio_identities_changed
 }
 
 # allow_tools CN...: let Apple's signing tools use these keys without the
@@ -355,7 +339,7 @@ allow_tools() {
 }
 
 install_certs() {
-    local files=() f kind key kinds=() names=() key_pub cer_pub app_hash pkg_hash dst tmp ca ca_ok=0
+    local files=() f i kind key kinds=() names=() key_pub cer_pub app_hash pkg_hash dst tmp ca ca_ok=0
     for f in "$@"; do
         [[ "$f" == /* ]] || f="$CALLER/$f"
         files+=("$f")
@@ -384,13 +368,12 @@ install_certs() {
     done
 
     umask 077
-    for f in "${files[@]}"; do
-        kind=$(cert_kind "$f")
-        if has_identity "$f" "$kind"; then
-            echo "==> $(cert_cn "$f") and its key are in $KEYCHAIN already"
+    for i in "${!files[@]}"; do
+        if has_identity "${files[$i]}" "${kinds[$i]}"; then
+            echo "==> ${names[$i]} and its key are in $KEYCHAIN already"
         else
-            echo "==> adding $(cert_cn "$f") and its key to $KEYCHAIN"
-            add_identity "$f" "$(key_of "$kind")"
+            echo "==> adding ${names[$i]} and its key to $KEYCHAIN"
+            add_identity "${files[$i]}" "$(key_of "${kinds[$i]}")" "${names[$i]}"
         fi
     done
 
@@ -414,12 +397,11 @@ install_certs() {
     fi
     rm -rf "$tmp"
 
-    for f in "${files[@]}"; do
+    for i in "${!files[@]}"; do
+        kind=${kinds[$i]}
         # Keep a copy with the key: the two together restore the setup anywhere.
-        dst=$(cer_of "$(cert_kind "$f")")
-        [[ "$f" -ef "$dst" ]] || cp -f "$f" "$dst"
-    done
-    for kind in "${kinds[@]}"; do
+        dst=$(cer_of "$kind")
+        [[ "${files[$i]}" -ef "$dst" ]] || cp -f "${files[$i]}" "$dst"
         # The Desktop copy of this kind's request has served its purpose.
         if [[ -f "$(copy_of "$kind")" ]] && cmp -s "$(csr_of "$kind")" "$(copy_of "$kind")"; then
             rm -f "$(copy_of "$kind")"

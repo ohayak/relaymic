@@ -111,7 +111,8 @@
 <script>
 const $ = id => document.getElementById(id);
 
-// UI language: follow the browser's language, fall back to English. Status values come from the API and are shown as-is.
+// UI strings by language; /i18n.js picks the language and fills the [data-i18n] markup from them.
+// Status values come from the API and are shown as-is.
 const STRINGS = {
   en: { title: 'Receiver Monitor', buffer: 'Buffer', dropped: 'Dropped', underruns: 'Underruns', received: 'Received', lost: 'Lost',
         return_path: "Return path (this Mac's system audio)", off: 'off',
@@ -149,20 +150,11 @@ const STRINGS = {
         segments: 'सेगमेंट रिकॉर्डिंग', no_segments: 'अभी तक कोई बोलने का सेगमेंट रिकॉर्ड नहीं हुआ',
         lane_pre: 'बफ़र से पहले', lane_post: 'बफ़र के बाद', lane_loop: 'डिवाइस के बाद', offline: 'रिसीवर ऑफ़लाइन' },
 };
-function pickLang() {
-  const forced = new URLSearchParams(location.search).get('lang');
-  const wanted = forced ? [forced] : (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || 'en']);
-  for (const w of wanted) {
-    const primary = String(w).toLowerCase().split(/[-_]/)[0];
-    if (STRINGS[primary]) return primary;
-  }
-  return 'en';
-}
-const LANG = pickLang();
-document.documentElement.lang = LANG;
-const t = key => (STRINGS[LANG] && STRINGS[LANG][key]) || STRINGS.en[key] || key;
-document.title = t('title');
-for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
+</script>
+<script src="/i18n.js"></script>
+<script>
+// meterWidth maps dBFS to a bar width: -60 and below is silence, 0 is clipping, linear in between.
+const meterWidth = db => Math.max(0, Math.min(100, (db + 60) / 60 * 100)) + '%';
 
 // Most receiver failures (process not running, LAN down) make fetch throw rather than return a non-200,
 // so both cases collapse into "offline"; the user doesn't need to tell them apart.
@@ -182,9 +174,8 @@ function renderStatus(s) {
   $('state').className = connected ? 'ok' : 'warn';
   $('path').textContent = s.path || '—';
 
-  // dBFS is negative: treat -60 as silence and 0 as clipping, mapped linearly to width.
   const db = typeof s.levelDb === 'number' ? s.levelDb : -60;
-  $('level').style.width = Math.max(0, Math.min(100, (db + 60) / 60 * 100)) + '%';
+  $('level').style.width = meterWidth(db);
 
   $('buffered').textContent = s.bufferedMs != null ? s.bufferedMs + ' ms' : '—';
   $('dropped').textContent = s.dropped ?? '—';
@@ -204,7 +195,7 @@ function renderStatus(s) {
     $('speaker').textContent = where + (sdb <= -119
       ? t('silent')
       : Math.round(sdb) + ' dBFS');
-    $('spkLevel').style.width = Math.max(0, Math.min(100, (sdb + 60) / 60 * 100)) + '%';
+    $('spkLevel').style.width = meterWidth(sdb);
   }
 }
 

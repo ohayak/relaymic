@@ -9,6 +9,7 @@
 #     with --from-app after it has already dropped the login item and stopped
 #     the receiver; the app quits itself when this returns.
 # System audio pauses for about a second while coreaudiod restarts.
+# This ships inside the app, so it stands alone (no macos/lib.sh).
 set -uo pipefail
 
 FROM_APP=0
@@ -18,11 +19,8 @@ if [[ $EUID -eq 0 && $FROM_APP -eq 0 ]]; then
     echo "run this as your normal user; it asks for sudo itself" >&2
     exit 2
 fi
-if [[ $EUID -eq 0 ]]; then
-    run_root() { "$@"; }
-else
-    run_root() { sudo "$@"; }
-fi
+SUDO=sudo
+[[ $EUID -ne 0 ]] || SUDO=""
 
 APP=/Applications/RemoteVisio.app
 DRIVER=/Library/Audio/Plug-Ins/HAL/RemoteVisio.driver
@@ -31,6 +29,7 @@ if [[ $FROM_APP -eq 0 ]]; then
     if [[ -x "$APP/Contents/MacOS/RemoteVisio" ]]; then
         "$APP/Contents/MacOS/RemoteVisio" --unregister-login-item >/dev/null 2>&1 || true
     fi
+    # Quit the app and wait until the receiver has let go of its audio device.
     if pkill -TERM -f "RemoteVisio.app/Contents/MacOS/RemoteVisio" 2>/dev/null; then
         for _ in $(seq 1 30); do
             pgrep -f "RemoteVisio.app/Contents/MacOS/" >/dev/null 2>&1 || break
@@ -40,8 +39,8 @@ if [[ $FROM_APP -eq 0 ]]; then
     echo "==> removing $APP and $DRIVER (asks for your admin password)"
 fi
 
-run_root rm -rf "$APP" "$DRIVER"
-run_root killall coreaudiod 2>/dev/null || true
-run_root pkgutil --forget com.remotevisio.app >/dev/null 2>&1 || true
-run_root pkgutil --forget com.remotevisio.driver >/dev/null 2>&1 || true
+$SUDO rm -rf "$APP" "$DRIVER"
+$SUDO killall coreaudiod 2>/dev/null || true
+$SUDO pkgutil --forget com.remotevisio.app >/dev/null 2>&1 || true
+$SUDO pkgutil --forget com.remotevisio.driver >/dev/null 2>&1 || true
 echo "==> Remote Visio removed"

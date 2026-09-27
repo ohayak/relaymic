@@ -56,29 +56,30 @@ compile rules; each multi-step procedure is a short script next to what it
 concerns, which the targets call and which reads on its own: `assemble-app.sh`
 (assemble and sign the bundle), `install-app.sh`, `build-pkg.sh` (package,
 notarize, staple, check), `build-opus.sh`, `icons.py`, `setup-signing.sh`
-(Developer ID setup) and `signing.sh` (identity lookup, sourced by the others)
-here, `driver/install.sh` and `driver/uninstall.sh` for the audio device.
+(Developer ID setup), `signing.sh` (identity lookup and notarization helpers,
+sourced by the others) and `lib.sh` (quit and unregister helpers shared by the
+install scripts) here, `driver/install.sh` and `driver/uninstall.sh` for the
+audio device.
 
 Building requires the Go toolchain, Xcode Command Line Tools (`swiftc`), and the
 receiver's usual build deps (`brew install opus pkg-config`). Opus is linked in
 statically, so the built app does not need Homebrew's opus at runtime and runs
-on a Mac without Homebrew. The receiver binary is bundled inside the app; if
-it's missing the wrapper falls back to `remotevisio-receiver` found in
-`~/.local/bin`, `/opt/homebrew/bin`, or `/usr/local/bin`. With the team's Developer
+on a Mac without Homebrew. The receiver binary is bundled inside the app, next
+to the wrapper. With the team's Developer
 ID Application certificate in the keychain (see "Signing" below) the bundle is
 signed with it and the hardened runtime; otherwise it is ad-hoc signed, for
-local use, with a pinned designated requirement (the bundle identifier instead
-of the build's hash) so the System Audio Recording and microphone grants
-survive rebuilds. If a grant ever stops applying after an upgrade, remove
-Remote Visio and add it again under System Settings → Privacy & Security →
-Screen & System Audio Recording.
+local use, with a pinned designated requirement (the identifier instead of
+the build's hash; the receiver and the driver get the same) so the System
+Audio Recording and microphone grants survive rebuilds. If a grant ever stops
+applying after an upgrade, remove Remote Visio and add it again under System
+Settings → Privacy & Security → Screen & System Audio Recording.
 
 Every icon comes from the PNGs in `icons/` (black strokes on transparency):
 `make icons` derives the app icon `macos/favicon.icns`, white and
 dark-tile variants, the installer's corner picture (`macos/pkg/resources/`),
-the favicons of the sender page (`internal/web/`) and of the landing site
-(`site/public/assets/`), and the Windows sender's icon (`cmd/sender-gui/icon.png`,
-`icons/RemoteVisio.ico`). The 16 and 32 px files double as the menu-bar image,
+the favicons that the receiver serves and the Windows sender's window icon
+(both from `internal/icons/`), the landing site's (`site/public/assets/`), and the
+Windows sender's `.exe` icon (`icons/RemoteVisio.ico`). The 16 and 32 px files double as the menu-bar image,
 which macOS recolours for light and dark menu bars. Drop a larger master
 (`icons/icon-1024.png`) in and run `make icons` again for sharper large sizes. After
 an upgrade the Dock may keep showing the old icon until it restarts

@@ -9,6 +9,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"math"
 	"net"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/hueshu/relaymic/internal/audio"
 	"github.com/hueshu/relaymic/internal/discover"
+	"github.com/hueshu/relaymic/internal/icons"
 	"github.com/hueshu/relaymic/internal/rtc"
 	"github.com/hueshu/relaymic/internal/tlscert"
 	"github.com/hueshu/relaymic/internal/web"
@@ -105,29 +107,10 @@ func main() {
 	}
 	defer actx.Close()
 
-	dev, err := actx.FindPlayback(*deviceName)
+	dev, player, err := openDevice(actx, *deviceName, *bufferMS)
 	if err != nil {
 		log.Println(err)
 		log.Fatalln("the Remote Visio audio device is missing: install it with `make install-driver` in the source tree (asks for your admin password), then start again")
-	}
-
-	// If opening the device fails, retry in-process instead of exiting.
-	//
-	// It used to Fatalln and let launchd restart it, but at the moment of the
-	// timeout an uncancellable InitDevice cgo call is still in flight, and exiting
-	// kills it inside coreaudiod. Every "timeout -> exit -> restart" cycle left one
-	// more leftover, making the device ever harder to open, until only
-	// sudo killall coreaudiod helped. Retrying in-process caps the leftovers at one.
-	var player *audio.Player
-	for {
-		// Decoded output is already interleaved stereo PCM, the Remote Visio device's format, so it goes straight in.
-		player, err = actx.NewPlayer(dev, rtc.SampleRate, rtc.Channels, *bufferMS)
-		if err == nil {
-			break
-		}
-		log.Println(err)
-		log.Println("retrying the device in 30 seconds (staying alive to avoid piling up driver leftovers)")
-		time.Sleep(30 * time.Second)
 	}
 	defer player.Close()
 
@@ -165,7 +148,7 @@ func main() {
 	// a silence gate: audio that arrives too quiet behaves as if it never arrived.
 	ice := iceServers(*stun, *turn, *turnUser, *turnPass)
 
-	level := newLevelMeter()
+	level := &audio.PeakMeter{}
 	agc := audio.NewAGC()
 	useAGC := *gain <= 0
 	if useAGC {
@@ -358,7 +341,7 @@ func main() {
 			} else {
 				applyGain(pcm, *gain)
 			}
-			level.observe(pcm)
+			level.Observe(pcm)
 			player.Write(pcm)
 			if segCh != nil {
 				frame := make([]int16, len(pcm))
@@ -391,7 +374,6 @@ func main() {
 			log.Println("warning: no TURN configured; behind a symmetric NAT this will very likely not connect at all")
 		}
 	}
-	defer receiver.Close()
 
 	// Return path: system audio -> tap -> Opus -> sender. Without permission the tap
 	// does not fail, it just yields silence, which is why the monitor page's return
@@ -399,47 +381,32 @@ func main() {
 	var spk *rtc.Speaker
 	speakerOutput := ""
 	if *speaker {
-		// The global tap follows the default output device. If that is BlackHole itself
-		// (the virtual microphone), nothing but the receiver plays there, so the capture
-		// would be empty; worse, tearing down a tap attached to BlackHole wedges its
-		// driver, and only a coreaudiod restart recovers. In that configuration skip the
-		// tap entirely and say so in the log.
-		out, outErr := actx.DefaultPlayback()
-		if outErr == nil && out.Name == dev.Name {
-			log.Printf("System audio return unavailable: the Mac's default output device is %q, the virtual microphone itself; "+
-				"set the output to the speakers and restart to enable the return path", out.Name)
-		} else if tap, err := actx.OpenSystemTap(*speakerMute); err != nil {
+		var closeReturn func()
+		spk, speakerOutput, closeReturn, err = openReturnPath(actx, receiver, dev, *speakerMute, *speakerBitrate)
+		if err != nil {
 			log.Println("System audio return unavailable:", err)
 		} else {
-			defer tap.Close()
-			s, err := receiver.NewSpeaker(*speakerBitrate)
-			if err != nil {
-				log.Println("System audio return unavailable:", err)
-			} else if capturer, err := actx.NewCapturer(tap.Device(), rtc.SampleRate, rtc.Channels, s.Feed); err != nil {
-				s.Close()
-				log.Println("System audio return unavailable:", err)
-			} else {
-				defer capturer.Close() // runs before tap.Close (defers are LIFO)
-				defer s.Close()
-				spk = s
-				speakerOutput = tap.Output
-				muted := ""
-				if *speakerMute {
-					muted = ", this Mac's own speakers muted"
-				}
-				log.Printf("System audio return: capturing from \"%s\", %d kbps%s", tap.Output, *speakerBitrate/1000, muted)
-				log.Println("  first run prompts for System Audio Recording permission; without it the sender only hears silence. " +
-					"Enable manually: System Settings > Privacy & Security > Screen & System Audio Recording > System Audio Recording Only")
+			defer closeReturn()
+			muted := ""
+			if *speakerMute {
+				muted = ", this Mac's own speakers muted"
 			}
+			log.Printf("System audio return: capturing from \"%s\", %d kbps%s", speakerOutput, *speakerBitrate/1000, muted)
+			log.Println("  first run prompts for System Audio Recording permission; without it the sender only hears silence. " +
+				"Enable manually: System Settings > Privacy & Security > Screen & System Audio Recording > System Audio Recording Only")
 		}
 	}
 
-	ips := localIPv4()
-	// Same-machine detection needs every address (IPv6 included); the certificate SAN only needs IPv4.
-	selfAddrs := localAddrs()
+	// Same-machine detection needs every address (IPv6 included); the certificate SAN and the printed URLs only IPv4.
+	selfAddrs := interfaceIPs()
+	ips := localIPv4(selfAddrs)
 
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.FS(web.FS())))
+	// Both pages link the favicons at the root; the files live in internal/icons, shared with the sender GUI.
+	favicons := http.FileServer(http.FS(icons.FS()))
+	mux.Handle("/favicon-32.png", favicons)
+	mux.Handle("/favicon-96.png", favicons)
 	// The sender must use the same ICE configuration: only if it also gets TURN does
 	// it generate relay candidates, so that ICE can pick the low-latency path.
 	// The machine name ships with the ICE config: each machine answers "which
@@ -533,7 +500,7 @@ func main() {
 	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
 		buffered, dropped, starved := player.Stats()
 		received, lost, _, _ := receiver.Stats().Snapshot()
-		state, path, levelDB, gain := st.snapshot()
+		state, path, levelDB, gain, speakerDB := st.snapshot()
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"state":      state,
@@ -548,7 +515,7 @@ func main() {
 			"speaker": map[string]any{
 				"on":      spk != nil,
 				"output":  speakerOutput,
-				"levelDb": st.speakerLevel(),
+				"levelDb": speakerDB,
 			},
 		})
 	})
@@ -700,26 +667,23 @@ func main() {
 		}
 	}()
 
-	// The level meter has a single consumer: takeDBFS resets it, so if the monitor
+	// The level meter has a single consumer: TakeDBFS resets it, so if the monitor
 	// page and -meter each took a reading, both would see half. Read it once here,
 	// then decide whether to log.
 	go func() {
 		for range time.Tick(time.Second) {
+			spkDB := audio.SilenceDBFS
 			if spk != nil {
-				st.setSpeakerLevel(spk.TakePeakDBFS())
+				spkDB = spk.TakePeakDBFS()
 			}
 			g := *gain
 			if useAGC {
 				g = agc.Gain()
 			}
-			db, ok := level.takeDBFS()
-			if !ok {
-				// No samples this second counts as silence; otherwise the page would keep showing the last reading.
-				st.setLevel(-120, g)
-				continue
-			}
-			st.setLevel(db, g)
-			if !*meter {
+			// No samples this second reads as silence; otherwise the page would keep showing the last reading.
+			db, ok := level.TakeDBFS()
+			st.setLevel(db, g, spkDB)
+			if !ok || !*meter {
 				continue
 			}
 			if useAGC {
@@ -756,6 +720,78 @@ func main() {
 	closeLoop()
 }
 
+// openDevice finds the virtual microphone and opens it for playback, retrying
+// both for up to a minute before giving up.
+//
+// Right after coreaudiod restarts (a driver reinstall, or the wrapper relaunching
+// this process because the device watchdog fired) the device may not be listed
+// yet, or be listed but refuse to open: the same transient either way, so both
+// wait rather than exit. Opening used to Fatalln and let launchd restart it, but
+// at the moment of the timeout an uncancellable InitDevice cgo call is still in
+// flight, and exiting kills it inside coreaudiod. Every "timeout -> exit ->
+// restart" cycle left one more leftover, making the device ever harder to open,
+// until only sudo killall coreaudiod helped. Retrying in-process caps the
+// leftovers at one.
+func openDevice(actx *audio.Context, name string, bufferMS int) (audio.Device, *audio.Player, error) {
+	deadline := time.Now().Add(60 * time.Second)
+	waiting := false
+	for {
+		dev, err := actx.FindPlayback(name)
+		if err == nil {
+			var player *audio.Player
+			// Decoded output is already interleaved stereo PCM, the Remote Visio device's format, so it goes straight in.
+			if player, err = actx.NewPlayer(dev, rtc.SampleRate, rtc.Channels, bufferMS); err == nil {
+				return dev, player, nil
+			}
+		}
+		if time.Now().After(deadline) {
+			return audio.Device{}, nil, err
+		}
+		log.Println(err)
+		if !waiting {
+			log.Println("waiting up to a minute for the device, retrying every 30 seconds (staying alive to avoid piling up driver leftovers)")
+			waiting = true
+		}
+		time.Sleep(30 * time.Second)
+	}
+}
+
+// openReturnPath sets up system audio -> tap -> Opus -> sender. It returns the
+// Speaker to attach to connections, the name of the tapped output device for
+// the monitor page, and the function that tears the path down again.
+func openReturnPath(actx *audio.Context, receiver *rtc.Receiver, dev audio.Device, mute bool, bitrate int) (spk *rtc.Speaker, output string, closeFn func(), err error) {
+	// The global tap follows the default output device. If that is BlackHole itself
+	// (the virtual microphone), nothing but the receiver plays there, so the capture
+	// would be empty; worse, tearing down a tap attached to BlackHole wedges its
+	// driver, and only a coreaudiod restart recovers. In that configuration skip the
+	// tap entirely and say so in the log.
+	if out, outErr := actx.FindPlayback(""); outErr == nil && out.Name == dev.Name {
+		return nil, "", nil, fmt.Errorf("the Mac's default output device is %q, the virtual microphone itself; "+
+			"set the output to the speakers and restart to enable the return path", out.Name)
+	}
+	tap, err := actx.OpenSystemTap(mute)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	spk, err = receiver.NewSpeaker(bitrate)
+	if err != nil {
+		tap.Close()
+		return nil, "", nil, err
+	}
+	capturer, err := actx.NewCapturer(tap.Device(), rtc.SampleRate, rtc.Channels, spk.Feed)
+	if err != nil {
+		spk.Close()
+		tap.Close()
+		return nil, "", nil, err
+	}
+	closeFn = func() {
+		spk.Close()
+		capturer.Close() // before the tap it reads from
+		tap.Close()
+	}
+	return spk, tap.Output, closeFn, nil
+}
+
 // statusState holds the /api/status values that only callbacks and timers know.
 // ICE callbacks and the level goroutine write it, HTTP handlers read it, all on
 // different goroutines.
@@ -766,18 +802,6 @@ type statusState struct {
 	levelDB   float64
 	gain      float64
 	speakerDB float64 // return path (system audio) level
-}
-
-func (s *statusState) setSpeakerLevel(db float64) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.speakerDB = db
-}
-
-func (s *statusState) speakerLevel() float64 {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.speakerDB
 }
 
 func (s *statusState) setState(state string) {
@@ -792,16 +816,17 @@ func (s *statusState) setPath(path string) {
 	s.path = path
 }
 
-func (s *statusState) setLevel(db, gain float64) {
+// setLevel records the once-a-second readings: the incoming level, the gain applied to it and the return path's level.
+func (s *statusState) setLevel(db, gain, speakerDB float64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.levelDB, s.gain = db, gain
+	s.levelDB, s.gain, s.speakerDB = db, gain, speakerDB
 }
 
-func (s *statusState) snapshot() (state, path string, levelDB, gain float64) {
+func (s *statusState) snapshot() (state, path string, levelDB, gain, speakerDB float64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.state, s.path, s.levelDB, s.gain
+	return s.state, s.path, s.levelDB, s.gain, s.speakerDB
 }
 
 // segmentJSON is the wire form of audio.SegmentInfo; field names match the monitor page.
@@ -882,46 +907,6 @@ func applyGain(pcm []int16, gain float64) {
 	}
 }
 
-// levelMeter accumulates the peak over one second, to diagnose "is audio
-// arriving at all, and is it loud enough".
-type levelMeter struct {
-	mu    sync.Mutex
-	peak  int16
-	count int
-}
-
-func newLevelMeter() *levelMeter { return &levelMeter{} }
-
-func (m *levelMeter) observe(pcm []int16) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for _, s := range pcm {
-		if s < 0 {
-			s = -s
-		}
-		if s > m.peak {
-			m.peak = s
-		}
-	}
-	m.count += len(pcm)
-}
-
-// takeDBFS returns the peak level since the last call and resets. Returns false when no samples arrived.
-func (m *levelMeter) takeDBFS() (float64, bool) {
-	m.mu.Lock()
-	peak, count := m.peak, m.count
-	m.peak, m.count = 0, 0
-	m.mu.Unlock()
-
-	if count == 0 {
-		return 0, false
-	}
-	if peak == 0 {
-		return -120, true
-	}
-	return 20 * math.Log10(float64(peak)/math.MaxInt16), true
-}
-
 // bar draws dBFS as a horizontal bar readable at a glance. Below -60dB is effectively silence.
 func bar(db float64) string {
 	n := int((db + 60) / 3)
@@ -938,7 +923,7 @@ func bar(db float64) string {
 // address, or one of the local addresses. The return path is enabled only when
 // the two ends are different machines; otherwise the tap would recapture the
 // return audio the sender plays back.
-func isLocalSender(remoteAddr string, self []string) bool {
+func isLocalSender(remoteAddr string, self []net.IP) bool {
 	host, _, err := net.SplitHostPort(remoteAddr)
 	if err != nil {
 		host = remoteAddr
@@ -951,35 +936,20 @@ func isLocalSender(remoteAddr string, self []string) bool {
 		return true
 	}
 	for _, s := range self {
-		if ip.Equal(net.ParseIP(s)) {
+		if ip.Equal(s) {
 			return true
 		}
 	}
 	return false
 }
 
-// localAddrs lists every local interface address (IPv4 and IPv6), for same-machine detection.
-func localAddrs() []string {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return nil
-	}
-	var out []string
-	for _, a := range addrs {
-		if ipnet, ok := a.(*net.IPNet); ok {
-			out = append(out, ipnet.IP.String())
-		}
-	}
-	return out
-}
-
-// localIPv4 lists the externally reachable local IPv4 addresses, for the certificate SAN and the printed URLs.
-func localIPv4() []string {
+// interfaceIPs lists the addresses (IPv4 and IPv6) of every interface that is up, loopback excluded.
+func interfaceIPs() []net.IP {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return nil
 	}
-	var ips []string
+	var ips []net.IP
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
 			continue
@@ -989,10 +959,21 @@ func localIPv4() []string {
 			continue
 		}
 		for _, a := range addrs {
-			if ipnet, ok := a.(*net.IPNet); ok && ipnet.IP.To4() != nil {
-				ips = append(ips, ipnet.IP.String())
+			if ipnet, ok := a.(*net.IPNet); ok {
+				ips = append(ips, ipnet.IP)
 			}
 		}
 	}
 	return ips
+}
+
+// localIPv4 picks the IPv4 addresses out of ips, for the certificate SAN and the printed URLs.
+func localIPv4(ips []net.IP) []string {
+	var out []string
+	for _, ip := range ips {
+		if ip.To4() != nil {
+			out = append(out, ip.String())
+		}
+	}
+	return out
 }

@@ -145,12 +145,12 @@ func TestSpeakerReachesSender(t *testing.T) {
 	}
 
 	// Keep feeding a sine tone until the sender receives its first RTP packet.
-	tone := make([]int16, speakerFrame)
-	for i := 0; i < speakerFrame/Channels; i++ {
+	tone := make([]int16, FrameSize*Channels)
+	for i := 0; i < FrameSize; i++ {
 		v := int16(8000 * math.Sin(2*math.Pi*440*float64(i)/SampleRate))
 		tone[i*Channels], tone[i*Channels+1] = v, v
 	}
-	tick := time.NewTicker(speakerFrameMS * time.Millisecond)
+	tick := time.NewTicker(FrameMS * time.Millisecond)
 	defer tick.Stop()
 	deadline := time.After(15 * time.Second)
 	for {

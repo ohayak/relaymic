@@ -6,7 +6,6 @@
 package main
 
 import (
-	_ "embed"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -17,14 +16,9 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/hueshu/relaymic/internal/icons"
 	"github.com/hueshu/relaymic/internal/sender"
 )
-
-// Window and taskbar icon (`make icons` derives it from icons/); the
-// .exe file icon is added by the build workflow from icons/RemoteVisio.ico.
-//
-//go:embed icon.png
-var iconPNG []byte
 
 // config is the user's remembered choices, stored under the user config directory.
 type config struct {
@@ -99,7 +93,8 @@ func main() {
 	useSystemCJKFont()
 
 	a := app.NewWithID("com.remotevisio.sender")
-	a.SetIcon(fyne.NewStaticResource("icon.png", iconPNG))
+	// Window and taskbar icon; the .exe file icon is added by the build workflow from icons/RemoteVisio.ico.
+	a.SetIcon(fyne.NewStaticResource("favicon-96.png", icons.Favicon96))
 	w := a.NewWindow("Remote Visio")
 	w.Resize(fyne.NewSize(380, 300))
 

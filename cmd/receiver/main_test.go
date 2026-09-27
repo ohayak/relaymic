@@ -1,13 +1,16 @@
 package main
 
-import "testing"
+import (
+	"net"
+	"testing"
+)
 
 // TestIsLocalSender pins down same-machine detection: loopback and local
 // addresses count as local, nothing else does. The cost of an error is
 // asymmetric: missing a local sender causes feedback, misjudging a remote one
 // merely loses the return path.
 func TestIsLocalSender(t *testing.T) {
-	self := []string{"192.168.31.82", "100.100.100.100", "fd7a:115c:a1e0::bb38:735a"}
+	self := []net.IP{net.ParseIP("192.168.31.82"), net.ParseIP("100.100.100.100"), net.ParseIP("fd7a:115c:a1e0::bb38:735a")}
 	cases := map[string]bool{
 		"127.0.0.1:51234":                  true,
 		"[::1]:51234":                      true,

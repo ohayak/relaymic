@@ -1,6 +1,7 @@
 # Signing configuration shared by the Makefile (driver, app and package
-# recipes) and macos/setup-signing.sh (which uses the identity lookup
-# helpers). Source it from the repository root.
+# recipes), macos/build-pkg.sh (notarization) and macos/setup-signing.sh
+# (which uses the identity lookup helpers). Source it from the repository
+# root.
 #
 # With a "Developer ID Application" certificate for the team below in the
 # keychain, code is signed with it and the hardened runtime. Release builds
@@ -14,32 +15,52 @@
 #   REMOTEVISIO_SIGN_ID="..."       exact code-signing identity (name or SHA-1)
 #   REMOTEVISIO_PKG_SIGN_ID="..."   exact installer-signing identity (name)
 #   REMOTEVISIO_SIGN=adhoc          force ad-hoc signing even if a certificate exists
+#   REMOTEVISIO_NOTARY_PROFILE=...  notarytool keychain profile (default: remotevisio)
+#
+# The Makefile looks the identities up once per run and passes them down as
+# REMOTEVISIO_SIGN_ID / REMOTEVISIO_PKG_SIGN_ID (with REMOTEVISIO_PKG_SIGN_COUNT,
+# how many valid installer certificates share that name), so the scripts it
+# runs take the override path and never touch the keychain.
 
 REMOTEVISIO_TEAM_ID="${REMOTEVISIO_TEAM_ID:-99F33YCKX9}"
+NOTARY_PROFILE="${REMOTEVISIO_NOTARY_PROFILE:-remotevisio}"
 
 # remotevisio_identities KIND [-v] [KEYCHAIN]: print "SHA1<TAB>name" for every
 # identity named "KIND: ... (TEAM)". With -v only valid (trusted, unexpired)
 # ones. Looks in KEYCHAIN instead of the default search list when given.
+# security is asked once per listing (valid, or all) for the life of the
+# shell: each call takes tens of milliseconds and the Makefile does this at
+# parse time. A process looks in one KEYCHAIN at most, so that gets one slot.
 remotevisio_identities() {
-    local kind=$1 valid=${2:-} keychain=${3:-}
-    security find-identity $valid ${keychain:+"$keychain"} 2>/dev/null \
-        | sed -nE 's/^ *[0-9]+\) ([0-9A-F]{40}) "(.*)"( \(.*\))?$/\1	\2/p' \
-        | grep -F "	$kind: " | grep -F "($REMOTEVISIO_TEAM_ID)" | sort -u || true
+    local kind=$1 valid=${2:-} keychain=${3:-} cache
+    cache=REMOTEVISIO_IDS${valid:+_VALID}${keychain:+_KEYCHAIN}
+    if [[ -z "${!cache+set}" ]]; then
+        printf -v "$cache" '%s' "$(security find-identity $valid ${keychain:+"$keychain"} 2>/dev/null \
+            | sed -nE 's/^ *[0-9]+\) ([0-9A-F]{40}) "(.*)"( \(.*\))?$/\1	\2/p' | sort -u || true)"
+    fi
+    printf '%s\n' "${!cache}" | grep -F "	$kind: " | grep -F "($REMOTEVISIO_TEAM_ID)" || true
+}
+
+# remotevisio_identities_changed: drop the cached listings, after an import.
+remotevisio_identities_changed() {
+    unset REMOTEVISIO_IDS REMOTEVISIO_IDS_VALID REMOTEVISIO_IDS_KEYCHAIN REMOTEVISIO_IDS_VALID_KEYCHAIN
 }
 
 # remotevisio_pick KIND [KEYCHAIN]: set PICK_HASH, PICK_NAME and PICK_COUNT to
-# the valid identity for KIND, or empty. Warn when one exists but is not valid
-# (missing intermediate certificate, expired, revoked), since that otherwise
-# looks like "no certificate at all".
+# the valid identity for KIND, or empty. Without one, PICK_UNTRUSTED holds
+# the identities for KIND that macOS does not consider valid (missing
+# intermediate certificate, expired, revoked), looked up only then, and a
+# warning says so, since that otherwise looks like "no certificate at all".
 remotevisio_pick() {
-    local kind=$1 keychain=${2:-} valid all
+    local kind=$1 keychain=${2:-} valid
     valid=$(remotevisio_identities "$kind" -v "$keychain")
     PICK_HASH=$(printf '%s\n' "$valid" | head -n1 | cut -f1)
     PICK_NAME=$(printf '%s\n' "$valid" | head -n1 | cut -f2)
     PICK_COUNT=$(printf '%s\n' "$valid" | grep -c . || true)
+    PICK_UNTRUSTED=""
     if [[ -z "$PICK_HASH" ]]; then
-        all=$(remotevisio_identities "$kind" "" "$keychain")
-        if [[ -n "$all" ]]; then
+        PICK_UNTRUSTED=$(remotevisio_identities "$kind" "" "$keychain")
+        if [[ -n "$PICK_UNTRUSTED" ]]; then
             echo "!!  found a \"$kind\" certificate for team $REMOTEVISIO_TEAM_ID, but macOS does not" >&2
             echo "    consider it valid (expired, revoked, or the Developer ID G2 intermediate" >&2
             echo "    certificate is missing from the keychain). Check it in Keychain Access." >&2
@@ -62,7 +83,7 @@ if [[ "${REMOTEVISIO_SIGN:-}" != "adhoc" ]]; then
     fi
     if [[ -n "${REMOTEVISIO_PKG_SIGN_ID:-}" ]]; then
         PKG_SIGN_ID=$REMOTEVISIO_PKG_SIGN_ID
-        PKG_SIGN_COUNT=1
+        PKG_SIGN_COUNT=${REMOTEVISIO_PKG_SIGN_COUNT:-1}
     else
         remotevisio_pick "Developer ID Installer"
         PKG_SIGN_ID=$PICK_NAME
@@ -70,33 +91,87 @@ if [[ "${REMOTEVISIO_SIGN:-}" != "adhoc" ]]; then
     fi
 fi
 
-# sign_code PATH [ENTITLEMENTS]: sign one bundle or binary. A secure timestamp
-# comes from Apple's timestamp server, which now and then fails a request
-# ("A timestamp was expected but was not found"); that is retried before the
-# whole build is given up.
-sign_code() {
-    local path=$1 ent=${2:-} ts=--timestamp=none attempt out
-    if [[ -z "$SIGN_ID" ]]; then
-        codesign --force --sign - "$path"
-        return
-    fi
-    [[ "${REMOTEVISIO_RELEASE:-}" == "1" ]] && ts=--timestamp
+# retry_timestamp CMD...: run CMD, which asks Apple's timestamp server for a
+# secure timestamp. The server now and then fails a request ("A timestamp
+# was expected but was not found"); that is retried before the whole build
+# is given up. CMD's stdout is discarded; what it printed on stderr is shown
+# and left in RETRY_OUT.
+retry_timestamp() {
+    local attempt
     for attempt in 1 2 3; do
-        if out=$(codesign --force --sign "$SIGN_ID" --options runtime "$ts" ${ent:+--entitlements "$ent"} "$path" 2>&1); then
-            [[ -z "$out" ]] || echo "$out" >&2
+        if RETRY_OUT=$("$@" 2>&1 >/dev/null); then
+            [[ -z "$RETRY_OUT" ]] || echo "$RETRY_OUT" >&2
             return 0
         fi
-        echo "$out" >&2
-        [[ "$out" == *"timestamp"* && $attempt -lt 3 ]] || return 1
-        echo "    (timestamp server hiccup; signing $path again)" >&2
+        echo "$RETRY_OUT" >&2
+        [[ "$RETRY_OUT" == *"timestamp"* && $attempt -lt 3 ]] || return 1
+        echo "    (timestamp server hiccup; trying again)" >&2
         sleep 3
     done
 }
 
-describe_signing() {
-    if [[ -n "$SIGN_ID" ]]; then
-        echo "==> signing with: $SIGN_NAME"
-    else
-        echo "==> ad-hoc signing (no valid Developer ID Application certificate for team $REMOTEVISIO_TEAM_ID)"
+# sign_code PATH [ENTITLEMENTS]: sign one bundle or binary.
+sign_code() {
+    local path=$1 ent=${2:-} ts=--timestamp=none id
+    if [[ -z "$SIGN_ID" ]]; then
+        # Ad-hoc, with the designated requirement pinned to the identifier
+        # instead of the default code hash: TCC remembers the requirement with
+        # each permission grant, and a hash-only one would make every rebuild
+        # silently drop the System Audio Recording and microphone grants (the
+        # app's, the receiver's when a LaunchAgent runs it outside the bundle,
+        # the driver's). The identifier is the bundle's, or a bare binary's
+        # file name; it is set explicitly (-i) because codesign's own choice
+        # for a bare binary can carry a hash suffix, which would not satisfy
+        # the requirement. (A Developer ID signature gets a stable requirement
+        # from the team ID on its own.)
+        id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$path/Contents/Info.plist" 2>/dev/null) \
+            || id=$(basename "$path")
+        codesign --force --sign - -i "$id" -r "=designated => identifier \"$id\"" "$path"
+        return
     fi
+    [[ "${REMOTEVISIO_RELEASE:-}" == "1" ]] && ts=--timestamp
+    retry_timestamp codesign --force --sign "$SIGN_ID" --options runtime "$ts" ${ent:+--entitlements "$ent"} "$path"
+}
+
+describe_signing() {
+    local name=$SIGN_NAME
+    if [[ -z "$SIGN_ID" ]]; then
+        echo "==> ad-hoc signing (no valid Developer ID Application certificate for team $REMOTEVISIO_TEAM_ID)"
+        return
+    fi
+    # An identity given as a SHA-1 (what the Makefile passes down) is shown by name.
+    if [[ "$name" == "$SIGN_ID" && "$SIGN_ID" =~ ^[0-9A-F]{40}$ ]]; then
+        name=$(remotevisio_identities "Developer ID Application" -v | grep "^$SIGN_ID	" | cut -f2 || true)
+    fi
+    echo "==> signing with: ${name:-$SIGN_ID}"
+}
+
+# notary_check: NOTARY becomes ok, missing or unreachable. The only way to
+# check the stored password is to use it, which needs Apple's service.
+notary_check() {
+    local err
+    if err=$(xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" 2>&1 >/dev/null); then
+        NOTARY=ok
+    elif [[ "$err" == *"No Keychain password item"* ]]; then
+        NOTARY=missing
+    else
+        NOTARY=unreachable
+    fi
+}
+
+# notary_hint: how to store the notarization credentials, for messages
+# (indented as a continuation of a "!!  " or "Next:" line).
+notary_hint() {
+    echo "    Make an app-specific password at https://account.apple.com (Sign-In and Security >"
+    echo "    App-Specific Passwords), then store it once:"
+    echo "    xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <your Apple ID email> --team-id $REMOTEVISIO_TEAM_ID"
+}
+
+# pkg_sign_clash COUNT NAME: the message for COUNT valid installer certificates
+# named NAME, which productbuild cannot tell apart (the caller prefixes the
+# first line).
+pkg_sign_clash() {
+    echo "$1 valid \"$2\" certificates are in the keychain, so productbuild cannot"
+    echo "    tell them apart. Delete the older one in Keychain Access (My Certificates), or set"
+    echo "    REMOTEVISIO_PKG_SIGN_ID to a distinct identity."
 }

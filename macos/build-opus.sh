@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Build a static libopus for a given minimum macOS version and print the
-# directory holding libopus.a. `make opus` runs it; `make receiver` links it.
+# Build a static libopus for a given minimum macOS version. `make opus` runs
+# it; `make receiver` links the result.
 #
-#   macos/build-opus.sh 14.2 [1.6.1]   → prints <repo>/bin/opus-1.6.1-macos14.2/lib
+#   macos/build-opus.sh 14.2 [1.6.1]   → <repo>/bin/opus-1.6.1-macos14.2/lib/libopus.a
 #
 # Homebrew's libopus.a is compiled for the macOS it was bottled on (26 at the
 # time of writing), so linking it into an app meant for older systems embeds
@@ -22,10 +22,7 @@ esac
 URL="https://ftp.osuosl.org/pub/xiph/releases/opus/opus-$VERSION.tar.gz"
 
 OUT="bin/opus-$VERSION-macos$MIN"
-if [[ -f "$OUT/lib/libopus.a" ]]; then
-    echo "$PWD/$OUT/lib"
-    exit 0
-fi
+[[ ! -f "$OUT/lib/libopus.a" ]] || exit 0
 
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/remotevisio-opus.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
@@ -46,4 +43,3 @@ tar -xzf "$WORK/opus.tar.gz" -C "$WORK"
 mkdir -p "$OUT/lib"
 cp "$WORK/install/lib/libopus.a" "$OUT/lib/libopus.a"
 cp "$WORK/opus-$VERSION/COPYING" "$OUT/COPYING"
-echo "$PWD/$OUT/lib"

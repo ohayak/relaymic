@@ -3,11 +3,11 @@
 # it. Asks for your admin password and restarts coreaudiod (system audio
 # pauses for about a second).
 set -euo pipefail
+cd "$(dirname "$0")/.."
+# shellcheck source=../macos/lib.sh
+source macos/lib.sh
 
-if [[ $EUID -eq 0 ]]; then
-    echo "run make uninstall-driver as your normal user; it asks for sudo itself" >&2
-    exit 2
-fi
+require_unprivileged "make uninstall-driver"
 
 DEST=/Library/Audio/Plug-Ins/HAL/RemoteVisio.driver
 if [[ ! -d "$DEST" ]]; then

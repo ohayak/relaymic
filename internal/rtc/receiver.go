@@ -370,14 +370,7 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrt
 			pc.Close()
 			return nil, fmt.Errorf("add audio send/receive transceiver: %w", err)
 		}
-		go func() { // RTCP on the send side must be drained too
-			buf := make([]byte, 1500)
-			for {
-				if _, _, err := tr.Sender().Read(buf); err != nil {
-					return
-				}
-			}
-		}()
+		go DrainRTCP(tr.Sender())
 	} else if _, err := pc.AddTransceiverFromKind(webrtc.RTPCodecTypeAudio,
 		webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly}); err != nil {
 		pc.Close()
@@ -385,14 +378,7 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrt
 	}
 
 	pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-		// RTCP must be drained continuously, or NACKs / receiver reports are silently dropped.
-		go func() {
-			for {
-				if _, _, err := receiver.ReadRTCP(); err != nil {
-					return
-				}
-			}
-		}()
+		go DrainRTCP(receiver)
 		r.consume(track)
 	})
 

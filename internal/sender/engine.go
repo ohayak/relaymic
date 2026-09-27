@@ -10,7 +10,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -26,17 +25,11 @@ import (
 	"github.com/hueshu/relaymic/internal/rtc"
 )
 
-const (
-	sampleRate = 48000
-	// Capture and encode in mono: the microphone is mono anyway, and stereo
-	// would just send the same content twice. SDP still declares opus/48000/2;
-	// the real channel count is encoded inside the Opus packet, and the
-	// receiver's libopus copies mono to both channels (see internal/rtc).
-	channels    = 1
-	frameMS     = 20
-	frameSize   = sampleRate / 1000 * frameMS
-	maxOpusSize = 4000
-)
+// Capture and encode in mono: the microphone is mono anyway, and stereo
+// would just send the same content twice. SDP still declares opus/48000/2;
+// the real channel count is encoded inside the Opus packet, and the
+// receiver's libopus copies mono to both channels (see internal/rtc).
+const channels = 1
 
 // Config holds all parameters for one streaming session.
 type Config struct {
@@ -196,46 +189,19 @@ func (e *Engine) Start() error {
 	//   VoIP mode / FEC on / DTX off.
 	// Silence detection belongs to the downstream recognizer, not the encoder
 	// (the browser is exactly where quiet speech got clipped).
-	enc, err := opus.NewEncoder(sampleRate, channels, opus.AppVoIP)
+	enc, err := rtc.NewOpusEncoder(opus.AppVoIP, channels, e.cfg.Bitrate)
 	if err != nil {
 		actx.Close()
 		return err
 	}
-	if err := enc.SetBitrate(e.cfg.Bitrate); err != nil {
-		actx.Close()
-		return err
-	}
-	_ = enc.SetInBandFEC(true)
-	_ = enc.SetPacketLossPerc(5)
 
 	// Capture callback -> frame buffer -> encode and send. The callback is a
 	// realtime thread and only copies; encoding waits for a full 20ms and runs
 	// in a normal goroutine.
-	var bufMu sync.Mutex
-	buf := make([]int16, 0, frameSize*4)
-	level := 0.0
-	pending := make(chan []int16, 8)
+	frames := audio.NewFramer(rtc.FrameSize*channels, 8)
 	stopped := make(chan struct{})
 
-	capturer, err := actx.NewCapturer(dev, sampleRate, channels, func(pcm []int16) {
-		bufMu.Lock()
-		buf = append(buf, pcm...)
-		for len(buf) >= frameSize {
-			frame := make([]int16, frameSize)
-			copy(frame, buf[:frameSize])
-			buf = buf[frameSize:]
-			select {
-			case pending <- frame:
-			default: // drop the frame if encoding falls behind; never block the realtime callback
-			}
-		}
-		for _, s := range pcm {
-			if v := math.Abs(float64(s)); v > level {
-				level = v
-			}
-		}
-		bufMu.Unlock()
-	})
+	capturer, err := actx.NewCapturer(dev, rtc.SampleRate, channels, frames.Push)
 	if err != nil {
 		actx.Close()
 		return err
@@ -251,13 +217,14 @@ func (e *Engine) Start() error {
 	}
 
 	go func() { // encode goroutine: encode once, fan out to all active receivers
-		out := make([]byte, maxOpusSize)
+		out := make([]byte, rtc.MaxOpusBytes)
 		for {
 			select {
 			case <-stopped:
 				return
-			case frame := <-pending:
+			case frame := <-frames.Frames():
 				n, err := enc.Encode(frame, out)
+				frames.Recycle(frame)
 				if err != nil {
 					continue
 				}
@@ -270,7 +237,7 @@ func (e *Engine) Start() error {
 					// reference; once the serial writes finish, out can be reused safely.
 					_ = track.WriteSample(media.Sample{
 						Data:     out[:n],
-						Duration: frameMS * time.Millisecond,
+						Duration: rtc.FrameMS * time.Millisecond,
 					})
 				}
 			}
@@ -285,14 +252,7 @@ func (e *Engine) Start() error {
 			case <-stopped:
 				return
 			case <-t.C:
-				bufMu.Lock()
-				peak := level
-				level = 0
-				bufMu.Unlock()
-				db := -96.0
-				if peak > 0 {
-					db = 20 * math.Log10(peak/math.MaxInt16)
-				}
+				db, _ := frames.TakeDBFS()
 				if e.OnLevel != nil {
 					e.OnLevel(db)
 				}
@@ -421,8 +381,8 @@ func (e *Engine) connectOnce(l *link, stopped <-chan struct{}) (<-chan struct{},
 	track, err := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{
 			MimeType:  webrtc.MimeTypeOpus,
-			ClockRate: sampleRate,
-			Channels:  2, // SDP always declares 2, independent of the channels inside the packet
+			ClockRate: rtc.SampleRate,
+			Channels:  rtc.Channels, // SDP always declares 2, independent of the channels inside the packet
 		}, "audio", "sender")
 	if err != nil {
 		return nil, err
@@ -450,24 +410,10 @@ func (e *Engine) connectOnce(l *link, stopped <-chan struct{}) (<-chan struct{},
 	if err != nil {
 		return nil, err
 	}
-	sender := tr.Sender()
-	go func() { // RTCP must be drained
-		buf := make([]byte, 1500)
-		for {
-			if _, _, err := sender.Read(buf); err != nil {
-				return
-			}
-		}
-	}()
+	go rtc.DrainRTCP(tr.Sender())
 	if e.cfg.Speaker {
 		pc.OnTrack(func(remote *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-			go func() {
-				for {
-					if _, _, err := receiver.ReadRTCP(); err != nil {
-						return
-					}
-				}
-			}()
+			go rtc.DrainRTCP(receiver)
 			e.playSpeaker(l, remote)
 		})
 	}
@@ -545,7 +491,7 @@ func (e *Engine) playSpeaker(l *link, remote *webrtc.TrackRemote) {
 	e.mu.Unlock()
 	defer e.inflight.Done()
 
-	dev, err := actx.DefaultPlayback()
+	dev, err := actx.FindPlayback("")
 	if err != nil {
 		e.state(l.target, "return path playback unavailable: "+err.Error())
 		return

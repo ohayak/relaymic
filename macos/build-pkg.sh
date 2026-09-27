@@ -11,19 +11,18 @@
 # (what `make pkg-unsigned` sets) produces an unsigned package for this Mac.
 # The package is assembled and checked in bin/.pkg-stage and moved to OUT
 # only at the end, so OUT never holds a package that failed a check.
-# Signing identities come from macos/signing.sh; the notarization credentials
-# from the notarytool keychain profile "remotevisio" (REMOTEVISIO_NOTARY_PROFILE).
+# Signing identities and the notarization profile come from macos/signing.sh;
+# the version, minimum macOS and architecture from the Makefile when it runs
+# this, otherwise from macos/Info.plist and uname.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=signing.sh
 source macos/signing.sh
 
 NOTARIZE=${NOTARIZE:-1}
-[[ "${REMOTEVISIO_SIGN:-}" != "adhoc" ]] || NOTARIZE=0
-NOTARY_PROFILE="${REMOTEVISIO_NOTARY_PROFILE:-remotevisio}"
-VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' macos/Info.plist)
-MIN_MACOS=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' macos/Info.plist)
-ARCH=$(uname -m)
+VERSION=${REMOTEVISIO_VERSION:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' macos/Info.plist)}
+MIN_MACOS=${REMOTEVISIO_MIN_MACOS:-$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' macos/Info.plist)}
+ARCH=${REMOTEVISIO_ARCH:-$(uname -m)}
 STAGE=bin/.pkg-stage
 
 # A missing or half-configured keychain fails here with a reason, before
@@ -46,17 +45,24 @@ preflight() {
         exit 1
     fi
     if [[ "$PKG_SIGN_COUNT" -gt 1 ]]; then
-        echo "!!  $PKG_SIGN_COUNT valid \"$PKG_SIGN_ID\" certificates are in the keychain, so productbuild cannot" >&2
-        echo "    tell them apart. Delete the older one in Keychain Access, or set REMOTEVISIO_PKG_SIGN_ID." >&2
+        echo "!!  $(pkg_sign_clash "$PKG_SIGN_COUNT" "$PKG_SIGN_ID")" >&2
         exit 1
     fi
-    if [[ "$NOTARIZE" == 1 ]] && ! xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
-        echo "!!  no notarization credentials in the keychain profile \"$NOTARY_PROFILE\" (or Apple is unreachable)." >&2
-        echo "    Store them once, with an app-specific password from account.apple.com:" >&2
-        echo "    xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <your Apple ID email> --team-id $REMOTEVISIO_TEAM_ID" >&2
-        echo "    or build without notarizing: make pkg NOTARIZE=0" >&2
-        exit 1
-    fi
+    [[ "$NOTARIZE" == 1 ]] || return 0
+    notary_check
+    case $NOTARY in
+        ok) ;;
+        missing)
+            echo "!!  no notarization credentials in the keychain profile \"$NOTARY_PROFILE\"." >&2
+            notary_hint >&2
+            echo "    Or build without notarizing: make pkg NOTARIZE=0" >&2
+            exit 1 ;;
+        *)
+            echo "!!  Apple's notary service is unreachable, so the credentials in the keychain profile" >&2
+            echo "    \"$NOTARY_PROFILE\" cannot be checked (and notarizing needs it too)." >&2
+            echo "    Or build without notarizing: make pkg NOTARIZE=0" >&2
+            exit 1 ;;
+    esac
 }
 
 # run TOOL ARGS...: run a tool that reports on stdout (stapler does) and show
@@ -71,22 +77,13 @@ run() {
 }
 
 build() {
-    local out=$1 app=$2 release pkg sign err result status id verdict
-    release="bin/RemoteVisio-$VERSION-$ARCH.pkg"
+    local out=$1 app=$2 pkg sign result status id verdict
     pkg="$STAGE/RemoteVisio.pkg"
     [[ -d bin/RemoteVisio.driver && -f "$app/Contents/Info.plist" ]] || { echo "!!  build the driver and the app first: make pkg" >&2; exit 1; }
     if [[ -z "$PKG_SIGN_ID" && "$out" != *-unsigned.pkg ]]; then
         echo "!!  no Developer ID Installer certificate: an unsigned package is only built as $out" >&2
         echo "    with an -unsigned suffix; use make pkg-unsigned" >&2
         exit 1
-    fi
-
-    # An unsigned package under the release name is a leftover from before
-    # test builds got their own suffix; it must not be mistaken for a
-    # shareable one. (pkgutil exits 1 for an unsigned package: test its text.)
-    if [[ -f "$release" && "$(pkgutil --check-signature "$release" 2>/dev/null || true)" == *"Status: no signature"* ]]; then
-        echo "==> removing $release: unsigned, from an older build"
-        rm -f "$release"
     fi
 
     echo "==> building component packages"
@@ -121,6 +118,11 @@ build() {
     echo "==> building the installer"
     sed -e "s/@VERSION@/$VERSION/g" -e "s/@ARCH@/$ARCH/g" -e "s/@MINOS@/$MIN_MACOS/g" \
         macos/pkg/Distribution.xml > "$STAGE/Distribution.xml"
+    # Installer takes the welcome and conclusion pages from <lang>.lproj and
+    # falls back to the resources root; the English pages serve as that
+    # fallback, copied here rather than kept twice in the repository.
+    cp -R macos/pkg/resources "$STAGE/resources"
+    cp "$STAGE/resources/en.lproj/"*.html "$STAGE/resources/"
     sign=()
     if [[ -n "$PKG_SIGN_ID" ]]; then
         echo "==> signing the package with: $PKG_SIGN_ID"
@@ -130,14 +132,10 @@ build() {
     # set -u in the bash 3.2 that macOS ships; this idiom expands to nothing.
     # productbuild only warns when it cannot chain the certificate to Apple's
     # root, but Gatekeeper then rejects the notarized package: fatal here.
-    if ! err=$(productbuild --distribution "$STAGE/Distribution.xml" \
-        --package-path "$STAGE" --resources macos/pkg/resources \
-        ${sign[@]+"${sign[@]}"} "$pkg" 2>&1 >/dev/null); then
-        echo "$err" >&2
-        exit 1
-    fi
-    [[ -z "$err" ]] || echo "$err" >&2
-    if [[ "$err" == *"unable to build chain"* ]]; then
+    retry_timestamp productbuild --distribution "$STAGE/Distribution.xml" \
+        --package-path "$STAGE" --resources "$STAGE/resources" \
+        ${sign[@]+"${sign[@]}"} "$pkg" || exit 1
+    if [[ "$RETRY_OUT" == *"unable to build chain"* ]]; then
         echo "!!  the installer certificate does not chain to Apple's root: make signing-install" >&2
         echo "    adds the missing intermediate certificate." >&2
         exit 1
@@ -164,8 +162,8 @@ build() {
     # transport and credential errors fail it. Read the verdict instead.
     echo "==> notarizing (keychain profile \"$NOTARY_PROFILE\"; usually takes a few minutes)"
     if ! result=$(xcrun notarytool submit "$pkg" --keychain-profile "$NOTARY_PROFILE" --wait --output-format json); then
-        echo "!!  could not submit for notarization. If the credentials are missing, store them once with:" >&2
-        echo "    xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <you> --team-id $REMOTEVISIO_TEAM_ID" >&2
+        echo "!!  could not submit for notarization. If the credentials are missing:" >&2
+        notary_hint >&2
         exit 1
     fi
     status=$(plutil -extract status raw -o - - <<<"$result" 2>/dev/null || echo unknown)

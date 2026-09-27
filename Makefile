@@ -14,26 +14,47 @@ SHELL := /bin/bash
 .DELETE_ON_ERROR:
 .SUFFIXES:
 
-MIN_MACOS := $(shell /usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' macos/Info.plist)
-VERSION   := $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' macos/Info.plist)
-ARCH      := $(shell uname -m)
-# Every binary targets the oldest macOS the app supports, not the build Mac's.
-export MACOSX_DEPLOYMENT_TARGET := $(MIN_MACOS)
-
-# ---- signing mode -----------------------------------------------------------
+# ---- signing mode, version, architecture ------------------------------------
 # REMOTEVISIO_SIGN=adhoc forces ad-hoc signing; REMOTEVISIO_RELEASE=1 adds
 # secure timestamps (`make pkg` sets it). macos/signing.sh reads both from
 # the environment, as does the identity choice (REMOTEVISIO_SIGN_ID,
-# REMOTEVISIO_PKG_SIGN_ID, REMOTEVISIO_TEAM_ID). bin/.signing records the mode,
-# so changing it re-signs the driver and the app; it is written here, at parse
-# time, and only when the mode changed, so make -n and -q see real mtimes.
+# REMOTEVISIO_PKG_SIGN_ID, REMOTEVISIO_TEAM_ID).
+#
+# The keychain lookup and the reads of macos/Info.plist happen once per make
+# run, at parse time, into bin/.signing-info, a make fragment included below
+# and exported to the scripts the recipes run (they source signing.sh too and
+# skip the lookup with the identities in the environment). The file is
+# rewritten only when its content changes, so make -n and -q see real mtimes;
+# as a prerequisite of the driver and the app it re-signs them when the
+# identity or the mode changes. Goals that neither build nor sign skip all of
+# it. $(shell) does not see exported variables in make 3.81, hence the
+# explicit environment.
 REMOTEVISIO_SIGN ?=
 REMOTEVISIO_RELEASE ?=
 export REMOTEVISIO_SIGN REMOTEVISIO_RELEASE
-SIGN_MODE := $(shell REMOTEVISIO_SIGN='$(REMOTEVISIO_SIGN)' REMOTEVISIO_SIGN_ID='$(REMOTEVISIO_SIGN_ID)' \
-	REMOTEVISIO_PKG_SIGN_ID='$(REMOTEVISIO_PKG_SIGN_ID)' REMOTEVISIO_TEAM_ID='$(REMOTEVISIO_TEAM_ID)' \
-	bash -c 'source macos/signing.sh; echo "$${SIGN_ID:-adhoc} release=$(REMOTEVISIO_RELEASE)"')
-SIGN_STAMP := $(shell mkdir -p bin; [ "$$(cat bin/.signing 2>/dev/null)" = "$(SIGN_MODE)" ] || echo "$(SIGN_MODE)" > bin/.signing)
+SIGNING_INFO   := bin/.signing-info
+UNSIGNED_GOALS := help clean distclean test-go check signing signing-request signing-install icons uninstall uninstall-driver
+ifneq ($(filter-out $(UNSIGNED_GOALS),$(or $(MAKECMDGOALS),app)),)
+$(shell mkdir -p bin; REMOTEVISIO_SIGN='$(REMOTEVISIO_SIGN)' REMOTEVISIO_SIGN_ID='$(REMOTEVISIO_SIGN_ID)' \
+	REMOTEVISIO_PKG_SIGN_ID='$(REMOTEVISIO_PKG_SIGN_ID)' REMOTEVISIO_PKG_SIGN_COUNT='$(REMOTEVISIO_PKG_SIGN_COUNT)' \
+	REMOTEVISIO_TEAM_ID='$(REMOTEVISIO_TEAM_ID)' bash -c 'source macos/signing.sh; \
+	mode=adhoc; [[ -z "$$SIGN_ID" ]] || mode=developer-id; \
+	info=$$(printf "%s := %s\n" \
+		VERSION "$$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" macos/Info.plist)" \
+		MIN_MACOS "$$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" macos/Info.plist)" \
+		ARCH "$$(uname -m)" SIGN_ID "$$SIGN_ID" PKG_SIGN_ID "$$PKG_SIGN_ID" PKG_SIGN_COUNT "$$PKG_SIGN_COUNT" \
+		SIGN_MODE "$$mode release=$(REMOTEVISIO_RELEASE)"); \
+	[[ "$$(cat $(SIGNING_INFO) 2>/dev/null)" == "$$info" ]] || echo "$$info" > $(SIGNING_INFO)')
+include $(SIGNING_INFO)
+# Every binary targets the oldest macOS the app supports, not the build Mac's.
+export MACOSX_DEPLOYMENT_TARGET := $(MIN_MACOS)
+export REMOTEVISIO_SIGN_ID := $(SIGN_ID)
+export REMOTEVISIO_PKG_SIGN_ID := $(PKG_SIGN_ID)
+export REMOTEVISIO_PKG_SIGN_COUNT := $(PKG_SIGN_COUNT)
+export REMOTEVISIO_VERSION := $(VERSION)
+export REMOTEVISIO_MIN_MACOS := $(MIN_MACOS)
+export REMOTEVISIO_ARCH := $(ARCH)
+endif
 
 # ---- products ---------------------------------------------------------------
 RECEIVER   := bin/remotevisio-receiver
@@ -47,7 +68,6 @@ APP        := bin/.build/RemoteVisio.app
 APP_BIN    := $(APP)/Contents/MacOS/RemoteVisio
 LOCAL_APP  := bin/RemoteVisio.app
 INSTALLED  := /Applications/RemoteVisio.app
-LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
 NOTARIZE ?= 1
 export NOTARIZE
@@ -67,7 +87,8 @@ endif
 OPUS_VERSION := 1.6.1
 OPUS_LIB     ?= bin/opus-$(OPUS_VERSION)-macos$(MIN_MACOS)/lib/libopus.a
 OPUS_COPYING := $(dir $(OPUS_LIB))../COPYING
-OPUS_INCLUDE := $(shell brew --prefix opus 2>/dev/null || echo /opt/homebrew/opt/opus)/include
+# The headers come from Homebrew's opus, wherever it is installed.
+OPUS_PREFIX  := $(firstword $(wildcard /opt/homebrew/opt/opus /usr/local/opt/opus))
 # The Go opus binding links with "-lopus" from pkg-config. The linker takes
 # the first libopus it finds along -L, so a directory holding only the static
 # archive, put first via CGO_LDFLAGS, makes the binary carry the codec. (A
@@ -95,16 +116,10 @@ minos=$$(vtool -show-build $(1) | awk '/minos/{print $$2; exit}'); \
 	|| { echo "!!  $(1) needs macOS $$minos, but the app claims $(MIN_MACOS)" >&2; exit 1; }
 endef
 
-# forget BUNDLE: delete an app bundle and unregister it from LaunchServices,
-# so its Launchpad icon goes too. Absolute path.
-define forget
-[[ ! -d "$(1)" ]] || { $(LSREGISTER) -u "$(1)" >/dev/null 2>&1 || true; rm -rf "$(1)"; }
-endef
-
 # ---- receiver and menu-bar wrapper -----------------------------------------
 opus: $(OPUS_LIB) ## static libopus for the minimum macOS (built once, cached in bin/)
 bin/opus-%/lib/libopus.a:
-	@macos/build-opus.sh $(MIN_MACOS) $(OPUS_VERSION) >/dev/null \
+	@macos/build-opus.sh $(MIN_MACOS) $(OPUS_VERSION) \
 		|| { echo "!!  could not build libopus (offline?). For a build that only suits this Mac:" >&2; \
 		     echo "    make app OPUS_LIB=\$$(brew --prefix opus)/lib/libopus.a" >&2; exit 1; }
 	@test -f $@ || { echo "!!  macos/build-opus.sh did not produce $@" >&2; exit 1; }
@@ -114,7 +129,8 @@ $(RECEIVER): $(GO_SRC) $(OPUS_LIB) bin/.icons
 	@echo "==> building remotevisio-receiver for macOS $(MIN_MACOS)+ (Opus linked statically)"
 	@[[ "$(REMOTEVISIO_RELEASE)" != 1 || "$(OPUS_LIB)" == bin/* ]] \
 		|| { echo "!!  a release build needs the libopus built for macOS $(MIN_MACOS), not $(OPUS_LIB)" >&2; exit 1; }
-	@test -f "$(OPUS_INCLUDE)/opus/opus.h" || { echo "!!  Opus headers not found; run: brew install opus pkg-config" >&2; exit 1; }
+	@test -f "$(OPUS_PREFIX)/include/opus/opus.h" \
+		|| { echo "!!  Opus headers not found in /opt/homebrew/opt/opus or /usr/local/opt/opus; run: brew install opus pkg-config" >&2; exit 1; }
 	@rm -rf $(STATICLIB); mkdir -p $(STATICLIB); ln -s "$(abspath $(OPUS_LIB))" $(STATICLIB)/libopus.a
 	CGO_CFLAGS="-O2 -g -mmacosx-version-min=$(MIN_MACOS)" CGO_LDFLAGS="-L$(abspath $(STATICLIB)) -mmacosx-version-min=$(MIN_MACOS)" \
 		go build -tags nolibopusfile -o $@ ./cmd/receiver
@@ -133,7 +149,7 @@ $(MENUBAR): macos/RemoteVisio.swift
 # with whatever clang they have, and a new diagnostic must not block an
 # install. test-driver builds with -Werror.
 driver: $(DRIVER_BIN) ## the virtual audio device (a Core Audio HAL plug-in)
-$(DRIVER_BIN): driver/RemoteVisio.c driver/Info.plist macos/signing.sh bin/.signing
+$(DRIVER_BIN): driver/RemoteVisio.c driver/Info.plist macos/signing.sh $(SIGNING_INFO)
 	@echo "==> building the audio device driver"
 	@rm -rf $(DRIVER); mkdir -p $(dir $@); cp driver/Info.plist $(DRIVER)/Contents/Info.plist
 	clang -O2 -Wall -Wextra -std=c11 -mmacosx-version-min=$(MIN_MACOS) -bundle -fvisibility=hidden \
@@ -150,11 +166,11 @@ bin/.icons: $(ICON_SRC) macos/icons.py
 app: $(LOCAL_APP)/Contents/MacOS/RemoteVisio ## bin/RemoteVisio.app (the default)
 	@[[ ! -d $(INSTALLED) ]] || echo "note: $(INSTALLED) is also installed; Launchpad lists both until one is removed"
 $(LOCAL_APP)/Contents/MacOS/RemoteVisio: $(APP_BIN)
-	@$(call forget,$(abspath $(LOCAL_APP))); cp -R $(APP) $(LOCAL_APP)
+	@macos/lib.sh forget $(abspath $(LOCAL_APP)); cp -R $(APP) $(LOCAL_APP)
 	@echo "==> built $(LOCAL_APP)"
 
 $(APP_BIN): $(RECEIVER) $(MENUBAR) bin/.icons macos/Info.plist macos/pkg/uninstall.sh \
-            macos/app.entitlements macos/receiver.entitlements macos/signing.sh macos/assemble-app.sh bin/.signing
+            macos/app.entitlements macos/receiver.entitlements macos/signing.sh macos/assemble-app.sh $(SIGNING_INFO)
 	@macos/assemble-app.sh $(APP) "$(OPUS_COPYING)"
 
 install: $(APP_BIN) ## build and install the app to /Applications (relaunches it if it was running)
@@ -181,7 +197,7 @@ $(PKG): $(DRIVER_BIN) $(APP_BIN) $(PKG_SRC) macos/signing.sh macos/build-pkg.sh
 	@macos/build-pkg.sh build $@ $(APP)
 
 # ---- driver install / uninstall ---------------------------------------------
-install-driver: $(DRIVER_BIN) ## install the audio device system-wide (asks for your admin password, restarts coreaudiod)
+install-driver: ## build and install the audio device system-wide (asks for your admin password, restarts coreaudiod)
 	@driver/install.sh
 
 uninstall-driver: ## remove the audio device (asks for your admin password, restarts coreaudiod)
@@ -225,9 +241,9 @@ signing-install: ## put the downloaded certificates in the keychain (CER=file op
 
 # ---- cleaning ---------------------------------------------------------------
 clean: ## remove build products (keeps the libopus build)
-	@$(call forget,$(abspath $(LOCAL_APP)))
-	rm -rf bin/.build bin/.pkg-stage bin/.signing bin/.icons bin/opus-static \
+	@macos/lib.sh forget $(abspath $(LOCAL_APP))
+	rm -rf bin/.build bin/.pkg-stage $(SIGNING_INFO) bin/.icons bin/opus-static \
 		$(RECEIVER) $(MENUBAR) $(DRIVER) $(SAN) $(HARNESS) $(HARNESS).dSYM bin/RemoteVisio-*.pkg
 distclean: ## remove bin/ entirely, the libopus build included
-	@$(call forget,$(abspath $(LOCAL_APP)))
+	@macos/lib.sh forget $(abspath $(LOCAL_APP))
 	rm -rf bin

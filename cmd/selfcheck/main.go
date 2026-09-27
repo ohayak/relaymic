@@ -20,17 +20,13 @@ import (
 	"github.com/hraban/opus"
 	"github.com/pion/webrtc/v4"
 	"github.com/pion/webrtc/v4/pkg/media"
+
+	"github.com/hueshu/relaymic/internal/rtc"
 )
 
 const (
-	sampleRate = 48000
-	// Opus in SDP is always opus/48000/2; the channel count must match what the receiver negotiates.
-	channels    = 2
-	frameMS     = 20
-	frameSize   = sampleRate / 1000 * frameMS // samples per channel per frame
-	toneHz      = 440
-	toneAmpl    = 8000 // about 1/4 of int16 full scale, i.e. -12dB
-	maxOpusSize = 4000
+	toneHz   = 440
+	toneAmpl = 8000 // about 1/4 of int16 full scale, i.e. -12dB
 )
 
 func main() {
@@ -44,11 +40,12 @@ func main() {
 
 	log.SetFlags(log.Ltime)
 
+	// Opus in SDP is always opus/48000/2; the channel count must match what the receiver negotiates.
 	track, err := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{
 			MimeType:  webrtc.MimeTypeOpus,
-			ClockRate: sampleRate,
-			Channels:  channels,
+			ClockRate: rtc.SampleRate,
+			Channels:  rtc.Channels,
 		}, "audio", "selfcheck")
 	if err != nil {
 		die(err)
@@ -75,15 +72,7 @@ func main() {
 	if err != nil {
 		die(err)
 	}
-	// RTCP must be drained, or the feedback packets pile up in the buffer.
-	go func() {
-		buf := make([]byte, 1500)
-		for {
-			if _, _, err := sender.Read(buf); err != nil {
-				return
-			}
-		}
-	}()
+	go rtc.DrainRTCP(sender)
 
 	connected := make(chan struct{})
 	var once bool
@@ -153,17 +142,17 @@ func negotiate(target string, offer *webrtc.SessionDescription) (*webrtc.Session
 }
 
 func sendTone(track *webrtc.TrackLocalStaticSample, duration time.Duration) error {
-	enc, err := opus.NewEncoder(sampleRate, channels, opus.AppVoIP)
+	enc, err := opus.NewEncoder(rtc.SampleRate, rtc.Channels, opus.AppVoIP)
 	if err != nil {
 		return fmt.Errorf("create Opus encoder: %w", err)
 	}
 
-	pcm := make([]int16, frameSize*channels)
-	buf := make([]byte, maxOpusSize)
+	pcm := make([]int16, rtc.FrameSize*rtc.Channels)
+	buf := make([]byte, rtc.MaxOpusBytes)
 	phase := 0.0
-	step := 2 * math.Pi * toneHz / sampleRate
+	step := 2 * math.Pi * toneHz / rtc.SampleRate
 
-	ticker := time.NewTicker(frameMS * time.Millisecond)
+	ticker := time.NewTicker(rtc.FrameMS * time.Millisecond)
 	defer ticker.Stop()
 	deadline := time.Now().Add(duration)
 
@@ -171,10 +160,10 @@ func sendTone(track *webrtc.TrackLocalStaticSample, duration time.Duration) erro
 		if time.Now().After(deadline) {
 			return nil
 		}
-		for i := 0; i < frameSize; i++ {
+		for i := 0; i < rtc.FrameSize; i++ {
 			v := int16(math.Sin(phase) * toneAmpl)
-			for c := 0; c < channels; c++ {
-				pcm[i*channels+c] = v
+			for c := 0; c < rtc.Channels; c++ {
+				pcm[i*rtc.Channels+c] = v
 			}
 			phase += step
 		}
@@ -184,7 +173,7 @@ func sendTone(track *webrtc.TrackLocalStaticSample, duration time.Duration) erro
 		}
 		if err := track.WriteSample(media.Sample{
 			Data:     buf[:n],
-			Duration: frameMS * time.Millisecond,
+			Duration: rtc.FrameMS * time.Millisecond,
 		}); err != nil {
 			return fmt.Errorf("write track: %w", err)
 		}
