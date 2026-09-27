@@ -70,19 +70,27 @@ if [[ "${REMOTEVISIO_SIGN:-}" != "adhoc" ]]; then
     fi
 fi
 
-# sign_code PATH [ENTITLEMENTS]: sign one bundle or binary.
+# sign_code PATH [ENTITLEMENTS]: sign one bundle or binary. A secure timestamp
+# comes from Apple's timestamp server, which now and then fails a request
+# ("A timestamp was expected but was not found"); that is retried before the
+# whole build is given up.
 sign_code() {
-    local path=$1 ent=${2:-} ts=--timestamp=none
+    local path=$1 ent=${2:-} ts=--timestamp=none attempt out
     if [[ -z "$SIGN_ID" ]]; then
         codesign --force --sign - "$path"
         return
     fi
     [[ "${REMOTEVISIO_RELEASE:-}" == "1" ]] && ts=--timestamp
-    if [[ -n "$ent" ]]; then
-        codesign --force --sign "$SIGN_ID" --options runtime "$ts" --entitlements "$ent" "$path"
-    else
-        codesign --force --sign "$SIGN_ID" --options runtime "$ts" "$path"
-    fi
+    for attempt in 1 2 3; do
+        if out=$(codesign --force --sign "$SIGN_ID" --options runtime "$ts" ${ent:+--entitlements "$ent"} "$path" 2>&1); then
+            [[ -z "$out" ]] || echo "$out" >&2
+            return 0
+        fi
+        echo "$out" >&2
+        [[ "$out" == *"timestamp"* && $attempt -lt 3 ]] || return 1
+        echo "    (timestamp server hiccup; signing $path again)" >&2
+        sleep 3
+    done
 }
 
 describe_signing() {

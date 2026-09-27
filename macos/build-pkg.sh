@@ -105,10 +105,14 @@ build() {
         "$STAGE/RemoteVisio-driver.pkg" >/dev/null
     # pkgbuild marks an app "relocatable" by default: Installer would then
     # update any other copy with the same bundle ID instead of /Applications.
-    # Pin it, and let an older version install over a newer one when asked to.
+    # Pin it, let an older version install over a newer one when asked to, and
+    # replace a RemoteVisio.app with another bundle identifier (an install from
+    # before the identifier became com.remotevisio.app) instead of parking the
+    # new app in /Applications/RemoteVisio.localized next to it.
     pkgbuild --analyze --root "$STAGE/app" "$STAGE/app-component.plist" >/dev/null
     plutil -replace 0.BundleIsRelocatable -bool NO "$STAGE/app-component.plist"
     plutil -replace 0.BundleIsVersionChecked -bool NO "$STAGE/app-component.plist"
+    plutil -replace 0.BundleHasStrictIdentifier -bool NO "$STAGE/app-component.plist"
     pkgbuild --root "$STAGE/app" --component-plist "$STAGE/app-component.plist" \
         --identifier com.remotevisio.app --version "$VERSION" \
         --install-location / --scripts macos/pkg/app-scripts \

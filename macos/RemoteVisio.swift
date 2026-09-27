@@ -209,10 +209,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        // Anchor near the right edge so the notch can't swallow the icon: a
+        // status item without a remembered position appears leftmost, where
+        // macOS hides it on notched Macs when the menu bar is crowded. AppKit
+        // keeps the position under this key (points from the right end of the
+        // status area); seed it once, and dragging the icon overrides it.
+        let positionKey = "NSStatusItem Preferred Position RemoteVisioStatus"
+        if UserDefaults.standard.object(forKey: positionKey) == nil {
+            UserDefaults.standard.set(40, forKey: positionKey)
+        }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        // Anchor near the right edge so the notch can't swallow the icon;
-        // new status items otherwise appear leftmost, where macOS hides
-        // them on notched Macs when the menu bar is crowded.
         item.autosaveName = "RemoteVisioStatus"
         if let button = item.button {
             if let icon = Bundle.main.image(forResource: "MenuIcon") {

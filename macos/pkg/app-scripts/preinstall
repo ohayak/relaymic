@@ -11,6 +11,25 @@ if pkill -TERM -f "RemoteVisio.app/Contents/MacOS/RemoteVisio" 2>/dev/null; then
         i=$((i + 1))
     done
 fi
+# A RemoteVisio.app with another bundle identifier (an install from before the
+# identifier became com.remotevisio.app) is replaced in place (the package's
+# BundleHasStrictIdentifier is off), but its login item still has to go, as
+# does a copy that an earlier package parked in RemoteVisio.localized or
+# RemoteVisio-<n>.localized next to it.
+app=/Applications/RemoteVisio.app
+if [ -d "$app" ]; then
+    id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist" 2>/dev/null || true)
+    if [ "$id" != "com.remotevisio.app" ]; then
+        user=$(stat -f %Su /dev/console 2>/dev/null || true)
+        if [ -n "$user" ] && [ "$user" != "root" ] && [ -x "$app/Contents/MacOS/RemoteVisio" ]; then
+            launchctl asuser "$(id -u "$user")" sudo -u "$user" "$app/Contents/MacOS/RemoteVisio" --unregister-login-item >/dev/null 2>&1 || true
+        fi
+        rm -rf "$app"
+    fi
+fi
+for d in /Applications/RemoteVisio.localized /Applications/RemoteVisio-[0-9]*.localized; do
+    [ -d "$d" ] && rm -rf "$d"
+done
 # Retire a previous install under the old RelayMic name: quit it, drop its
 # login item (as the console user), and remove it.
 if pkill -TERM -f "RelayMic.app/Contents/MacOS/RelayMic" 2>/dev/null; then
