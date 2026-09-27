@@ -18,6 +18,7 @@
     --err: #e05a4f;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body {
     margin: 0;
     min-height: 100vh;
@@ -95,7 +96,30 @@
   }
   .hear input { margin: 0; }
 
+  /* Camera picker, indented under its checkbox; shown only once labels are known and there is a choice to make. */
+  .camsel {
+    display: block;
+    width: calc(100% - 22px);
+    margin: -4px 0 12px 22px;
+    padding: 6px 8px;
+    font: inherit;
+    font-size: 13px;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+  .campreview {
+    display: block;
+    max-width: 160px;
+    margin: 0 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #000;
+  }
+
   .micstate { font-size: 13px; color: var(--dim); min-height: 18px; margin-bottom: 8px; }
+  .camstate:empty { display: none; }
   .conns {
     font-size: 13px;
     border-top: 1px solid var(--line);
@@ -108,6 +132,7 @@
   .conn .host { font-variant-numeric: tabular-nums; }
   .conn .st { flex: 1; text-align: right; }
   .conn .rtt { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 52px; text-align: right; }
+  .conn .vid { color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .empty { color: var(--dim); }
   .ok { color: var(--ok); } .warn { color: var(--warn); } .err { color: var(--err); }
   .src {
@@ -126,11 +151,15 @@
 
   <div class="profiles" id="profiles"></div>
   <label class="hear"><input type="checkbox" id="hear"> <span data-i18n="hear">Hear the remote Mac (meeting audio, alerts)</span></label>
+  <label class="hear"><input type="checkbox" id="cam"> <span data-i18n="cam">Send this device's camera</span></label>
+  <select id="camsel" class="camsel" hidden></select>
 
   <button id="toggle" data-i18n="start">Start talking</button>
   <div class="meter"><i id="level"></i></div>
+  <video id="campreview" class="campreview" muted playsinline autoplay hidden></video>
 
   <div id="micstate" class="micstate"></div>
+  <div id="camstate" class="micstate camstate"></div>
   <div id="conns" class="conns"><div class="empty" data-i18n="not_connected">Not connected</div></div>
 
   <!-- AGPL-3.0 section 13: users interacting with this program over a network must be able to get
@@ -166,6 +195,17 @@ const STRINGS = {
     mic_busy: 'Microphone is in use by another program: close meeting/recording apps and other tabs',
     mic_constraints: 'Microphone does not support the required settings',
     mic_other: 'Could not get the microphone: {reason}', unknown: 'unknown reason',
+    cam: "Send this device's camera",
+    cam_none: 'No camera found',
+    cam_waiting: 'Waiting for camera permission: check the prompt at the left of the address bar',
+    cam_denied: 'Camera denied: click the icon at the left of the address bar and allow it',
+    cam_notfound: 'No camera found on this device',
+    cam_busy: 'Camera in use by another app: close meeting/video apps and other tabs',
+    cam_constraints: 'Camera does not support the required settings',
+    cam_other: 'Camera error: {err}',
+    cam_noh264: 'This browser cannot send H.264 video; the camera will not be relayed',
+    sending_video: 'Sending the camera',
+    cam_declined: 'camera not relayed: no virtual camera on the Mac',
   },
   es: {
     title: 'Remote Visio',
@@ -187,6 +227,17 @@ const STRINGS = {
     mic_busy: 'Otro programa está usando el micrófono: cierra las apps de reuniones o grabación y las otras pestañas',
     mic_constraints: 'El micrófono no admite la configuración necesaria',
     mic_other: 'No se pudo acceder al micrófono: {reason}', unknown: 'motivo desconocido',
+    cam: 'Enviar la cámara de este dispositivo',
+    cam_none: 'No se encontró ninguna cámara',
+    cam_waiting: 'Esperando el permiso de la cámara: mira el aviso a la izquierda de la barra de direcciones',
+    cam_denied: 'Cámara denegada: haz clic en el icono a la izquierda de la barra de direcciones y permítela',
+    cam_notfound: 'No se encontró ninguna cámara en este dispositivo',
+    cam_busy: 'Otra app está usando la cámara: cierra las apps de reuniones o vídeo y las otras pestañas',
+    cam_constraints: 'La cámara no admite la configuración necesaria',
+    cam_other: 'Error de cámara: {err}',
+    cam_noh264: 'Este navegador no puede enviar vídeo H.264; la cámara no se retransmitirá',
+    sending_video: 'Enviando la cámara',
+    cam_declined: 'cámara no retransmitida: el Mac no tiene cámara virtual',
   },
   fr: {
     title: 'Remote Visio',
@@ -208,6 +259,17 @@ const STRINGS = {
     mic_busy: "Le micro est utilisé par un autre programme : fermez les apps de réunion ou d'enregistrement et les autres onglets",
     mic_constraints: 'Le micro ne prend pas en charge les réglages requis',
     mic_other: "Impossible d'accéder au micro : {reason}", unknown: 'raison inconnue',
+    cam: 'Envoyer la caméra de cet appareil',
+    cam_none: 'Aucune caméra trouvée',
+    cam_waiting: "En attente de l'autorisation de la caméra : regardez l'invite à gauche de la barre d'adresse",
+    cam_denied: "Caméra refusée : cliquez sur l'icône à gauche de la barre d'adresse et autorisez-la",
+    cam_notfound: 'Aucune caméra trouvée sur cet appareil',
+    cam_busy: 'La caméra est utilisée par une autre app : fermez les apps de réunion ou de vidéo et les autres onglets',
+    cam_constraints: 'La caméra ne prend pas en charge les réglages requis',
+    cam_other: 'Erreur de caméra : {err}',
+    cam_noh264: 'Ce navigateur ne peut pas envoyer de vidéo H.264 ; la caméra ne sera pas relayée',
+    sending_video: 'Envoi de la caméra',
+    cam_declined: 'caméra non relayée : pas de caméra virtuelle sur le Mac',
   },
   zh: {
     title: 'Remote Visio',
@@ -229,6 +291,17 @@ const STRINGS = {
     mic_busy: '麦克风被别的程序占着：关掉会议/录音软件和其他标签页',
     mic_constraints: '麦克风不支持所需参数',
     mic_other: '拿不到麦克风：{reason}', unknown: '未知原因',
+    cam: '发送这台设备的摄像头',
+    cam_none: '没找到摄像头',
+    cam_waiting: '等待摄像头授权：看一下地址栏左侧的权限提示',
+    cam_denied: '摄像头被拒绝：点地址栏左侧图标改成允许',
+    cam_notfound: '这台机器上没找到摄像头',
+    cam_busy: '摄像头被别的程序占着：关掉会议/视频软件和其他标签页',
+    cam_constraints: '摄像头不支持所需参数',
+    cam_other: '摄像头出错：{err}',
+    cam_noh264: '这个浏览器发不了 H.264 视频，摄像头画面不会被转发',
+    sending_video: '正在发送摄像头画面',
+    cam_declined: '摄像头未转发：Mac 上没有虚拟摄像头',
   },
   de: {
     title: 'Remote Visio',
@@ -250,6 +323,17 @@ const STRINGS = {
     mic_busy: 'Das Mikrofon wird von einem anderen Programm benutzt: Meeting-/Aufnahme-Apps und andere Tabs schließen',
     mic_constraints: 'Das Mikrofon unterstützt die nötigen Einstellungen nicht',
     mic_other: 'Mikrofon nicht verfügbar: {reason}', unknown: 'unbekannter Grund',
+    cam: 'Die Kamera dieses Geräts senden',
+    cam_none: 'Keine Kamera gefunden',
+    cam_waiting: 'Warte auf die Kamera-Berechtigung: siehe die Abfrage links in der Adressleiste',
+    cam_denied: 'Kamera verweigert: auf das Symbol links in der Adressleiste klicken und erlauben',
+    cam_notfound: 'Auf diesem Gerät wurde keine Kamera gefunden',
+    cam_busy: 'Die Kamera wird von einer anderen App benutzt: Meeting-/Video-Apps und andere Tabs schließen',
+    cam_constraints: 'Die Kamera unterstützt die nötigen Einstellungen nicht',
+    cam_other: 'Kamerafehler: {err}',
+    cam_noh264: 'Dieser Browser kann kein H.264-Video senden; die Kamera wird nicht weitergeleitet',
+    sending_video: 'Kamera wird gesendet',
+    cam_declined: 'Kamera nicht weitergeleitet: keine virtuelle Kamera auf dem Mac',
   },
   it: {
     title: 'Remote Visio',
@@ -271,6 +355,17 @@ const STRINGS = {
     mic_busy: 'Il microfono è usato da un altro programma: chiudi le app di riunioni o registrazione e le altre schede',
     mic_constraints: 'Il microfono non supporta le impostazioni richieste',
     mic_other: 'Impossibile usare il microfono: {reason}', unknown: 'motivo sconosciuto',
+    cam: 'Invia la fotocamera di questo dispositivo',
+    cam_none: 'Nessuna fotocamera trovata',
+    cam_waiting: 'In attesa del permesso per la fotocamera: guarda la richiesta a sinistra della barra degli indirizzi',
+    cam_denied: "Fotocamera negata: fai clic sull'icona a sinistra della barra degli indirizzi e consentila",
+    cam_notfound: 'Nessuna fotocamera trovata su questo dispositivo',
+    cam_busy: "La fotocamera è usata da un'altra app: chiudi le app di riunioni o video e le altre schede",
+    cam_constraints: 'La fotocamera non supporta le impostazioni richieste',
+    cam_other: 'Errore della fotocamera: {err}',
+    cam_noh264: 'Questo browser non può inviare video H.264; la fotocamera non verrà inoltrata',
+    sending_video: 'Invio della fotocamera',
+    cam_declined: 'fotocamera non inoltrata: nessuna fotocamera virtuale sul Mac',
   },
   hi: {
     title: 'Remote Visio',
@@ -292,6 +387,17 @@ const STRINGS = {
     mic_busy: 'माइक्रोफ़ोन किसी और प्रोग्राम के पास है: मीटिंग/रिकॉर्डिंग ऐप और दूसरे टैब बंद करें',
     mic_constraints: 'माइक्रोफ़ोन ज़रूरी सेटिंग्स का समर्थन नहीं करता',
     mic_other: 'माइक्रोफ़ोन नहीं मिल सका: {reason}', unknown: 'अज्ञात कारण',
+    cam: 'इस डिवाइस का कैमरा भेजें',
+    cam_none: 'कोई कैमरा नहीं मिला',
+    cam_waiting: 'कैमरे की अनुमति का इंतज़ार है: एड्रेस बार के बाईं ओर दिख रहे संकेत को देखें',
+    cam_denied: 'कैमरे की अनुमति नहीं मिली: एड्रेस बार के बाईं ओर के आइकन पर क्लिक करके अनुमति दें',
+    cam_notfound: 'इस डिवाइस पर कोई कैमरा नहीं मिला',
+    cam_busy: 'कैमरा किसी और ऐप के पास है: मीटिंग/वीडियो ऐप और दूसरे टैब बंद करें',
+    cam_constraints: 'कैमरा ज़रूरी सेटिंग्स का समर्थन नहीं करता',
+    cam_other: 'कैमरे में गड़बड़ी: {err}',
+    cam_noh264: 'यह ब्राउज़र H.264 वीडियो नहीं भेज सकता; कैमरा आगे नहीं भेजा जाएगा',
+    sending_video: 'कैमरा भेजा जा रहा है',
+    cam_declined: 'कैमरा नहीं भेजा गया: Mac पर वर्चुअल कैमरा नहीं है',
   },
 };
 </script>
@@ -401,6 +507,179 @@ function getMic() {
     'The microphone never responded');
 }
 
+// Camera: this device's camera goes to the Mac as a second, send-only track and comes out of the Remote Visio virtual
+// camera there. Off by default: it costs bandwidth and a second permission prompt, and most sessions are voice only.
+let cam = localStorage.getItem('cam') === '1';
+let camId = localStorage.getItem('camId') || '';
+let camStream = null;
+// The camera status line shows, in order: the last acquisition problem, "no camera" from the device list, the codec warning.
+let camErr = '', noCam = false, noH264 = false;
+$('cam').checked = cam;
+$('cam').onchange = () => toggleCam($('cam').checked);
+$('camsel').onchange = () => switchCam($('camsel').value);
+if (navigator.mediaDevices) navigator.mediaDevices.addEventListener('devicechange', listCams);
+listCams();
+
+function renderCamState() {
+  $('camstate').textContent = camErr || (cam && noCam ? t('cam_none') : '') || (cam && noH264 ? t('cam_noh264') : '');
+}
+
+async function toggleCam(on) {
+  cam = on;
+  localStorage.setItem('cam', on ? '1' : '0');
+  if (!live) { if (on) listCams(); else releaseCam(); return; }
+  // Like the return path, the camera lives in the m-line layout, so switching it takes a rebuild (brief drop);
+  // the checkbox is locked meanwhile so a double click can't start two rebuilds that trample each other.
+  $('cam').disabled = true;
+  try {
+    if (on) {
+      await acquireCam(camId);
+      if (!camStream) return; // nothing to send; the status line says why
+    } else {
+      releaseCam();
+    }
+    for (const c of conns.values()) connectOne(c);
+  } finally {
+    $('cam').disabled = false;
+  }
+}
+
+// getCam asks for one camera: the remembered one when there is one, else whatever the browser picks.
+// 720p at 30 fps is what the receiver's virtual camera is sized for; more would only cost bandwidth.
+function getCam(id) {
+  return withTimeout(
+    navigator.mediaDevices.getUserMedia({
+      video: {
+        deviceId: id ? { exact: id } : undefined,
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        frameRate: { ideal: 30, max: 30 },
+      },
+    }),
+    20000,
+    'The camera never responded');
+}
+
+// acquireCam opens the camera `want` (a device id, or '' for whatever the browser picks), shows the preview and
+// swaps the track into every connection (replaceTrack, no renegotiation). A camera already open is released only
+// once the new one is up, so a failed switch keeps the picture. Runs are queued, never concurrent: Start fires one
+// without waiting for it, and a switch made meanwhile must end with the camera picked last, not race the first run.
+let camQueue = Promise.resolve();
+function acquireCam(want) {
+  const run = () => acquireCamNow(want);
+  return camQueue = camQueue.then(run, run);
+}
+
+async function acquireCamNow(want) {
+  const hint = setTimeout(() => { camErr = t('cam_waiting'); renderCamState(); }, 2500);
+  let released = ''; // a working camera let go of for the new one, to bring back if the new one fails
+  try {
+    let next;
+    try {
+      next = await getCam(want);
+    } catch (err) {
+      if (want && (err.name === 'OverconstrainedError' || err.name === 'NotFoundError')) {
+        // The remembered camera is gone (unplugged, or the browser rotated its id): take whichever is there now.
+        want = '';
+        camId = '';
+        localStorage.removeItem('camId');
+        next = await getCam('');
+      } else if (camStream && err.name === 'NotReadableError') {
+        // Phones often can't hold two cameras open at once: let go of the current one and try again.
+        released = camStream.getVideoTracks()[0].getSettings?.().deviceId || '';
+        camStream.getTracks().forEach(t => t.stop()); camStream = null;
+        next = await getCam(want);
+      } else {
+        throw err;
+      }
+    }
+    showCam(next, want);
+    camErr = '';
+  } catch (err) {
+    camErr = explainCamError(err);
+    // The new camera failed after the old one was let go of: bring the old one back, so the picture stays and the
+    // picker returns to it. The failed pick is not remembered; choosing it again is a fresh try.
+    if (!camStream && released && released !== want) {
+      try { showCam(await getCam(released), released); } catch { /* gone too; the message is about the new one */ }
+    }
+    if (!camStream) { attachCam(null); $('campreview').hidden = true; }
+  } finally {
+    clearTimeout(hint);
+    renderCamState();
+    await listCams(); // labels are known now, and the picker follows the camera in use (the list may have changed)
+  }
+}
+
+// showCam makes `next` the camera in use: remembered (by the id the browser reports, else as `want`), previewed and
+// sent on every connection; the previous camera, if any, is stopped. Nothing when the session ended meanwhile.
+function showCam(next, want) {
+  if (!live || !cam) { next.getTracks().forEach(t => t.stop()); return; }
+  const old = camStream;
+  camStream = next;
+  const track = next.getVideoTracks()[0];
+  camId = track.getSettings?.().deviceId || want;
+  localStorage.setItem('camId', camId);
+  // A track that ends on its own (camera unplugged, capture stopped from the browser's UI, permission revoked) is
+  // not reopened -- that would be a new prompt out of nowhere -- but the badge and preview must not claim a picture
+  // that is no longer sent; the picker offers the other cameras, or says there is none.
+  track.onended = () => {
+    if (camStream !== next) return;
+    camStream = null;
+    attachCam(null);
+    $('campreview').srcObject = null;
+    $('campreview').hidden = true;
+    listCams();
+  };
+  attachCam(track);
+  const v = $('campreview');
+  v.srcObject = next;
+  v.hidden = false;
+  v.play().catch(() => { /* muted and inline, so autoplay is normally allowed */ });
+  if (old) old.getTracks().forEach(t => t.stop());
+}
+
+// releaseCam stops the camera and takes the preview down; the connections keep their video line until the next rebuild.
+function releaseCam() {
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  const v = $('campreview');
+  v.srcObject = null;
+  v.hidden = true;
+  camErr = '';
+  renderCamState();
+  listCams(); // hides the picker when the camera is off
+}
+
+// Switching cameras while live: open the new one and swap it in with replaceTrack; the connections stay up. The pick
+// is remembered once that camera is open (a failed switch leaves the previous one in place and selected).
+async function switchCam(id) {
+  if (id === camId) return;
+  if (!live || !cam) { camId = id; localStorage.setItem('camId', id); return; }
+  $('camsel').disabled = true;
+  try { await acquireCam(id); } finally { $('camsel').disabled = false; }
+}
+
+// listCams fills the camera picker and notes when there is no camera at all. Labels (and so the picker) only come once
+// a camera has been granted; the device kinds come earlier, enough to say up front that there is nothing to send.
+// Runs at load, after each grant, and whenever a camera is plugged in or pulled out.
+async function listCams() {
+  let devs;
+  try { devs = await navigator.mediaDevices.enumerateDevices(); } catch { return; /* no picker, no hint */ }
+  const cams = devs.filter(d => d.kind === 'videoinput');
+  const sel = $('camsel');
+  sel.innerHTML = '';
+  for (const d of cams) {
+    if (!d.label) continue;
+    const o = document.createElement('option');
+    o.value = d.deviceId;
+    o.textContent = d.label;
+    sel.appendChild(o);
+  }
+  if (cams.some(d => d.deviceId === camId)) sel.value = camId;
+  sel.hidden = !cam || sel.options.length < 2; // one camera needs no picker
+  noCam = cams.length === 0;
+  renderCamState();
+}
+
 async function start() {
   live = true;
   $('toggle').textContent = t('stop');
@@ -428,6 +707,8 @@ async function start() {
   }
   meter(stream);
   attachMic();
+  // The camera is optional: a failure shows on its own status line and doesn't stop the session.
+  if (cam) acquireCam(camId);
 }
 
 // discover finds all receivers: the one that served this page plus the others it scanned for us.
@@ -446,7 +727,7 @@ async function discover() {
 function ensureConn(target) {
   const key = hostOf(target);
   for (const c of conns.values()) if (hostOf(c.target) === key) return;
-  const c = { target, retry: 0, state: t('connecting'), cls: 'warn', rtt: '' };
+  const c = { target, retry: 0, state: t('connecting'), cls: 'warn', rtt: '', video: '' };
   conns.set(target, c);
   renderConns();
   connectOne(c);
@@ -462,9 +743,25 @@ function attachMic() {
   if (!stream) return;
   for (const c of conns.values()) {
     if (!c.pc) continue;
-    const sender = c.pc.getSenders().find(s => !s.track || s.track.kind === 'audio');
+    const sender = senderOf(c.pc, 'audio');
     if (sender) sender.replaceTrack(stream.getAudioTracks()[0]);
   }
+}
+
+// attachCam does the same for the camera; null takes the picture away without a rebuild.
+function attachCam(track) {
+  for (const c of conns.values()) {
+    if (!c.pc) continue;
+    const sender = senderOf(c.pc, 'video');
+    if (sender) sender.replaceTrack(track);
+  }
+}
+
+// senderOf finds a connection's sender for one kind of media. Both m-lines are declared before their track exists,
+// so a sender can be trackless; go by the transceiver instead -- its receiver track always carries the kind.
+function senderOf(pc, kind) {
+  const tx = pc.getTransceivers().find(x => x.receiver.track.kind === kind);
+  return tx ? tx.sender : null;
 }
 
 // Each receiver serves its own /ice-config (same TURN set); fetched cross-origin.
@@ -496,13 +793,30 @@ async function connectOne(c) {
     if (cfg.name) { c.name = cfg.name; }
     const pc = new RTCPeerConnection({ iceServers: cfg.iceServers });
     c.pc = pc;
+    c.camDeclined = false;
     // Declare an audio transceiver up front to claim the m-line so ICE gathering starts right away; attachMic
     // fills in the real track once the mic is ready. On reconnect the mic is already in hand, so attach it now.
     // With the return path on, this m-line is sendrecv and the receiver sends the remote Mac's system audio back over it.
     const tx = pc.addTransceiver('audio', { direction: hear ? 'sendrecv' : 'sendonly' });
     if (stream) tx.sender.replaceTrack(stream.getAudioTracks()[0]);
+    // The camera is a second m-line in the same offer, always sendonly: the receiver spots the return path by a=sendrecv,
+    // so a sendrecv video line would be taken for one. The receiver decodes H.264 only, so it goes first in the codec
+    // list; the full reordered list is passed (never a trimmed one) so a browser without H.264 still negotiates -- the
+    // receiver then declines the line and the status line says why. No virtual camera on the Mac: same, declined.
+    let vtx = null;
+    if (cam) {
+      vtx = pc.addTransceiver('video', { direction: 'sendonly', sendEncodings: [{ maxBitrate: 2_500_000, maxFramerate: 30 }] });
+      if (camStream) vtx.sender.replaceTrack(camStream.getVideoTracks()[0]);
+      const caps = RTCRtpSender.getCapabilities?.('video')?.codecs || [];
+      const h264 = caps.filter(x => /video\/h264/i.test(x.mimeType));
+      const rest = caps.filter(x => !/video\/h264/i.test(x.mimeType));
+      if (h264.length && vtx.setCodecPreferences) {
+        try { vtx.setCodecPreferences([...h264, ...rest]); } catch { /* default order: the receiver only answers H.264 anyway */ }
+      }
+    }
     pc.ontrack = e => {
-      if (c.pc !== pc) return;
+      // Only the return-path audio ever comes back; the video line is sendonly, but never let a stray track become a player.
+      if (c.pc !== pc || e.track.kind !== 'audio') return;
       detachSpeaker(c);
       const el = document.createElement('audio');
       el.autoplay = true;
@@ -541,6 +855,7 @@ async function connectOne(c) {
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
+    if (vtx) { noH264 = !/ H264\//.test(offer.sdp); renderCamState(); }
     // Wait for candidate gathering, but at most 3 s: when STUN is unreachable, don't sit through the browser's full 10 s.
     await new Promise(done => {
       if (pc.iceGatheringState === 'complete') return done();
@@ -561,6 +876,10 @@ async function connectOne(c) {
     if (!res.ok) throw new Error(await res.text());
     await pc.setRemoteDescription(await res.json());
     if (stale()) { pc.close(); return; }
+    // The receiver takes the camera line as recvonly; inactive means it has no virtual camera (or nothing it can
+    // decode from this browser). The track stays attached to an idle line, so the row says so instead of the badge.
+    if (vtx) { c.camDeclined = vtx.currentDirection !== 'sendonly'; renderConns(); }
+    if (vtx) preferFramerate(vtx.sender);
 
     if (!statsTimer) statsTimer = setInterval(poll, 1000);
   } catch (err) {
@@ -580,6 +899,16 @@ function detachSpeaker(c) {
   c.speaker.srcObject = null;
   c.speaker.remove();
   c.speaker = null;
+}
+
+// preferFramerate asks the encoder to give up resolution before frames under pressure: a face at 30 fps and 480p reads
+// better than a crisp slideshow. Not every browser exposes the knob, and nothing depends on it.
+function preferFramerate(sender) {
+  try {
+    const p = sender.getParameters();
+    p.degradationPreference = 'maintain-framerate';
+    sender.setParameters(p).catch(() => { /* optional */ });
+  } catch { /* optional */ }
 }
 
 function scheduleRetry(c, why) {
@@ -604,6 +933,7 @@ function stop() {
   }
   conns.clear();
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  releaseCam();
   $('toggle').textContent = t('start');
   $('toggle').classList.remove('live');
   $('level').style.width = '0';
@@ -617,6 +947,12 @@ function setConnState(c, text, cls) {
   renderConns();
 }
 
+// sendingVideo says whether a connection currently carries the camera: its video sender has a track and the
+// receiver took the line (declined, the track sits on an inactive line and nothing goes out).
+function sendingVideo(c) {
+  return !!(c.pc && !c.camDeclined && senderOf(c.pc, 'video')?.track);
+}
+
 function renderConns() {
   const box = $('conns');
   if (conns.size === 0) {
@@ -625,18 +961,23 @@ function renderConns() {
   }
   box.innerHTML = [...conns.values()].map(c => `
     <div class="conn">
-      <span class="host">${c.name ? c.name + ' · ' : ''}${hostOf(c.target)}${c.speaker ? ` <span title="${t('playing')}">🔊</span>` : ''}</span>
+      <span class="host">${c.name ? c.name + ' · ' : ''}${hostOf(c.target)}${c.speaker ? ` <span title="${t('playing')}">🔊</span>` : ''}${sendingVideo(c) ? ` <span title="${t('sending_video')}">📷</span>` : ''}</span>
       <span class="st ${c.cls}">${c.needCert
         ? `${t('cert_before')}<a href="${c.target}" target="_blank">${t('cert_link')}</a>${t('cert_after')}`
         : c.state}</span>
+      ${c.video ? `<span class="vid">${c.video}</span>` : c.camDeclined ? `<span class="vid">${t('cam_declined')}</span>` : ''}
       <span class="rtt">${c.rtt}</span>
     </div>`).join('');
 }
 
+// withTimeout rejects after ms. A getUserMedia that answers later (the user found the permission prompt after the
+// error was shown) would otherwise leave its camera or microphone running with nothing on the page able to stop it.
 function withTimeout(promise, ms, message) {
+  let late = false;
+  promise.then(s => { if (late && s?.getTracks) s.getTracks().forEach(t => t.stop()); }, () => {});
   return Promise.race([
     promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
+    new Promise((_, reject) => setTimeout(() => { late = true; reject(new Error(message)); }, ms)),
   ]);
 }
 
@@ -648,6 +989,15 @@ function explainMicError(err) {
   if (name === 'NotReadableError') return t('mic_busy');
   if (name === 'OverconstrainedError') return t('mic_constraints');
   return t('mic_other', { reason: err.message || name || t('unknown') });
+}
+
+function explainCamError(err) {
+  const name = err.name || '';
+  if (name === 'NotAllowedError') return t('cam_denied');
+  if (name === 'NotFoundError') return t('cam_notfound');
+  if (name === 'NotReadableError' || name === 'AbortError') return t('cam_busy'); // Chrome reports a busy camera as AbortError
+  if (name === 'OverconstrainedError') return t('cam_constraints');
+  return t('cam_other', { err: err.message || name || t('unknown') });
 }
 
 // Local level meter: confirm this side is actually capturing audio before suspecting the network.
@@ -673,9 +1023,10 @@ async function poll() {
   for (const c of conns.values()) {
     if (!c.pc || c.pc.connectionState === 'closed') continue;
     const stats = await c.pc.getStats();
-    let pair = null;
+    let pair = null, video = null;
     stats.forEach(r => {
       if (r.type === 'candidate-pair' && r.state === 'succeeded' && r.nominated !== false) pair = r;
+      if (r.type === 'outbound-rtp' && (r.kind || r.mediaType) === 'video') video = r;
     });
     if (pair && pair.currentRoundTripTime != null) {
       const local = stats.get(pair.localCandidateId);
@@ -684,6 +1035,15 @@ async function poll() {
       const txt = Math.round(pair.currentRoundTripTime * 1000) + 'ms' + (relayed ? ' ' + t('relay') : '');
       if (txt !== c.rtt) { c.rtt = txt; dirty = true; }
     }
+    // Camera: the resolution and frame rate actually leaving this device, so "no picture on the Mac" splits into
+    // "not sending" and "not arriving". Firefox lacks framesPerSecond; there, count framesSent between polls.
+    let vtxt = '';
+    if (video && video.framesSent) {
+      const fps = video.framesPerSecond ?? Math.max(0, video.framesSent - (c.framesSent ?? video.framesSent));
+      vtxt = (video.frameHeight ? video.frameHeight + 'p · ' : '') + Math.round(fps) + ' fps';
+    }
+    c.framesSent = video ? video.framesSent : undefined;
+    if (vtxt !== c.video) { c.video = vtxt; dirty = true; }
   }
   if (dirty) renderConns();
 }

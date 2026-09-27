@@ -42,11 +42,18 @@ Any app on the Mac (Zoom / dictation / Audacity …) reads Remote Visio as an or
 
 The Mac's own sound (meeting audio, alerts, video)
   ↑ Core Audio system-audio tap → Opus → the same WebRTC connection → the sender's speakers
+
+The user's camera (optional, installer package built with the provisioning profile only)
+  ↓ H.264 over the same connection → the Remote Visio Camera virtual camera (a system extension)
+Video apps on the Mac (Zoom, FaceTime …) read Remote Visio Camera as an ordinary webcam
 ```
 
 Remote Visio needs **macOS 14.2 or later** on the remote Mac: that is the first release with
 the Core Audio tap the return path uses. The return path also needs a one-time "System Audio
-Recording" permission; see Step 6.
+Recording" permission; see Step 6. The virtual camera needs a one-time approval of its
+extension in System Settings; it only exists in packages built with the team's Developer ID
+and provisioning profile (`macos/README.md`, "Virtual camera"), and everything else works
+without it.
 
 Remote Visio does **not** replace the remote desktop tool — it runs alongside whichever one the user
 already has.
@@ -142,7 +149,12 @@ Running the package:
    starts it; the app registers itself to start at login (a "Start at Login" toggle
    is in its menu);
 3. macOS then asks for **System Audio Recording** and **Microphone** access for Remote Visio — have
-   the user allow both.
+   the user allow both;
+4. when the package carries the virtual camera, the app activates the **Remote Visio Camera**
+   extension and macOS asks the user to approve it: System Settings > General > Login Items &
+   Extensions > Camera Extensions (macOS 14: Privacy & Security). The menu-bar menu shows
+   `Camera: needs approval in System Settings` until then, and `Camera: active` afterwards; the
+   `Relay the Camera` item in the same menu turns the relay off and on.
 
 **Gatekeeper**: `make pkg` signs the package with the team's Developer ID
 certificates and has Apple notarize it, so it opens anywhere. A test package built with
@@ -154,14 +166,19 @@ Mac, open it once, then click Open Anyway in System Settings > Privacy & Securit
 ```bash
 system_profiler SPAudioDataType | grep "Remote Visio"     # the device is there
 curl -sk https://localhost:7420/api/status           # the receiver answers with JSON
+systemextensionsctl list | grep com.remotevisio.app.camera   # camera builds only: "[activated enabled]"
 ```
 
-Then continue at **Step 4**. The sender URL is also listed in the menu-bar icon's menu.
+Then continue at **Step 4**. The sender URL is also listed in the menu-bar icon's menu. If the
+camera line says `[activated waiting for user]`, the approval in item 4 above is still pending;
+if the extension is not listed at all, the package was built without it (the menu-bar menu then
+shows no camera items) — audio is unaffected.
 
 - Upgrade: run the new package. It quits the running app, replaces everything, restarts
   coreaudiod and relaunches the app.
 - Uninstall everything: **Uninstall Remote Visio…** in the menu-bar menu, or `/Applications/RemoteVisio.app/Contents/Resources/uninstall.sh` (asks for
-  the admin password; removes the login item, the app, the driver and the package receipts).
+  the admin password; removes the login item, the camera extension, the app, the driver and the
+  package receipts).
 - Building the package, on a Mac that has the prerequisites above plus
   `brew install opus pkg-config`: `make pkg` → `bin/RemoteVisio-<version>-<arch>.pkg`
   (currently `bin/RemoteVisio-2.0-arm64.pkg`), signed and notarized with the team's Developer ID
@@ -466,6 +483,8 @@ running executable lets macOS mix old and new, and the symptom is bizarre behavi
 | Choppy audio | Network jitter. Raise `-buffer` to 200–300 |
 | Dictation drops the first syllable | Don't enable `-dtx` (it's off by default) |
 | The sender hears nothing from the Mac | Monitor page shows `silent`: the "System Audio Recording" permission is missing (Step 6). Also check the page's **Hear the remote Mac** checkbox is on |
+| No "Remote Visio Camera" in the video app; the menu says `Camera: needs approval in System Settings`, or the log says `virtual camera unavailable` | The camera extension is not active yet. Approve it under System Settings > General > Login Items & Extensions > Camera Extensions (macOS 14: Privacy & Security), then reopen the video app. If the menu-bar menu shows no camera items at all, the package was built without the extension (ad-hoc build, or no provisioning profile on the build Mac; `macos/README.md`, "Virtual camera"): rebuild it with the profile, or do without — audio works either way |
+| The menu says `Camera: failed (blocked by this Mac's management policy…)` | The Mac is managed (MDM) and its system-extension policy activates only the extensions the administrator lists; nothing on the Mac itself can override it. Ask whoever manages it to allow team ID `99F33YCKX9`, bundle `com.remotevisio.app.camera` (a Camera / Core Media I/O extension) in that policy, or use an unmanaged Mac. Audio is unaffected |
 | Log says `System audio return unavailable: the Mac's default output device is ...` | Only possible with a non-default `-device`: the Mac's output is set to the device the receiver plays into. `System Settings → Sound → Output` → pick the speakers, then restart the receiver |
 | The user hears their own voice, or the Mac's audio twice | The remote desktop tool is still forwarding audio. Turn it off there — Remote Visio carries the Mac's sound now |
 | Meeting participants hear themselves echo | The user is on the native sender without headphones, or on the web page with the checkbox off while the remote tool plays audio. Headphones, or enable the checkbox so echo cancellation kicks in |

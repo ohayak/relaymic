@@ -1,4 +1,5 @@
-// Package rtc handles the WebRTC side: accept the browser's offer, receive Opus, decode to PCM.
+// Package rtc handles the WebRTC side: accept the browser's offer, receive Opus
+// and decode it to PCM, receive H.264 and hand the access units to the camera relay.
 package rtc
 
 import (
@@ -12,7 +13,10 @@ import (
 
 	"github.com/hraban/opus"
 	"github.com/pion/interceptor"
+	"github.com/pion/rtcp"
+	"github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v4"
+	"github.com/pion/webrtc/v4/pkg/media/samplebuilder"
 )
 
 const (
@@ -53,6 +57,68 @@ type Receiver struct {
 	// same principle as the sender, tracks are never reused across connections.
 	spkMu    sync.Mutex
 	spkTrack *webrtc.TrackLocalStaticSample
+
+	// Camera path: where the sender's H.264 access units go. nil means no
+	// virtual camera, and the video m-line is refused so the browser does not
+	// send frames nobody decodes.
+	sinkMu    sync.Mutex
+	videoSink VideoSink
+	video     videoStats
+}
+
+// VideoSink takes the sender's camera frames: one H.264 access unit at a
+// time, Annex-B with 4-byte start codes, with its RTP timestamp (90 kHz). It
+// returns true when it could not decode and needs the sender to send a
+// keyframe (a PLI goes out then). A sink with a Reset method is told when a
+// new track starts, before its first access unit.
+type VideoSink interface {
+	Decode(accessUnit []byte, rtpTimestamp uint32) (needKeyframe bool)
+}
+
+// SetVideoSink sets where camera frames go; nil turns the camera path off for
+// the connections negotiated from now on.
+func (r *Receiver) SetVideoSink(s VideoSink) {
+	r.sinkMu.Lock()
+	r.videoSink = s
+	r.sinkMu.Unlock()
+}
+
+func (r *Receiver) currentVideoSink() VideoSink {
+	r.sinkMu.Lock()
+	defer r.sinkMu.Unlock()
+	return r.videoSink
+}
+
+// VideoStats counts what arrived on the camera track.
+type VideoStats struct {
+	Frames  uint64 // access units reassembled and handed to the sink
+	Packets uint64 // RTP packets received
+	Bytes   uint64 // RTP bytes received, header included
+}
+
+type videoStats struct {
+	mu sync.Mutex
+	VideoStats
+}
+
+func (s *videoStats) packet(n int) {
+	s.mu.Lock()
+	s.Packets++
+	s.Bytes += uint64(n)
+	s.mu.Unlock()
+}
+
+func (s *videoStats) frame() {
+	s.mu.Lock()
+	s.Frames++
+	s.mu.Unlock()
+}
+
+// Video returns a copy of the camera track counters.
+func (r *Receiver) Video() VideoStats {
+	r.video.mu.Lock()
+	defer r.video.mu.Unlock()
+	return r.video.VideoStats
 }
 
 // New creates a receiver. onPCM is called repeatedly from the decode goroutine with 48kHz interleaved stereo PCM.
@@ -152,9 +218,12 @@ func (r *Receiver) buildAPI() (*webrtc.API, error) {
 		return r.api, nil
 	}
 	m := &webrtc.MediaEngine{}
-	if err := m.RegisterDefaultCodecs(); err != nil {
+	if err := registerCodecs(m); err != nil {
 		return nil, fmt.Errorf("register codecs: %w", err)
 	}
+	// NACK, RTCP reports and TWCC. TWCC matters for the camera: without
+	// transport-wide feedback Chrome never raises the video bitrate above its
+	// 300 kbps starting point.
 	ir := &interceptor.Registry{}
 	if err := webrtc.RegisterDefaultInterceptors(m, ir); err != nil {
 		return nil, fmt.Errorf("register interceptors: %w", err)
@@ -176,6 +245,59 @@ func (r *Receiver) buildAPI() (*webrtc.API, error) {
 		webrtc.WithSettingEngine(se),
 	)
 	return r.api, nil
+}
+
+// registerCodecs declares what the receiver decodes: Opus for the
+// microphone, H.264 for the camera, and nothing else.
+//
+// H.264 only, deliberately: the Mac decodes it in hardware through
+// VideoToolbox, while VP8, VP9 and AV1 would run on the CPU of a machine that
+// is usually busy with a meeting. Two profiles cover the browsers: Constrained
+// Baseline (42e01f) is what every WebRTC stack offers, Constrained High
+// (640c1f) is what Safari prefers. Each gets an RTX entry so retransmissions
+// arrive on their own payload type. A browser without H.264 gets its video
+// m-line rejected and keeps the audio.
+func registerCodecs(m *webrtc.MediaEngine) error {
+	if err := m.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType: webrtc.MimeTypeOpus, ClockRate: SampleRate, Channels: Channels,
+			SDPFmtpLine: "minptime=10;useinbandfec=1",
+		},
+		PayloadType: 111,
+	}, webrtc.RTPCodecTypeAudio); err != nil {
+		return err
+	}
+	feedback := []webrtc.RTCPFeedback{
+		{Type: "goog-remb"}, {Type: "ccm", Parameter: "fir"}, {Type: "nack"}, {Type: "nack", Parameter: "pli"},
+	}
+	for _, c := range []struct {
+		profile string
+		pt, rtx webrtc.PayloadType
+	}{
+		{"42e01f", 106, 107},
+		{"640c1f", 112, 113},
+	} {
+		if err := m.RegisterCodec(webrtc.RTPCodecParameters{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType: webrtc.MimeTypeH264, ClockRate: VideoClockRate,
+				SDPFmtpLine:  "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=" + c.profile,
+				RTCPFeedback: feedback,
+			},
+			PayloadType: c.pt,
+		}, webrtc.RTPCodecTypeVideo); err != nil {
+			return err
+		}
+		if err := m.RegisterCodec(webrtc.RTPCodecParameters{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType: webrtc.MimeTypeRTX, ClockRate: VideoClockRate,
+				SDPFmtpLine: fmt.Sprintf("apt=%d", c.pt),
+			},
+			PayloadType: c.rtx,
+		}, webrtc.RTPCodecTypeVideo); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // opusParams assembles the Opus switches declared to the sender in the answer.
@@ -322,8 +444,16 @@ func describePath(pc *webrtc.PeerConnection) string {
 // its audio m-line must be sendrecv. Older pages only send (sendonly), and
 // pion will only pair that with a local recvonly transceiver; forcing a
 // sendrecv transceiver with a track onto it would just sit idle.
+//
+// Only the audio section counts: the camera's video m-line has its own
+// direction and must not be mistaken for an answer about audio.
 func offerWantsSpeaker(sdp string) bool {
-	return strings.Contains(sdp, "a=sendrecv")
+	for _, section := range strings.Split(sdp, "\nm=")[1:] {
+		if strings.HasPrefix(section, "audio") {
+			return strings.Contains(section, "a=sendrecv")
+		}
+	}
+	return false
 }
 
 // Answer handles an SDP offer from the sender and returns the answer.
@@ -377,9 +507,20 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrt
 		return nil, fmt.Errorf("add audio receive transceiver: %w", err)
 	}
 
+	// The camera sink is fixed at negotiation time: the answer either accepts
+	// the video m-line for this sink or refuses it, and the track that arrives
+	// later must go to the same place.
+	sink := r.currentVideoSink()
 	pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 		go DrainRTCP(receiver)
-		r.consume(track)
+		switch track.Kind() {
+		case webrtc.RTPCodecTypeAudio:
+			r.consume(track)
+		case webrtc.RTPCodecTypeVideo:
+			if sink != nil {
+				r.consumeVideo(pc, track, sink)
+			}
+		}
 	})
 
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
@@ -403,6 +544,20 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrt
 	if err := pc.SetRemoteDescription(offer); err != nil {
 		pc.Close()
 		return nil, fmt.Errorf("set remote description: %w", err)
+	}
+
+	// Without a virtual camera, refuse the camera: pion has created a recvonly
+	// transceiver for the offered video m-line, and stopping it answers that
+	// m-line as inactive, so the browser sends no frames nobody would decode.
+	if sink == nil {
+		for _, tr := range pc.GetTransceivers() {
+			if tr.Kind() == webrtc.RTPCodecTypeVideo {
+				if err := tr.Stop(); err != nil {
+					pc.Close()
+					return nil, fmt.Errorf("refuse video: %w", err)
+				}
+			}
+		}
 	}
 
 	answer, err := pc.CreateAnswer(nil)
@@ -441,6 +596,72 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrt
 // consume decodes the sender's microphone track to PCM until the track ends.
 func (r *Receiver) consume(track *webrtc.TrackRemote) {
 	Decode(track, &r.stats, r.emit)
+}
+
+const (
+	// VideoClockRate is the RTP clock of every video codec.
+	VideoClockRate = 90000
+	// pliInterval is the least time between two keyframe requests: an IDR
+	// costs the sender a burst of bandwidth, and one request per round trip
+	// is all it takes.
+	pliInterval = 300 * time.Millisecond
+	// maxAccessUnitPackets is the samplebuilder's packet cap. It is not a
+	// reordering window: the builder drops the oldest packet of a frame that
+	// grows past it, so it is the largest frame that gets through. A keyframe
+	// is one frame of many packets (at the 1200-byte payloads browsers use, a
+	// 720p IDR at the sender's 2.5 Mbit/s is well past 64 of them), so the cap
+	// sits far above any keyframe the sender's bitrate allows.
+	maxAccessUnitPackets = 2048
+)
+
+// consumeVideo reassembles the camera track's packets into access units and
+// hands them to the sink until the track ends.
+//
+// The samplebuilder does the jitter handling: at most 150 ms of waiting for
+// a missing packet (the NACK interceptor has asked for it by then; a frame
+// later than that is not worth showing), and frames of any realistic size
+// (maxAccessUnitPackets). A keyframe is requested at the start, whenever the
+// builder had to drop a frame (the frames after it reference it, so the
+// picture would drift until the next IDR) and whenever the sink says it
+// cannot decode, rate-limited so a burst of undecodable frames does not
+// turn into a burst of PLIs.
+func (r *Receiver) consumeVideo(pc *webrtc.PeerConnection, track *webrtc.TrackRemote, sink VideoSink) {
+	sb := samplebuilder.New(maxAccessUnitPackets, &codecs.H264Packet{}, VideoClockRate,
+		samplebuilder.WithMaxTimeDelay(150*time.Millisecond))
+
+	var lastPLI time.Time
+	requestKeyframe := func() {
+		if !lastPLI.IsZero() && time.Since(lastPLI) < pliInterval {
+			return
+		}
+		lastPLI = time.Now()
+		_ = pc.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(track.SSRC())}})
+	}
+	// A new track is a new encoder on a new RTP timeline: the sink keeps its
+	// decoder across connections and must not take the first frames of this
+	// one for continuations of the last.
+	if s, ok := sink.(interface{ Reset() }); ok {
+		s.Reset()
+	}
+	requestKeyframe()
+
+	for {
+		pkt, _, err := track.ReadRTP()
+		if err != nil {
+			return // track ended; the next offer rebuilds
+		}
+		r.video.packet(pkt.MarshalSize())
+		sb.Push(pkt)
+		for s := sb.Pop(); s != nil; s = sb.Pop() {
+			r.video.frame()
+			if s.PrevDroppedPackets > 0 {
+				requestKeyframe() // a frame was lost for good; this one and the next reference it
+			}
+			if sink.Decode(s.Data, s.PacketTimestamp) {
+				requestKeyframe()
+			}
+		}
+	}
 }
 
 // Decode decodes an Opus track to 48kHz interleaved stereo PCM until the track ends.

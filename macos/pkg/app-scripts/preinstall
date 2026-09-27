@@ -8,6 +8,10 @@
 # (login items are per user); the new app registers itself again when
 # postinstall starts it, unless the person opted out. A previous install
 # under the old RelayMic name is retired the same way and removed.
+# The camera system extension inside the app needs nothing here: the new app
+# version replaces the installed extension itself on its next launch (an
+# activation request with the replace action), and deactivating it would take
+# the GUI and an administrator's authorization, which an installer has not.
 
 # quit_app NAME: quit a running NAME.app (its menu-bar process) and wait, up to
 # 15 s, until nothing runs from the bundle any more.

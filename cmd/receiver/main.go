@@ -29,6 +29,7 @@ import (
 	"github.com/hueshu/relaymic/internal/icons"
 	"github.com/hueshu/relaymic/internal/rtc"
 	"github.com/hueshu/relaymic/internal/tlscert"
+	"github.com/hueshu/relaymic/internal/video"
 	"github.com/hueshu/relaymic/internal/web"
 	"github.com/pion/webrtc/v4"
 )
@@ -81,6 +82,10 @@ func main() {
 	// The remote Mac is usually playing meeting audio into an empty room. Mute its
 	// own speakers; the return path is unaffected.
 	speakerMute := flag.Bool("speaker-mute", false, "silence this Mac's own speakers while its audio is relayed (the sender still hears everything)")
+	// Camera: the sender's browser camera arrives as H.264, is decoded with
+	// VideoToolbox and pushed into the Remote Visio Camera system extension, so
+	// Zoom or FaceTime on this Mac can pick it as a camera.
+	camera := flag.Bool("camera", true, "relay the remote camera into the Remote Visio Camera virtual camera")
 	flag.Parse()
 
 	log.SetFlags(log.Ltime)
@@ -397,6 +402,18 @@ func main() {
 		}
 	}
 
+	// Camera relay. The extension may not be activated yet (it needs the
+	// user's approval in System Settings), so a failure here is not fatal: the
+	// receiver runs without a camera, says so once next to the virtual
+	// microphone line, and tries again on later offers.
+	cam := &cameraState{on: *camera}
+	if *camera {
+		cam.open()
+		// Closed after receiver.Close() at the end of main: the decoder drains
+		// before the sink stream stops.
+		defer cam.close()
+	}
+
 	// Same-machine detection needs every address (IPv6 included); the certificate SAN and the printed URLs only IPv4.
 	selfAddrs := interfaceIPs()
 	ips := localIPv4(selfAddrs)
@@ -451,6 +468,12 @@ func main() {
 		// back: the browser plays it, the tap captures it again, round and round. Such
 		// connections get no return path.
 		local := isLocalSender(r.RemoteAddr, selfAddrs)
+		// The camera extension may have been activated since startup: retry
+		// the relay (rate-limited inside) and negotiate with whatever is there now.
+		if cam.on {
+			cam.open()
+		}
+		receiver.SetVideoSink(cam.sink())
 		answer, err := receiver.Answer(offer, spk != nil && !local)
 		if err != nil {
 			log.Println("negotiation failed:", err)
@@ -517,6 +540,7 @@ func main() {
 				"output":  speakerOutput,
 				"levelDb": speakerDB,
 			},
+			"camera": cam.status(),
 		})
 	})
 	toJSON := func(r *audio.SegmentRecorder) []segmentJSON {
@@ -622,6 +646,7 @@ func main() {
 
 	go func() {
 		log.Printf("virtual microphone: %s", dev.Name)
+		log.Println(cam.describe())
 		log.Printf("sender URL: %s://localhost:%s", scheme, port)
 		log.Printf("monitor page: %s://localhost:%s/monitor", scheme, port)
 		for _, ip := range ips {
@@ -672,6 +697,7 @@ func main() {
 	// then decide whether to log.
 	go func() {
 		for range time.Tick(time.Second) {
+			cam.tick()
 			spkDB := audio.SilenceDBFS
 			if spk != nil {
 				spkDB = spk.TakePeakDBFS()
@@ -712,12 +738,128 @@ func main() {
 	}
 	_ = srv.Close()
 	// Teardown order: close the connection first (decoding stops, nothing writes to
-	// the player any more), then the loopback capture, and only then the deferred
+	// the player or the camera relay any more), then the loopback capture, and only
+	// then the deferred camera relay (decoder drained, then the sink stream stopped),
 	// recording finalization, return-path capture, player and audio context. The
 	// devices must be fully closed before the context so the process exits within
 	// seconds instead of being cut off midway by the wrapper app's SIGKILL.
 	receiver.Close()
 	closeLoop()
+}
+
+// cameraState owns the camera relay. The extension may be activated at any
+// time during the session (the user approves it in System Settings), so
+// opening is retried lazily on each new offer, at most once per
+// cameraRetryInterval, rather than in a loop. The /offer handler, the status
+// handler, the once-a-second tick and the exit path all touch it.
+type cameraState struct {
+	on bool // the -camera flag
+
+	mu         sync.Mutex
+	relay      *video.Relay
+	lastTry    time.Time
+	lastErr    error // why the last open failed, for the startup line
+	lastFrames uint64
+	fps        uint64 // frames decoded in the last second
+}
+
+const cameraRetryInterval = 30 * time.Second
+
+// open opens the relay if there is none and the last attempt was long enough
+// ago. The first attempt's outcome is reported by describe at startup; later
+// attempts only log when the camera becomes available, so an absent
+// extension does not fill the log.
+func (c *cameraState) open() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.relay != nil {
+		return
+	}
+	first := c.lastTry.IsZero()
+	if !first && time.Since(c.lastTry) < cameraRetryInterval {
+		return
+	}
+	c.lastTry = time.Now()
+	relay, err := video.Open(video.DeviceUID)
+	if err != nil {
+		c.lastErr = err
+		return
+	}
+	c.relay, c.lastErr = relay, nil
+	if !first {
+		log.Printf("virtual camera now available: %s (%s)", video.DeviceName, relay.Stream)
+	}
+}
+
+// describe is the startup line, printed next to the virtual microphone's.
+func (c *cameraState) describe() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	switch {
+	case !c.on:
+		return "virtual camera: off (-camera=false)"
+	case c.relay != nil:
+		return fmt.Sprintf("virtual camera: %s (%s)", video.DeviceName, c.relay.Stream)
+	default:
+		return fmt.Sprintf("virtual camera unavailable: %v; the camera relay is off", c.lastErr)
+	}
+}
+
+// sink returns the relay as the receiver's video sink, or an untyped nil when there is none.
+func (c *cameraState) sink() rtc.VideoSink {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.relay == nil {
+		return nil
+	}
+	return c.relay
+}
+
+// tick computes the frame rate from the once-a-second counter difference.
+func (c *cameraState) tick() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.relay == nil {
+		c.fps, c.lastFrames = 0, 0
+		return
+	}
+	frames := c.relay.Stats().Frames
+	c.fps = frames - c.lastFrames
+	c.lastFrames = frames
+}
+
+// status is the "camera" object of /api/status.
+func (c *cameraState) status() map[string]any {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := map[string]any{
+		"on":        c.on,
+		"available": c.relay != nil,
+		"frames":    uint64(0),
+		"fps":       c.fps,
+		"width":     0,
+		"height":    0,
+		"hardware":  false,
+		"dropped":   uint64(0),
+	}
+	if c.relay != nil {
+		s := c.relay.Stats()
+		out["frames"] = s.Frames
+		out["width"] = s.Width
+		out["height"] = s.Height
+		out["hardware"] = s.Hardware
+		out["dropped"] = s.Dropped
+	}
+	return out
+}
+
+func (c *cameraState) close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.relay != nil {
+		c.relay.Close()
+		c.relay = nil
+	}
 }
 
 // openDevice finds the virtual microphone and opens it for playback, retrying

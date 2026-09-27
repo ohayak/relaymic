@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Info.plist of the Remote Visio virtual camera (a Core Media I/O camera
+     system extension). The Makefile substitutes @VERSION@, @BUILD@ (the app's
+     version and build number, which macOS compares to decide whether to
+     replace an installed extension) and @MINOS@ when it assembles the bundle.
+     The mach service name must start with an app group the extension holds
+     (macos/camera.entitlements). -->
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>com.remotevisio.app.camera</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.remotevisio.app.camera</string>
+    <key>CFBundleName</key>
+    <string>Remote Visio Camera</string>
+    <key>CFBundleDisplayName</key>
+    <string>Remote Visio Camera</string>
+    <key>CFBundlePackageType</key>
+    <string>SYSX</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleSupportedPlatforms</key>
+    <array>
+        <string>MacOSX</string>
+    </array>
+    <key>CFBundleShortVersionString</key>
+    <string>@VERSION@</string>
+    <key>CFBundleVersion</key>
+    <string>@BUILD@</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>@MINOS@</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Remote Visio</string>
+    <key>NSSystemExtensionUsageDescription</key>
+    <string>Provides the Remote Visio virtual camera, which shows the camera of the remote device in your video apps.</string>
+    <key>CMIOExtension</key>
+    <dict>
+        <key>CMIOExtensionMachServiceName</key>
+        <string>99F33YCKX9.com.remotevisio.app.camera</string>
+    </dict>
+</dict>
+</plist>

@@ -62,7 +62,7 @@
 
   .stats { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--dim); }
   .stats b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
-  .stats.spk { margin-top: 14px; }
+  .stats.spk, .stats.cam { margin-top: 14px; }
   .meter.spk { margin: 6px 0 0; }
   .meter.spk i { background: var(--warn); }
 
@@ -98,6 +98,7 @@
     </div>
     <div class="stats spk"><span><span data-i18n="return_path">Return path (this Mac's system audio)</span> <b id="speaker">—</b></span></div>
     <div class="meter spk"><i id="spkLevel"></i></div>
+    <div class="stats cam"><span><span data-i18n="camera">Virtual camera</span> <b id="camera">—</b></span></div>
   </div>
 
   <div class="card">
@@ -117,36 +118,43 @@ const STRINGS = {
   en: { title: 'Receiver Monitor', buffer: 'Buffer', dropped: 'Dropped', underruns: 'Underruns', received: 'Received', lost: 'Lost',
         return_path: "Return path (this Mac's system audio)", off: 'off',
         silent: "silent (the Mac isn't playing anything, or System Audio Recording isn't allowed)",
+        camera: 'Virtual camera', camera_off: 'off', camera_ext_missing: 'camera extension not activated', camera_idle: 'no video arriving',
         segments: 'Segment recordings', no_segments: 'No speech segments recorded yet',
         lane_pre: 'before ring', lane_post: 'after ring', lane_loop: 'after device', offline: 'Receiver offline' },
   es: { title: 'Monitor del receptor', buffer: 'Búfer', dropped: 'Descartados', underruns: 'Vacíos', received: 'Recibidos', lost: 'Perdidos',
         return_path: 'Retorno (audio del sistema de este Mac)', off: 'apagado',
         silent: 'silencio (el Mac no reproduce nada, o la grabación del audio del sistema no está permitida)',
+        camera: 'Cámara virtual', camera_off: 'apagada', camera_ext_missing: 'extensión de cámara no activada', camera_idle: 'no llega vídeo',
         segments: 'Grabaciones por segmento', no_segments: 'Aún no hay segmentos de voz grabados',
         lane_pre: 'antes del búfer', lane_post: 'después del búfer', lane_loop: 'después del dispositivo', offline: 'Receptor desconectado' },
   fr: { title: 'Moniteur du récepteur', buffer: 'Tampon', dropped: 'Rejetés', underruns: 'Sous-alimentations', received: 'Reçus', lost: 'Perdus',
         return_path: 'Retour (son système de ce Mac)', off: 'désactivé',
         silent: "silence (le Mac ne joue rien, ou l'enregistrement du son système n'est pas autorisé)",
+        camera: 'Caméra virtuelle', camera_off: 'désactivée', camera_ext_missing: 'extension caméra non activée', camera_idle: "aucune vidéo n'arrive",
         segments: 'Enregistrements par segment', no_segments: 'Aucun segment de parole enregistré pour le moment',
         lane_pre: 'avant le tampon', lane_post: 'après le tampon', lane_loop: 'après le périphérique', offline: 'Récepteur hors ligne' },
   zh: { title: '接收监控', buffer: '缓冲', dropped: '丢弃', underruns: '欠载', received: '收包', lost: '丢包',
         return_path: '回程（这台 Mac 的系统声音）', off: '关',
         silent: '无声（Mac 没在出声，或「系统声音录制」未授权）',
+        camera: '虚拟摄像头', camera_off: '关', camera_ext_missing: '摄像头扩展未启用', camera_idle: '没有视频进来',
         segments: '分段录音', no_segments: '还没有录到语音段',
         lane_pre: 'ring 前', lane_post: 'ring 后', lane_loop: '设备后', offline: '接收端离线' },
   de: { title: 'Empfänger-Monitor', buffer: 'Puffer', dropped: 'Verworfen', underruns: 'Unterläufe', received: 'Empfangen', lost: 'Verloren',
         return_path: 'Rückweg (Systemton dieses Macs)', off: 'aus',
         silent: 'stumm (der Mac gibt nichts wieder, oder die Systemton-Aufnahme ist nicht erlaubt)',
+        camera: 'Virtuelle Kamera', camera_off: 'aus', camera_ext_missing: 'Kamera-Erweiterung nicht aktiviert', camera_idle: 'kein Video kommt an',
         segments: 'Segmentaufnahmen', no_segments: 'Noch keine Sprachsegmente aufgenommen',
         lane_pre: 'vor dem Puffer', lane_post: 'nach dem Puffer', lane_loop: 'nach dem Gerät', offline: 'Empfänger offline' },
   it: { title: 'Monitor del ricevitore', buffer: 'Buffer', dropped: 'Scartati', underruns: 'Sottoalimentazioni', received: 'Ricevuti', lost: 'Persi',
         return_path: 'Ritorno (audio di sistema di questo Mac)', off: 'spento',
         silent: "silenzio (il Mac non riproduce nulla, o la registrazione dell'audio di sistema non è consentita)",
+        camera: 'Fotocamera virtuale', camera_off: 'spenta', camera_ext_missing: 'estensione fotocamera non attivata', camera_idle: 'nessun video in arrivo',
         segments: 'Registrazioni per segmento', no_segments: 'Nessun segmento vocale registrato finora',
         lane_pre: 'prima del buffer', lane_post: 'dopo il buffer', lane_loop: 'dopo il dispositivo', offline: 'Ricevitore offline' },
   hi: { title: 'रिसीवर मॉनिटर', buffer: 'बफ़र', dropped: 'छोड़े गए', underruns: 'अंडररन', received: 'प्राप्त', lost: 'खोए',
         return_path: 'रिटर्न पाथ (इस Mac की सिस्टम आवाज़)', off: 'बंद',
         silent: 'खामोश (Mac कुछ नहीं बजा रहा, या सिस्टम ऑडियो रिकॉर्डिंग की अनुमति नहीं है)',
+        camera: 'वर्चुअल कैमरा', camera_off: 'बंद', camera_ext_missing: 'कैमरा एक्सटेंशन सक्रिय नहीं है', camera_idle: 'कोई वीडियो नहीं आ रहा',
         segments: 'सेगमेंट रिकॉर्डिंग', no_segments: 'अभी तक कोई बोलने का सेगमेंट रिकॉर्ड नहीं हुआ',
         lane_pre: 'बफ़र से पहले', lane_post: 'बफ़र के बाद', lane_loop: 'डिवाइस के बाद', offline: 'रिसीवर ऑफ़लाइन' },
 };
@@ -197,6 +205,15 @@ function renderStatus(s) {
       : Math.round(sdb) + ' dBFS');
     $('spkLevel').style.width = meterWidth(sdb);
   }
+
+  // Virtual camera: "off" is the relay switched off; "extension not activated" is the relay on but macOS refusing the
+  // device (the camera extension needs a one-time approval in System Settings); "no video arriving" is the device open
+  // but no frames decoded in the last second, i.e. the sender isn't sending its camera.
+  const cam = s.camera || {};
+  $('camera').textContent = !cam.on ? t('camera_off')
+    : !cam.available ? t('camera_ext_missing')
+    : !cam.fps ? t('camera_idle')
+    : `${cam.width}×${cam.height} · ${cam.fps} fps${cam.hardware ? '' : ' · software'}`;
 }
 
 function renderOffline() {
@@ -206,7 +223,7 @@ function renderOffline() {
   $('level').style.width = '0';
   $('spkLevel').style.width = '0';
   $('buffered').textContent = $('dropped').textContent = $('starved').textContent =
-    $('received').textContent = $('lost').textContent = $('speaker').textContent = '—';
+    $('received').textContent = $('lost').textContent = $('speaker').textContent = $('camera').textContent = '—';
 }
 
 pollStatus();

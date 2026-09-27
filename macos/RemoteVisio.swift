@@ -1,10 +1,13 @@
 import AppKit
 import ServiceManagement
+import SystemExtensions
 
 // Menu-bar wrapper for remotevisio-receiver: shows the app icon in the status
 // bar while the receiver runs, lists the current endpoints (click to copy),
 // offers a start-at-login toggle, and quits the receiver cleanly from the
-// menu.
+// menu. When this build carries the virtual camera (a system extension,
+// see macos/assemble-app.sh) it activates the extension at launch and shows
+// its state in the menu.
 
 // Remembers that the user switched start-at-login off, so a later launch
 // does not quietly switch it back on.
@@ -12,6 +15,9 @@ private let loginItemOptOutKey = "loginItemOptOut"
 // When on, the receiver is started with -speaker-mute: the Mac's own
 // speakers stay silent while its sound is relayed to the sender.
 private let speakerMuteKey = "speakerMute"
+// When on, the receiver is started with -camera=false: the remote device's
+// camera is not relayed into the virtual camera. Off by default (relay on).
+private let cameraOffKey = "cameraOff"
 
 // UI strings follow the system language; anything not covered falls back to
 // English. Keys are shared across the languages below.
@@ -26,7 +32,7 @@ private let strings: [String: [String: String]] = [
         "quit": "Quit Remote Visio",
         "mute": "Mute This Mac's Speakers",
         "uninstall_q": "Uninstall Remote Visio?",
-        "uninstall_info": "This removes the Remote Visio audio device, the app and its login item. You will be asked for your administrator password. Sound pauses for about a second while the audio system restarts.",
+        "uninstall_info": "This removes the Remote Visio audio device, the virtual camera, the app and its login item. You will be asked for your administrator password. Sound pauses for about a second while the audio system restarts.",
         "uninstall_btn": "Uninstall",
         "cancel": "Cancel",
         "uninstall_failed": "Uninstall failed",
@@ -35,6 +41,16 @@ private let strings: [String: [String: String]] = [
         "receiver_missing": "The receiver is missing from this copy of Remote Visio. Reinstall the app.",
         "exited": "remotevisio-receiver exited unexpectedly (status {n}). See ~/Library/Logs/RemoteVisio.log.",
         "start_failed": "Could not start remotevisio-receiver: {err}",
+        "camera_toggle": "Relay the Camera",
+        "camera_active": "Camera: active",
+        "camera_needs_approval": "Camera: needs approval in System Settings",
+        "camera_missing": "Camera: not bundled in this build",
+        "camera_failed": "Camera: failed ({err})",
+        "camera_policy": "blocked by this Mac's management policy; whoever manages it has to allow the extension",
+        "camera_reboot": "Camera: active after the Mac restarts",
+        "camera_open_settings": "Open System Settings…",
+        "camera_not_installed": "Camera: available once the app is in /Applications",
+        "camera_deactivate_failed": "The virtual camera could not be removed ({err}). If System Settings still lists the Remote Visio camera extension after uninstalling, restart the Mac.",
     ],
     "es": [
         "running": "Receptor Remote Visio: en marcha",
@@ -46,7 +62,7 @@ private let strings: [String: [String: String]] = [
         "quit": "Salir de Remote Visio",
         "mute": "Silenciar los altavoces de este Mac",
         "uninstall_q": "¿Desinstalar Remote Visio?",
-        "uninstall_info": "Se eliminarán el dispositivo de audio Remote Visio, la app y su elemento de inicio. Se te pedirá la contraseña de administrador. El sonido se detiene un segundo mientras el sistema de audio se reinicia.",
+        "uninstall_info": "Se eliminarán el dispositivo de audio Remote Visio, la cámara virtual, la app y su elemento de inicio. Se te pedirá la contraseña de administrador. El sonido se detiene un segundo mientras el sistema de audio se reinicia.",
         "uninstall_btn": "Desinstalar",
         "cancel": "Cancelar",
         "uninstall_failed": "La desinstalación falló",
@@ -55,6 +71,16 @@ private let strings: [String: [String: String]] = [
         "receiver_missing": "Falta el receptor en esta copia de Remote Visio. Reinstala la app.",
         "exited": "remotevisio-receiver terminó inesperadamente (estado {n}). Consulta ~/Library/Logs/RemoteVisio.log.",
         "start_failed": "No se pudo iniciar remotevisio-receiver: {err}",
+        "camera_toggle": "Retransmitir la cámara",
+        "camera_active": "Cámara: activa",
+        "camera_needs_approval": "Cámara: requiere aprobación en Ajustes del Sistema",
+        "camera_missing": "Cámara: no incluida en esta compilación",
+        "camera_failed": "Cámara: error ({err})",
+        "camera_policy": "bloqueada por la política de gestión de este Mac; quien lo administra debe permitir la extensión",
+        "camera_reboot": "Cámara: activa cuando el Mac se reinicie",
+        "camera_open_settings": "Abrir Ajustes del Sistema…",
+        "camera_not_installed": "Cámara: disponible cuando la app esté en /Applications",
+        "camera_deactivate_failed": "No se pudo quitar la cámara virtual ({err}). Si Ajustes del Sistema sigue mostrando la extensión de cámara de Remote Visio después de desinstalar, reinicia el Mac.",
     ],
     "fr": [
         "running": "Récepteur Remote Visio : en marche",
@@ -66,7 +92,7 @@ private let strings: [String: [String: String]] = [
         "quit": "Quitter Remote Visio",
         "mute": "Couper les haut-parleurs de ce Mac",
         "uninstall_q": "Désinstaller Remote Visio ?",
-        "uninstall_info": "Cela supprime le périphérique audio Remote Visio, l'app et son élément de connexion. Votre mot de passe administrateur sera demandé. Le son est coupé environ une seconde pendant le redémarrage du système audio.",
+        "uninstall_info": "Cela supprime le périphérique audio Remote Visio, la caméra virtuelle, l'app et son élément de connexion. Votre mot de passe administrateur sera demandé. Le son est coupé environ une seconde pendant le redémarrage du système audio.",
         "uninstall_btn": "Désinstaller",
         "cancel": "Annuler",
         "uninstall_failed": "Échec de la désinstallation",
@@ -75,6 +101,16 @@ private let strings: [String: [String: String]] = [
         "receiver_missing": "Le récepteur manque dans cette copie de Remote Visio. Réinstallez l'app.",
         "exited": "remotevisio-receiver s'est arrêté de façon inattendue (état {n}). Voir ~/Library/Logs/RemoteVisio.log.",
         "start_failed": "Impossible de démarrer remotevisio-receiver : {err}",
+        "camera_toggle": "Relayer la caméra",
+        "camera_active": "Caméra : active",
+        "camera_needs_approval": "Caméra : à approuver dans Réglages Système",
+        "camera_missing": "Caméra : absente de cette version",
+        "camera_failed": "Caméra : échec ({err})",
+        "camera_policy": "bloquée par la politique de gestion de ce Mac ; la personne qui l'administre doit autoriser l'extension",
+        "camera_reboot": "Caméra : active après le redémarrage du Mac",
+        "camera_open_settings": "Ouvrir Réglages Système…",
+        "camera_not_installed": "Caméra : disponible une fois l'app dans /Applications",
+        "camera_deactivate_failed": "La caméra virtuelle n'a pas pu être retirée ({err}). Si Réglages Système affiche encore l'extension caméra de Remote Visio après la désinstallation, redémarrez le Mac.",
     ],
     "zh": [
         "running": "Remote Visio 接收端：运行中",
@@ -86,7 +122,7 @@ private let strings: [String: [String: String]] = [
         "quit": "退出 Remote Visio",
         "mute": "静音这台 Mac 的扬声器",
         "uninstall_q": "要卸载 Remote Visio 吗？",
-        "uninstall_info": "这会删除 Remote Visio 音频设备、这个 App 和它的登录项。系统会要求输入管理员密码。音频系统重启时声音会中断大约一秒。",
+        "uninstall_info": "这会删除 Remote Visio 音频设备、虚拟摄像头、这个 App 和它的登录项。系统会要求输入管理员密码。音频系统重启时声音会中断大约一秒。",
         "uninstall_btn": "卸载",
         "cancel": "取消",
         "uninstall_failed": "卸载失败",
@@ -95,6 +131,16 @@ private let strings: [String: [String: String]] = [
         "receiver_missing": "这份 Remote Visio 里缺少接收端。请重新安装这个 App。",
         "exited": "remotevisio-receiver 意外退出（状态 {n}）。见 ~/Library/Logs/RemoteVisio.log。",
         "start_failed": "无法启动 remotevisio-receiver：{err}",
+        "camera_toggle": "转发摄像头",
+        "camera_active": "摄像头：已启用",
+        "camera_needs_approval": "摄像头：需要在「系统设置」里允许",
+        "camera_missing": "摄像头：这个版本没有包含",
+        "camera_failed": "摄像头：失败（{err}）",
+        "camera_policy": "被这台 Mac 的管理策略拦截；需要管理员允许这个扩展",
+        "camera_reboot": "摄像头：重启 Mac 后启用",
+        "camera_open_settings": "打开系统设置…",
+        "camera_not_installed": "摄像头：把 App 放进 /Applications 后可用",
+        "camera_deactivate_failed": "无法移除虚拟摄像头（{err}）。卸载后如果「系统设置」里仍列出 Remote Visio 的摄像头扩展，请重启 Mac。",
     ],
     "de": [
         "running": "Remote Visio-Empfänger: läuft",
@@ -106,7 +152,7 @@ private let strings: [String: [String: String]] = [
         "quit": "Remote Visio beenden",
         "mute": "Lautsprecher dieses Macs stummschalten",
         "uninstall_q": "Remote Visio deinstallieren?",
-        "uninstall_info": "Das entfernt das Remote Visio-Audiogerät, die App und ihr Anmeldeobjekt. Sie werden nach Ihrem Administrator-Passwort gefragt. Der Ton setzt etwa eine Sekunde aus, während das Audiosystem neu startet.",
+        "uninstall_info": "Das entfernt das Remote Visio-Audiogerät, die virtuelle Kamera, die App und ihr Anmeldeobjekt. Sie werden nach Ihrem Administrator-Passwort gefragt. Der Ton setzt etwa eine Sekunde aus, während das Audiosystem neu startet.",
         "uninstall_btn": "Deinstallieren",
         "cancel": "Abbrechen",
         "uninstall_failed": "Deinstallation fehlgeschlagen",
@@ -115,6 +161,16 @@ private let strings: [String: [String: String]] = [
         "receiver_missing": "In dieser Kopie von Remote Visio fehlt der Empfänger. Installieren Sie die App neu.",
         "exited": "remotevisio-receiver wurde unerwartet beendet (Status {n}). Siehe ~/Library/Logs/RemoteVisio.log.",
         "start_failed": "remotevisio-receiver konnte nicht gestartet werden: {err}",
+        "camera_toggle": "Kamera weiterleiten",
+        "camera_active": "Kamera: aktiv",
+        "camera_needs_approval": "Kamera: in den Systemeinstellungen erlauben",
+        "camera_missing": "Kamera: in diesem Build nicht enthalten",
+        "camera_failed": "Kamera: fehlgeschlagen ({err})",
+        "camera_policy": "von der Verwaltungsrichtlinie dieses Macs blockiert; wer ihn verwaltet, muss die Erweiterung erlauben",
+        "camera_reboot": "Kamera: aktiv nach dem Neustart des Macs",
+        "camera_open_settings": "Systemeinstellungen öffnen…",
+        "camera_not_installed": "Kamera: verfügbar, sobald die App in /Applications liegt",
+        "camera_deactivate_failed": "Die virtuelle Kamera konnte nicht entfernt werden ({err}). Wenn die Systemeinstellungen die Kameraerweiterung von Remote Visio nach der Deinstallation noch anzeigen, starten Sie den Mac neu.",
     ],
     "it": [
         "running": "Ricevitore Remote Visio: in esecuzione",
@@ -126,7 +182,7 @@ private let strings: [String: [String: String]] = [
         "quit": "Esci da Remote Visio",
         "mute": "Silenzia gli altoparlanti di questo Mac",
         "uninstall_q": "Disinstallare Remote Visio?",
-        "uninstall_info": "Verranno rimossi il dispositivo audio Remote Visio, l'app e il suo elemento di login. Ti verrà chiesta la password di amministratore. L'audio si interrompe per circa un secondo mentre il sistema audio si riavvia.",
+        "uninstall_info": "Verranno rimossi il dispositivo audio Remote Visio, la fotocamera virtuale, l'app e il suo elemento di login. Ti verrà chiesta la password di amministratore. L'audio si interrompe per circa un secondo mentre il sistema audio si riavvia.",
         "uninstall_btn": "Disinstalla",
         "cancel": "Annulla",
         "uninstall_failed": "Disinstallazione non riuscita",
@@ -135,6 +191,16 @@ private let strings: [String: [String: String]] = [
         "receiver_missing": "In questa copia di Remote Visio manca il ricevitore. Reinstalla l'app.",
         "exited": "remotevisio-receiver si è chiuso in modo imprevisto (stato {n}). Vedi ~/Library/Logs/RemoteVisio.log.",
         "start_failed": "Impossibile avviare remotevisio-receiver: {err}",
+        "camera_toggle": "Inoltra la fotocamera",
+        "camera_active": "Fotocamera: attiva",
+        "camera_needs_approval": "Fotocamera: da approvare in Impostazioni di Sistema",
+        "camera_missing": "Fotocamera: non inclusa in questa build",
+        "camera_failed": "Fotocamera: errore ({err})",
+        "camera_policy": "bloccata dai criteri di gestione di questo Mac; chi lo amministra deve consentire l'estensione",
+        "camera_reboot": "Fotocamera: attiva dopo il riavvio del Mac",
+        "camera_open_settings": "Apri Impostazioni di Sistema…",
+        "camera_not_installed": "Fotocamera: disponibile quando l'app è in /Applications",
+        "camera_deactivate_failed": "Non è stato possibile rimuovere la fotocamera virtuale ({err}). Se dopo la disinstallazione Impostazioni di Sistema elenca ancora l'estensione fotocamera di Remote Visio, riavvia il Mac.",
     ],
     "hi": [
         "running": "Remote Visio रिसीवर: चालू है",
@@ -146,7 +212,7 @@ private let strings: [String: [String: String]] = [
         "quit": "Remote Visio बंद करें",
         "mute": "इस Mac के स्पीकर म्यूट करें",
         "uninstall_q": "Remote Visio हटाएँ?",
-        "uninstall_info": "इससे Remote Visio ऑडियो डिवाइस, यह ऐप और इसका लॉगिन आइटम हट जाएँगे। आपसे व्यवस्थापक पासवर्ड माँगा जाएगा। ऑडियो सिस्टम के रीस्टार्ट होने के दौरान आवाज़ लगभग एक सेकंड के लिए रुकेगी।",
+        "uninstall_info": "इससे Remote Visio ऑडियो डिवाइस, वर्चुअल कैमरा, यह ऐप और इसका लॉगिन आइटम हट जाएँगे। आपसे व्यवस्थापक पासवर्ड माँगा जाएगा। ऑडियो सिस्टम के रीस्टार्ट होने के दौरान आवाज़ लगभग एक सेकंड के लिए रुकेगी।",
         "uninstall_btn": "हटाएँ",
         "cancel": "रद्द करें",
         "uninstall_failed": "हटाना विफल रहा",
@@ -155,6 +221,16 @@ private let strings: [String: [String: String]] = [
         "receiver_missing": "Remote Visio की इस कॉपी में रिसीवर नहीं है। ऐप को दोबारा इंस्टॉल करें।",
         "exited": "remotevisio-receiver अप्रत्याशित रूप से बंद हो गया (स्थिति {n})। ~/Library/Logs/RemoteVisio.log देखें।",
         "start_failed": "remotevisio-receiver शुरू नहीं हो सका: {err}",
+        "camera_toggle": "कैमरा रिले करें",
+        "camera_active": "कैमरा: चालू",
+        "camera_needs_approval": "कैमरा: System Settings में अनुमति चाहिए",
+        "camera_missing": "कैमरा: इस बिल्ड में शामिल नहीं",
+        "camera_failed": "कैमरा: विफल ({err})",
+        "camera_policy": "इस Mac की प्रबंधन नीति ने रोक दिया; इसके प्रबंधक को एक्सटेंशन की अनुमति देनी होगी",
+        "camera_reboot": "कैमरा: Mac रीस्टार्ट होने के बाद चालू",
+        "camera_open_settings": "System Settings खोलें…",
+        "camera_not_installed": "कैमरा: ऐप /Applications में होने पर उपलब्ध",
+        "camera_deactivate_failed": "वर्चुअल कैमरा हटाया नहीं जा सका ({err})। अगर हटाने के बाद भी System Settings में Remote Visio का कैमरा एक्सटेंशन दिखे, तो Mac रीस्टार्ट करें।",
     ],
 ]
 
@@ -183,10 +259,114 @@ private let logPath = NSHomeDirectory() + "/Library/Logs/RemoteVisio.log"
 // endpoints keep matching what the receiver listens on.
 private let receiverPort = 7420
 
+// The virtual camera: a Core Media I/O system extension that
+// macos/assemble-app.sh bundles into Developer ID builds that carry the
+// provisioning profile (macos/README.md, "Virtual camera"). Its bundle
+// identifier is fixed; so is where a system extension has to live.
+private let cameraExtensionID = "com.remotevisio.app.camera"
+private let cameraExtensionBundled = FileManager.default.fileExists(
+    atPath: Bundle.main.bundlePath + "/Contents/Library/SystemExtensions/\(cameraExtensionID).systemextension")
+// Where macOS lets the user approve the extension: General > Login Items &
+// Extensions > Camera Extensions on macOS 15 and later, Privacy & Security
+// before that.
+private let cameraSettingsURL: String = {
+    if #available(macOS 15.0, *) { return "x-apple.systempreferences:com.apple.LoginItems-Settings.extension" }
+    return "x-apple.systempreferences:com.apple.preference.security"
+}()
+
+// One activation or deactivation request for the camera extension. macOS
+// answers through the delegate on the main queue: needs approval (the user
+// has to allow it in System Settings; the final answer follows once they
+// do), completed, will complete after a reboot, or failed. The manager
+// holds the delegate weakly, so the caller keeps this object until then.
+final class CameraExtensionRequest: NSObject, OSSystemExtensionRequestDelegate {
+    enum Outcome {
+        case completed, willCompleteAfterReboot, needsApproval
+        case failed(Error)
+    }
+    private let report: (Outcome) -> Void
+
+    private init(report: @escaping (Outcome) -> Void) {
+        self.report = report
+    }
+
+    static func activate(report: @escaping (Outcome) -> Void) -> CameraExtensionRequest {
+        let delegate = CameraExtensionRequest(report: report)
+        let request = OSSystemExtensionRequest.activationRequest(forExtensionWithIdentifier: cameraExtensionID, queue: .main)
+        request.delegate = delegate
+        OSSystemExtensionManager.shared.submitRequest(request)
+        return delegate
+    }
+
+    // Asks for an administrator's authorization.
+    static func deactivate(report: @escaping (Outcome) -> Void) -> CameraExtensionRequest {
+        let delegate = CameraExtensionRequest(report: report)
+        let request = OSSystemExtensionRequest.deactivationRequest(forExtensionWithIdentifier: cameraExtensionID, queue: .main)
+        request.delegate = delegate
+        OSSystemExtensionManager.shared.submitRequest(request)
+        return delegate
+    }
+
+    // A new app version brings a new extension version (the Makefile stamps
+    // the app's version and build number into it; macOS asks only when one
+    // of them differs): always replace what is installed.
+    func request(_ request: OSSystemExtensionRequest, actionForReplacingExtension existing: OSSystemExtensionProperties,
+                 withExtension ext: OSSystemExtensionProperties) -> OSSystemExtensionRequest.ReplacementAction {
+        return .replace
+    }
+
+    func requestNeedsUserApproval(_ request: OSSystemExtensionRequest) {
+        report(.needsApproval)
+    }
+
+    func request(_ request: OSSystemExtensionRequest, didFinishWithResult result: OSSystemExtensionRequest.Result) {
+        report(result == .willCompleteAfterReboot ? .willCompleteAfterReboot : .completed)
+    }
+
+    func request(_ request: OSSystemExtensionRequest, didFailWithError error: Error) {
+        report(.failed(error))
+    }
+
+    // What went wrong, for the menu. macOS's own text for a policy denial
+    // ("OSSystemExtensionErrorDomain error 10") says nothing a user can act
+    // on; a managed Mac only activates the extensions its administrator
+    // lists (sysextd logs "not in the list of allowed extensions").
+    static func describe(_ error: Error) -> String {
+        if let e = error as? OSSystemExtensionError, e.code == .forbiddenBySystemPolicy {
+            return L("camera_policy")
+        }
+        return error.localizedDescription
+    }
+
+    // Turn the main run loop until `done` or `timeout` seconds have passed;
+    // the delegate is called on the main queue, so a semaphore would block
+    // the very queue that delivers the answer.
+    static func wait(timeout: TimeInterval, until done: () -> Bool) -> Bool {
+        let deadline = Date(timeIntervalSinceNow: timeout)
+        while !done() && Date() < deadline {
+            RunLoop.main.run(mode: .default, before: Date(timeIntervalSinceNow: 0.25))
+        }
+        return done()
+    }
+}
+
+// What the menu says about the camera extension.
+private enum CameraState {
+    case missing        // not bundled in this build: the menu shows no camera items
+    case notInstalled   // bundled, but the app is not in /Applications, where macOS wants it
+    case requesting     // activation submitted, no answer yet
+    case needsApproval
+    case active
+    case reboot         // active after the Mac restarts
+    case failed(String)
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var receiver: Process?
     private var signalSources: [DispatchSourceSignal] = []
+    private var cameraState: CameraState = cameraExtensionBundled ? .requesting : .missing
+    private var cameraRequest: CameraExtensionRequest?
 
     func applicationDidFinishLaunching(_ note: Notification) {
         // A plain SIGTERM/SIGINT would kill this process without running
@@ -204,6 +384,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             fail(L("receiver_missing"))
             return
         }
+
+        // Before the receiver starts: macOS registers (or replaces) the
+        // extension while the rest comes up, and the receiver finds it.
+        activateCameraExtensionIfInstalled()
 
         // Anchor near the right edge so the notch can't swallow the icon: a
         // status item without a remembered position appears leftmost, where
@@ -262,6 +446,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launchReceiver(fresh: false)
     }
 
+    // Same for -camera.
+    @objc private func toggleCameraRelay() {
+        let off = !UserDefaults.standard.bool(forKey: cameraOffKey)
+        UserDefaults.standard.set(off, forKey: cameraOffKey)
+        stopReceiver()
+        launchReceiver(fresh: false)
+    }
+
+    // Activate the camera extension bundled in this app. macOS only takes
+    // one from an app in /Applications (same rule as the login item), and
+    // asks the user to approve it the first time; a newer version replaces
+    // the installed one. The menu shows how it went.
+    private func activateCameraExtensionIfInstalled() {
+        guard cameraExtensionBundled else { return }
+        guard Bundle.main.bundlePath == "/Applications/RemoteVisio.app" else {
+            cameraState = .notInstalled
+            return
+        }
+        cameraState = .requesting
+        cameraRequest = CameraExtensionRequest.activate { [weak self] outcome in
+            guard let self = self else { return }
+            switch outcome {
+            case .completed: self.cameraState = .active
+            case .willCompleteAfterReboot: self.cameraState = .reboot
+            case .needsApproval: self.cameraState = .needsApproval
+            case .failed(let error): self.cameraState = .failed(CameraExtensionRequest.describe(error))
+            }
+        }
+    }
+
+    // Deactivate the extension and wait for macOS (it asks for an
+    // administrator's authorization), up to `timeout` seconds. Returns nil
+    // when it is gone or goes at the next reboot, otherwise what went wrong.
+    private func deactivateCameraExtension(timeout: TimeInterval) -> String? {
+        guard cameraExtensionBundled else { return nil }
+        var outcome: CameraExtensionRequest.Outcome?
+        cameraRequest = CameraExtensionRequest.deactivate { outcome = $0 }
+        _ = CameraExtensionRequest.wait(timeout: timeout) { outcome != nil }
+        switch outcome {
+        case .completed?, .willCompleteAfterReboot?: return nil
+        case .needsApproval?: return L("camera_needs_approval")
+        case .failed(let error)?: return CameraExtensionRequest.describe(error)
+        case nil: return "timeout"
+        }
+    }
+
+    @objc private func openCameraSettings() {
+        if let url = URL(string: cameraSettingsURL) {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     @objc private func toggleLoginItem() {
         guard #available(macOS 13.0, *) else { return }
         let service = SMAppService.mainApp
@@ -286,7 +522,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func launchReceiver(fresh: Bool) {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: receiverPath)
-        proc.arguments = UserDefaults.standard.bool(forKey: speakerMuteKey) ? ["-speaker-mute"] : []
+        var arguments: [String] = []
+        if UserDefaults.standard.bool(forKey: speakerMuteKey) { arguments.append("-speaker-mute") }
+        if UserDefaults.standard.bool(forKey: cameraOffKey) { arguments.append("-camera=false") }
+        proc.arguments = arguments
 
         // Finder launches apps with a minimal PATH that excludes user bin dirs;
         // the receiver looks up the tailscale CLI on PATH.
@@ -387,9 +626,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // Menu-driven uninstall: confirm, drop the login item, stop the receiver,
-    // then run the bundled uninstall script as root through the standard
-    // macOS password dialog. It removes the audio device driver, restarts
+    // Menu-driven uninstall: confirm, drop the login item, deactivate the
+    // camera extension (macOS asks for the admin password; the app has to
+    // still exist for that, so it comes first), stop the receiver, then run
+    // the bundled uninstall script as root through the standard macOS
+    // password dialog. It removes the audio device driver, restarts
     // coreaudiod, deletes the app and forgets the package receipts.
     @objc private func uninstall() {
         let confirm = NSAlert()
@@ -409,6 +650,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if #available(macOS 13.0, *) {
             try? SMAppService.mainApp.unregister()
         }
+        // A failure here does not stop the uninstall; the user hears about
+        // it at the end, with what to do (a reboot clears it).
+        let cameraProblem = deactivateCameraExtension(timeout: 60)
         stopReceiver()
 
         // Paths come from the bundle; quote them for the shell all the same.
@@ -416,12 +660,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let source = "do shell script \"\(quoted) --from-app\" with administrator privileges"
         var error: NSDictionary?
         if NSAppleScript(source: source)?.executeAndReturnError(&error) != nil {
+            if let problem = cameraProblem {
+                let note = NSAlert()
+                note.alertStyle = .warning
+                note.messageText = "Remote Visio"
+                note.informativeText = L("camera_deactivate_failed", ["err": problem])
+                note.runModal()
+            }
             NSApp.terminate(nil)
             return
         }
         // Cancelled at the password dialog (error -128) or failed: put things
-        // back the way they were.
+        // back the way they were, the camera extension included.
         let code = (error?[NSAppleScript.errorNumber] as? Int) ?? 0
+        activateCameraExtensionIfInstalled()
         launchReceiver(fresh: false)
         if code != -128 {
             let message = (error?[NSAppleScript.errorMessage] as? String) ?? "unknown error"
@@ -447,6 +699,7 @@ extension AppDelegate: NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         menu.addItem(NSMenuItem(title: L("running"), action: nil, keyEquivalent: ""))
+        addCameraStatus(to: menu)
         menu.addItem(.separator())
         let ips = localIPv4Addresses()
         if ips.isEmpty {
@@ -467,6 +720,12 @@ extension AppDelegate: NSMenuDelegate {
         mute.target = self
         mute.state = UserDefaults.standard.bool(forKey: speakerMuteKey) ? .on : .off
         menu.addItem(mute)
+        if cameraExtensionBundled {
+            let camera = NSMenuItem(title: L("camera_toggle"), action: #selector(toggleCameraRelay), keyEquivalent: "")
+            camera.target = self
+            camera.state = UserDefaults.standard.bool(forKey: cameraOffKey) ? .off : .on
+            menu.addItem(camera)
+        }
         if #available(macOS 13.0, *) {
             let login = NSMenuItem(title: L("login"), action: #selector(toggleLoginItem), keyEquivalent: "")
             login.target = self
@@ -481,6 +740,31 @@ extension AppDelegate: NSMenuDelegate {
         quitItem.target = self
         menu.addItem(quitItem)
     }
+
+    // The camera line under the receiver line: nothing when this build has no
+    // extension, nothing yet while macOS is still answering, otherwise the
+    // state. Waiting for approval, the line (and an entry under it) opens
+    // System Settings where the user allows it.
+    private func addCameraStatus(to menu: NSMenu) {
+        let title: String
+        switch cameraState {
+        case .missing, .requesting: return
+        case .notInstalled: title = L("camera_not_installed")
+        case .active: title = L("camera_active")
+        case .reboot: title = L("camera_reboot")
+        case .failed(let err): title = L("camera_failed", ["err": err])
+        case .needsApproval:
+            let line = NSMenuItem(title: L("camera_needs_approval"), action: #selector(openCameraSettings), keyEquivalent: "")
+            line.target = self
+            menu.addItem(line)
+            let open = NSMenuItem(title: L("camera_open_settings"), action: #selector(openCameraSettings), keyEquivalent: "")
+            open.target = self
+            open.indentationLevel = 1
+            menu.addItem(open)
+            return
+        }
+        menu.addItem(NSMenuItem(title: title, action: nil, keyEquivalent: ""))
+    }
 }
 
 // The uninstaller calls this so the login item does not linger after the
@@ -488,6 +772,32 @@ extension AppDelegate: NSMenuDelegate {
 if CommandLine.arguments.contains("--unregister-login-item") {
     if #available(macOS 13.0, *) {
         try? SMAppService.mainApp.unregister()
+    }
+    exit(0)
+}
+
+// The uninstaller's Terminal path calls this, as the user at the console,
+// before it deletes the app: deactivate the camera extension (macOS asks
+// for an administrator's authorization) and exit once macOS has answered.
+// Best effort: the uninstall goes on either way, and a reboot clears an
+// extension whose app is gone. Status 0 when it is gone or goes at the next
+// reboot, 1 otherwise, with the reason on stderr.
+if CommandLine.arguments.contains("--deactivate-camera") {
+    guard cameraExtensionBundled else { exit(0) }
+    var outcome: CameraExtensionRequest.Outcome?
+    let request = CameraExtensionRequest.deactivate { outcome = $0 }
+    _ = CameraExtensionRequest.wait(timeout: 60) { outcome != nil }
+    withExtendedLifetime(request) {}
+    let problem: String?
+    switch outcome {
+    case .completed?, .willCompleteAfterReboot?: problem = nil
+    case .needsApproval?: problem = "needs approval in System Settings"
+    case .failed(let error)?: problem = error.localizedDescription
+    case nil: problem = "no answer from macOS within 60 s"
+    }
+    if let problem = problem {
+        FileHandle.standardError.write("could not deactivate \(cameraExtensionID): \(problem)\n".data(using: .utf8)!)
+        exit(1)
     }
     exit(0)
 }

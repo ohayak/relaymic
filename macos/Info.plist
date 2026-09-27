@@ -30,5 +30,9 @@
     <string>Remote Visio receives audio from other devices on your local network.</string>
     <key>NSAudioCaptureUsageDescription</key>
     <string>Remote Visio sends this Mac's system audio back to the device you are speaking from.</string>
+    <key>NSSystemExtensionUsageDescription</key>
+    <string>Remote Visio adds a virtual camera that shows the remote device's camera in your video apps.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Remote Visio feeds the remote device's camera into its virtual camera; it does not use this Mac's camera.</string>
 </dict>
 </plist>

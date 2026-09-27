@@ -5,9 +5,11 @@
 #   macos/setup-signing.sh request [--new] [NAME] [EMAIL]
 #                                           → create the private keys and the certificate
 #                                             requests to upload to Apple
-#   macos/setup-signing.sh install [CER...] → put Apple's certificates and the keys in
-#                                             the login keychain (default: the .cer files
-#                                             in ~/Downloads, or the copies kept with the keys)
+#   macos/setup-signing.sh install [FILE...] → put Apple's certificates and the keys in
+#                                             the login keychain, and a provisioning
+#                                             profile next to the keys (default: the .cer
+#                                             and .provisionprofile files in ~/Downloads,
+#                                             or the certificate copies kept with the keys)
 #
 # A package that other Macs open without warnings is signed with two Apple
 # "Developer ID" certificates (Application for the code, Installer for the
@@ -26,6 +28,12 @@
 #      and lets codesign and productbuild use the keys without a dialog.
 #   4. Store the notarization password once (the status output shows the
 #      command when it is missing); `make pkg` then does the rest.
+#   5. Optional, for the virtual camera: a Developer ID provisioning profile
+#      for the App ID com.remotevisio.app with the "System Extension"
+#      capability, made on the same web site (the status output spells the
+#      clicks out) and installed with `install` like a certificate. The build
+#      bundles the camera extension only when it is in place; without it the
+#      app is built without a camera (macos/README.md, "Virtual camera").
 #
 # Replacing a certificate (expired, revoked): `request` leaves a kind whose
 # certificate is still valid alone and makes a fresh key for a kind whose
@@ -42,8 +50,10 @@
 #
 # Overrides: REMOTEVISIO_TEAM_ID, REMOTEVISIO_NOTARY_PROFILE (as for `make pkg`),
 # REMOTEVISIO_SIGN_NAME / REMOTEVISIO_SIGN_EMAIL (identify the requests),
-# REMOTEVISIO_SIGNING_DIR (where the keys live), REMOTEVISIO_KEYCHAIN (import
-# into, and look in, this keychain instead of the login keychain; for tests).
+# REMOTEVISIO_SIGNING_DIR (where the keys live), REMOTEVISIO_PROFILE (where the
+# provisioning profile goes and where the build looks for it; default: next to
+# the keys), REMOTEVISIO_KEYCHAIN (import into, and look in, this keychain
+# instead of the login keychain; for tests).
 set -euo pipefail
 CALLER=$PWD
 cd "$(dirname "$0")/.."
@@ -53,6 +63,13 @@ source macos/signing.sh
 DIR="${REMOTEVISIO_SIGNING_DIR:-$HOME/.config/remotevisio/signing}"
 [[ "$DIR" == /* ]] || DIR="$CALLER/$DIR"
 PORTAL="https://developer.apple.com/account/resources/certificates/add"
+PORTAL_ACCOUNT="https://developer.apple.com/account"
+# The provisioning profile for the camera extension (signing.sh sets the
+# default from the signing directory; REMOTEVISIO_PROFILE overrides it), and
+# the App ID it has to be for.
+PROFILE=$REMOTEVISIO_PROFILE
+[[ "$PROFILE" == /* ]] || PROFILE="$CALLER/$PROFILE"
+APP_ID=$PROFILE_APP_ID
 # Apple's "Developer ID - G2" intermediate, which issues every Developer ID
 # certificate since 2022 and which macOS does not ship (it fetches it on
 # demand when online). Fingerprint from the download, valid until 2031.
@@ -145,6 +162,75 @@ has_identity() {
     grep -qx "$(cert_sha1 "$1")" <<<"$ids"
 }
 
+# is_profile FILE: a provisioning profile, by name or, failing that, by
+# content (a CMS envelope that security can open and that is no certificate).
+is_profile() {
+    [[ "$1" == *.provisionprofile ]] && return 0
+    [[ -z "$(cert_cn "$1")" ]] && security cms -D -i "$1" >/dev/null 2>&1
+}
+
+# profile_read and profile_problem (what a profile must be for the camera
+# extension) live in macos/signing.sh: the build checks the profile the same
+# way before embedding it.
+
+# profile_hint: how to get the provisioning profile, for messages.
+profile_hint() {
+    echo "For the virtual camera the app needs a Developer ID provisioning profile, missing at"
+    echo "  $PROFILE. Sign in at $PORTAL_ACCOUNT"
+    echo "  (as the account holder of team $REMOTEVISIO_TEAM_ID):"
+    echo "  1. Identifiers > $APP_ID > Edit > enable \"System Extension\" > Save"
+    echo "     (no such identifier yet: + > App IDs > App > Bundle ID \"$APP_ID\", explicit)"
+    echo "  2. Profiles > + > \"Developer ID\" (under Distribution) > Continue > App ID $APP_ID"
+    echo "     > pick the Developer ID Application certificate > name it, e.g. \"Remote Visio\" > Generate > Download"
+    echo "  3. make signing-install CER=~/Downloads/<name>.provisionprofile"
+    echo "  Until then the build leaves the camera extension out and says so; audio is unaffected."
+}
+
+# profile_install FILE: check the profile and put it where the build looks.
+profile_install() {
+    local file=$1 problem
+    profile_read "$file" || die "$file is not a provisioning profile"
+    problem=$(profile_problem)
+    [[ -z "$problem" ]] || die "$file is $problem. Generate a profile as make signing describes."
+    if [[ "$PROFILE_ALL" != true ]]; then
+        echo "!!  $file does not look like a Developer ID profile (it does not provision every Mac);" >&2
+        echo "    choose \"Developer ID\" under Distribution when generating it. Installing it anyway." >&2
+    fi
+    pick "$APP_KIND"
+    if [[ -z "$PICK_HASH" ]]; then
+        echo "    (no Developer ID Application certificate in the keychain yet, so whether the profile"
+        echo "    carries it cannot be checked; run install again once the certificate is in)"
+    elif ! grep -qx "$PICK_HASH" <<<"$PROFILE_CERTS"; then
+        echo "!!  the profile does not carry the Developer ID Application certificate in the keychain" >&2
+        echo "    ($PICK_NAME): an app signed with that certificate and provisioned by this profile" >&2
+        echo "    is killed at launch. Generate the profile again and pick that certificate. Installing" >&2
+        echo "    it anyway." >&2
+    fi
+    umask 022
+    mkdir -p "$(dirname "$PROFILE")"
+    [[ "$file" -ef "$PROFILE" ]] || cp -f "$file" "$PROFILE"
+    chmod 644 "$PROFILE"
+    echo "==> provisioning profile \"$PROFILE_NAME\" (valid until ${PROFILE_EXPIRES:-?}) installed as $PROFILE"
+    echo "    the next make app / make pkg bundles the camera extension"
+}
+
+# profile_status: the status line for the profile at $PROFILE; PROFILE_OK
+# says whether the build will use it.
+profile_status() {
+    local problem
+    PROFILE_OK=0
+    if [[ ! -f "$PROFILE" ]]; then
+        echo "missing"
+    elif ! profile_read "$PROFILE"; then
+        echo "at $PROFILE but not a provisioning profile"
+    elif pick "$APP_KIND" 2>/dev/null; problem=$(profile_problem "$PICK_HASH"); [[ -n "$problem" ]]; then
+        echo "at $PROFILE but $problem"
+    else
+        PROFILE_OK=1
+        echo "ok  $PROFILE (valid until ${PROFILE_EXPIRES:-?})"
+    fi
+}
+
 # describe: the status line for the certificate the last pick looked for.
 describe() {
     if [[ -n "$PICK_HASH" ]]; then
@@ -157,9 +243,10 @@ describe() {
 }
 
 status() {
-    local app_state pkg_state app_hash pkg_hash pkg_name pkg_count key_state notary_state keys=0
+    local app_state pkg_state app_hash pkg_hash pkg_name pkg_count key_state notary_state profile_state keys=0
     pick "$APP_KIND"; app_hash=$PICK_HASH; app_state=$(describe)
     pick "$PKG_KIND"; pkg_hash=$PICK_HASH; pkg_name=$PICK_NAME; pkg_count=$PICK_COUNT; pkg_state=$(describe)
+    profile_state=$(profile_status); PROFILE_OK=0; [[ "$profile_state" == ok* ]] && PROFILE_OK=1
     [[ -f "$(key_of "$APP_KIND")" ]] && keys=$((keys + 1))
     [[ -f "$(key_of "$PKG_KIND")" ]] && keys=$((keys + 1))
     case $keys in
@@ -178,16 +265,26 @@ status() {
     echo "  Installer certificate     $pkg_state"
     echo "  Private keys + requests   $key_state"
     echo "  Notarization credentials  $notary_state"
+    echo "  Provisioning profile      $profile_state"
     echo
     if [[ "$pkg_count" -gt 1 ]]; then
         echo "Next: $(pkg_sign_clash "$pkg_count" "$pkg_name")"
-    elif [[ -n "$app_hash" && -n "$pkg_hash" && "$NOTARY" == ok ]]; then
-        echo "Ready: make pkg builds a signed, notarized package."
-    elif [[ -n "$app_hash" && -n "$pkg_hash" && "$NOTARY" == unreachable ]]; then
-        echo "Next: connect to the network and run this again (notarizing needs it anyway)."
     elif [[ -n "$app_hash" && -n "$pkg_hash" ]]; then
-        echo "Next: the notarization credentials are missing."
-        notary_hint
+        # The certificates are fine; the profile is the optional last piece.
+        if [[ "$NOTARY" == ok && $PROFILE_OK -eq 1 ]]; then
+            echo "Ready: make pkg builds a signed, notarized package with the virtual camera."
+        elif [[ "$NOTARY" == ok ]]; then
+            echo "Ready: make pkg builds a signed, notarized package, without the virtual camera."
+        elif [[ "$NOTARY" == unreachable ]]; then
+            echo "Next: connect to the network and run this again (notarizing needs it anyway)."
+        else
+            echo "Next: the notarization credentials are missing."
+            notary_hint
+        fi
+        if [[ $PROFILE_OK -eq 0 ]]; then
+            echo
+            profile_hint
+        fi
     elif [[ "$app_state$pkg_state" == *"not trusted"* ]]; then
         echo "Next: Keychain Access (My Certificates) shows why macOS does not trust the certificate."
         echo "  An expired or revoked one is replaced by a new one made at $PORTAL"
@@ -338,23 +435,34 @@ allow_tools() {
     done
 }
 
+# install_certs [FILE...]: certificates (.cer) go in the keychain with their
+# keys, provisioning profiles (.provisionprofile) next to the keys. Without
+# arguments, whatever is in ~/Downloads. Certificates first: the profile
+# check wants to see the certificate it should carry.
 install_certs() {
-    local files=() f i kind key kinds=() names=() key_pub cer_pub app_hash pkg_hash dst tmp ca ca_ok=0
+    local files=() profiles=() f i kind key kinds=() names=() key_pub cer_pub app_hash pkg_hash dst tmp ca ca_ok=0
     for f in "$@"; do
+        f=${f/#\~\//$HOME/} # "~/x" arrives literally from zsh, which does not expand ~ after CER=
         [[ "$f" == /* ]] || f="$CALLER/$f"
-        files+=("$f")
+        [[ -f "$f" ]] || die "no file at $f"
+        if is_profile "$f"; then profiles+=("$f"); else files+=("$f"); fi
     done
-    if [[ ${#files[@]} -eq 0 ]]; then
+    if [[ $# -eq 0 ]]; then
         # Safari/Chrome add " (2)" etc. to repeated downloads; take the newest.
         for kind in "${KINDS[@]}"; do
             f=$(newest "$HOME"/Downloads/developerID_"$(tag "$kind")"*.cer "$(cer_of "$kind")")
             [[ -n "$f" ]] && files+=("$f")
         done
-        [[ ${#files[@]} -gt 0 ]] || die "no developerID_application.cer / developerID_installer.cer in ~/Downloads or $DIR; pass the file: make signing-install CER=<file>"
+        f=$(newest "$HOME"/Downloads/*.provisionprofile)
+        [[ -n "$f" ]] && profiles+=("$f")
+        [[ ${#files[@]} -gt 0 || ${#profiles[@]} -gt 0 ]] \
+            || die "no developerID_application.cer / developerID_installer.cer or .provisionprofile in ~/Downloads, and no certificates in $DIR; pass the file: make signing-install CER=<file>"
     fi
 
     [[ -d "$DIR" ]] && chmod 700 "$DIR"
-    for f in "${files[@]}"; do
+    # ${files[@]+"${files[@]}"}: an empty array is an "unbound variable" under
+    # set -u in the bash 3.2 that macOS ships; this idiom expands to nothing.
+    for f in ${files[@]+"${files[@]}"}; do
         kind=$(cert_kind "$f")
         key=$(key_of "$kind")
         [[ -f "$key" ]] || die "no private key at $key for $f: run make signing-request first (or copy the signing directory from the Mac that did)"
@@ -368,7 +476,7 @@ install_certs() {
     done
 
     umask 077
-    for i in "${!files[@]}"; do
+    for i in ${files[@]+"${!files[@]}"}; do
         if has_identity "${files[$i]}" "${kinds[$i]}"; then
             echo "==> ${names[$i]} and its key are in $KEYCHAIN already"
         else
@@ -380,24 +488,26 @@ install_certs() {
     # The chain has to reach Apple's root for the identities to count as
     # valid. macOS fetches the intermediate itself when online; keep a copy
     # in the keychain so signing also works offline and behind proxies.
-    tmp=$(mktemp -d "${TMPDIR:-/tmp}/remotevisio-ca.XXXXXX")
-    ca="$tmp/DeveloperIDG2CA.cer"
-    if curl -fsSL "$CA_URL" -o "$ca" 2>/dev/null; then
-        if [[ "$(cert_x509 "$ca" -noout -fingerprint -sha256 | sed 's/.*=//')" != "$CA_SHA256" ]]; then
-            rm -rf "$tmp"
-            die "$CA_URL did not return Apple's Developer ID G2 certificate (fingerprint mismatch)"
+    if [[ ${#files[@]} -gt 0 ]]; then
+        tmp=$(mktemp -d "${TMPDIR:-/tmp}/remotevisio-ca.XXXXXX")
+        ca="$tmp/DeveloperIDG2CA.cer"
+        if curl -fsSL "$CA_URL" -o "$ca" 2>/dev/null; then
+            if [[ "$(cert_x509 "$ca" -noout -fingerprint -sha256 | sed 's/.*=//')" != "$CA_SHA256" ]]; then
+                rm -rf "$tmp"
+                die "$CA_URL did not return Apple's Developer ID G2 certificate (fingerprint mismatch)"
+            fi
+            if ! in_keychain "$ca"; then
+                echo "==> adding Apple's Developer ID intermediate certificate"
+                security import "$ca" -k "$KEYCHAIN" >/dev/null
+            fi
+            ca_ok=1
+        else
+            echo "    (could not download $CA_URL; macOS fetches it itself when online)"
         fi
-        if ! in_keychain "$ca"; then
-            echo "==> adding Apple's Developer ID intermediate certificate"
-            security import "$ca" -k "$KEYCHAIN" >/dev/null
-        fi
-        ca_ok=1
-    else
-        echo "    (could not download $CA_URL; macOS fetches it itself when online)"
+        rm -rf "$tmp"
     fi
-    rm -rf "$tmp"
 
-    for i in "${!files[@]}"; do
+    for i in ${files[@]+"${!files[@]}"}; do
         kind=${kinds[$i]}
         # Keep a copy with the key: the two together restore the setup anywhere.
         dst=$(cer_of "$kind")
@@ -411,7 +521,7 @@ install_certs() {
     pick "$APP_KIND"; app_hash=$PICK_HASH
     pick "$PKG_KIND"; pkg_hash=$PICK_HASH
     local kind_done
-    for kind in "${kinds[@]}"; do
+    for kind in ${kinds[@]+"${kinds[@]}"}; do
         kind_done=$pkg_hash
         [[ "$kind" == "$APP_KIND" ]] && kind_done=$app_hash
         if [[ -z "$kind_done" ]]; then
@@ -426,7 +536,10 @@ install_certs() {
             exit 1
         fi
     done
-    allow_tools "${names[@]}"
+    for f in ${profiles[@]+"${profiles[@]}"}; do
+        profile_install "$f"
+    done
+    [[ ${#names[@]} -eq 0 ]] || allow_tools "${names[@]}"
     echo
     status
 }
@@ -435,5 +548,5 @@ case "${1:-status}" in
     status) status ;;
     request) shift; request "$@" ;;
     install) shift; install_certs "$@" ;;
-    *) echo "usage: $0 [status | request [--new] [NAME] [EMAIL] | install [CER...]]" >&2; exit 2 ;;
+    *) echo "usage: $0 [status | request [--new] [NAME] [EMAIL] | install [CER|PROFILE...]]" >&2; exit 2 ;;
 esac

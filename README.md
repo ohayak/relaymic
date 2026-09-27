@@ -18,13 +18,20 @@ Zoom / dictation / Audacity / anything — reads it as an ordinary microphone
 
 The Mac's own sound (the meeting, alerts, a video)
   ↑  Core Audio tap → Opus → the same encrypted connection → your browser's speakers
+
+Your device's camera (optional)
+  ↓  H.264 over the same connection → the Remote Visio Camera virtual camera
+Zoom / FaceTime / anything — reads it as an ordinary webcam
 ```
 
 It does **not** replace your remote desktop tool. It runs alongside TeamViewer, AnyDesk, Parsec,
 RustDesk, Jump Desktop, ToDesk — those keep doing screen and input, unaware anything changed.
 It does carry the Mac's audio back to you, though, so you can switch sound off in the remote
 desktop tool and keep both directions on one low-latency connection (one-time
-"System Audio Recording" permission; `-speaker=false` turns it off).
+"System Audio Recording" permission; `-speaker=false` turns it off). Your camera can
+come along too: the app installs a virtual camera, **Remote Visio Camera**, that video apps
+on the Mac pick like a webcam (one-time approval in System Settings; `-camera=false`
+turns it off; only Developer ID builds carry it, see `macos/README.md`).
 
 ## Who can forward your microphone to a Mac
 
@@ -65,8 +72,12 @@ package installs the Remote Visio audio device driver to `/Library/Audio/Plug-In
 coreaudiod (sound pauses about a second), installs `RemoteVisio.app` to `/Applications` with the
 receiver and the Opus codec linked in statically, and starts the app; the app registers itself
 to start at login (there is a "Start at Login" toggle in its menu). Requires macOS 14.2 or later. macOS then asks
-for System Audio Recording and Microphone access for Remote Visio — allow both. Pick "Remote Visio" as
-the microphone in your apps; the sender URL is in the menu-bar icon's menu.
+for System Audio Recording and Microphone access for Remote Visio — allow both — and, when the
+package carries the virtual camera, to approve the Remote Visio camera extension (System Settings >
+General > Login Items & Extensions > Camera Extensions; a Mac managed by an organization may block
+it by policy, see the troubleshooting table in SETUP.md). Pick "Remote Visio" as
+the microphone in your apps, and "Remote Visio Camera" as the camera; the sender URL is in the
+menu-bar icon's menu.
 
 The package is for the architecture it is built on: built on an Apple Silicon Mac, it runs on
 Apple Silicon. An Intel Mac needs a package built on an Intel Mac, or the source install below.
@@ -81,7 +92,7 @@ once, then click Open Anyway in System Settings > Privacy & Security.
 To upgrade, run the new package: it quits the running app, replaces everything, restarts
 coreaudiod and relaunches the app. To remove everything, run
 **Uninstall Remote Visio…** in the menu-bar menu, or `/Applications/RemoteVisio.app/Contents/Resources/uninstall.sh` (asks for the admin password;
-removes the login item, the app, the driver and the package receipts).
+removes the login item, the camera extension, the app, the driver and the package receipts).
 
 ### Option 2: from source
 
@@ -128,6 +139,9 @@ ignores it either way; `brew uninstall --cask blackhole-2ch` removes it.
   by coreaudiod. It shows up as an input device (Zoom: Settings → Audio → Microphone → Remote Visio;
   dictation: System Settings → Sound → Input → Remote Visio) and deliberately cannot be chosen as the
   Mac's sound output, so installing it never hijacks the Mac's speakers
+- **The virtual camera is a system extension**, activated by the app with your approval and only
+  present in Developer ID builds (it needs a provisioning profile from Apple; `macos/README.md`
+  explains). Without it everything else works; the receiver just logs that the camera is unavailable
 
 But **the audio path itself has been in daily use** — three Macs, every day. The parameters below
 are what they are because something broke without them, and "optimizing" them is not advised:
@@ -167,8 +181,8 @@ cmd/receiver     Mac receiver: takes the stream, decodes, plays into the virtual
                  and serves the web sender
 driver/          Remote Visio virtual audio device (Core Audio HAL plug-in) and its in-process
                  test harness (make install-driver, make test-driver)
-macos/           menu-bar wrapper app (make install) and installer package
-                 (make pkg)
+macos/           menu-bar wrapper app (make install), the camera system extension
+                 (macos/camera, make camext) and the installer package (make pkg)
 cmd/sender       command-line sender
 cmd/sender-gui   Windows GUI sender (frozen — the web sender covers it)
 cmd/probe, selfcheck, stuncheck, turncheck   diagnostics

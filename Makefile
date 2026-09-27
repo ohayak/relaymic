@@ -9,7 +9,9 @@
 # pkg-config (the headers; the codec itself is built from source for the
 # minimum macOS, see `opus`). Signing is automatic once the Developer ID
 # certificates are in the keychain (macos/signing.sh); `make signing` shows
-# the state and how to set it up.
+# the state and how to set it up. The virtual camera (a system extension,
+# `camext`) goes into the app only with a Developer ID signature and the
+# provisioning profile below; without them the app is built as before.
 SHELL := /bin/bash
 .DELETE_ON_ERROR:
 .SUFFIXES:
@@ -41,6 +43,7 @@ $(shell mkdir -p bin; REMOTEVISIO_SIGN='$(REMOTEVISIO_SIGN)' REMOTEVISIO_SIGN_ID
 	mode=adhoc; [[ -z "$$SIGN_ID" ]] || mode=developer-id; \
 	info=$$(printf "%s := %s\n" \
 		VERSION "$$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" macos/Info.plist)" \
+		BUILD "$$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" macos/Info.plist)" \
 		MIN_MACOS "$$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" macos/Info.plist)" \
 		ARCH "$$(uname -m)" SIGN_ID "$$SIGN_ID" PKG_SIGN_ID "$$PKG_SIGN_ID" PKG_SIGN_COUNT "$$PKG_SIGN_COUNT" \
 		SIGN_MODE "$$mode release=$(REMOTEVISIO_RELEASE)"); \
@@ -55,6 +58,13 @@ export REMOTEVISIO_VERSION := $(VERSION)
 export REMOTEVISIO_MIN_MACOS := $(MIN_MACOS)
 export REMOTEVISIO_ARCH := $(ARCH)
 endif
+# The Developer ID provisioning profile that authorizes the app to install
+# its camera extension (macos/README.md, "Virtual camera"); `make signing`
+# says how to get it. macos/signing.sh has the same default; the scripts
+# take it from the environment.
+REMOTEVISIO_SIGNING_DIR ?= $(HOME)/.config/remotevisio/signing
+REMOTEVISIO_PROFILE ?= $(REMOTEVISIO_SIGNING_DIR)/RemoteVisio.provisionprofile
+export REMOTEVISIO_PROFILE
 
 # ---- products ---------------------------------------------------------------
 RECEIVER   := bin/remotevisio-receiver
@@ -68,6 +78,21 @@ APP        := bin/.build/RemoteVisio.app
 APP_BIN    := $(APP)/Contents/MacOS/RemoteVisio
 LOCAL_APP  := bin/RemoteVisio.app
 INSTALLED  := /Applications/RemoteVisio.app
+# The camera extension, compiled here and copied into the app by
+# macos/assemble-app.sh under its bundle identifier, which is also the name
+# of its executable, as macOS requires of system extensions.
+CAMEXT_ID  := com.remotevisio.app.camera
+CAMEXT     := bin/RemoteVisioCamera.systemextension
+CAMEXT_BIN := $(CAMEXT)/Contents/MacOS/$(CAMEXT_ID)
+# The app depends on the extension only when macos/assemble-app.sh will
+# bundle it: a Developer ID identity and the profile. An ad-hoc build, or a
+# checkout without the profile, builds the app without macos/camera/ at all.
+CAMERA_DEPS :=
+ifneq ($(SIGN_ID),)
+ifneq ($(wildcard $(REMOTEVISIO_PROFILE)),)
+CAMERA_DEPS := $(CAMEXT_BIN) macos/camera.entitlements macos/app-camera.entitlements $(REMOTEVISIO_PROFILE)
+endif
+endif
 
 NOTARIZE ?= 1
 export NOTARIZE
@@ -100,7 +125,7 @@ GO_SRC   := go.mod go.sum $(shell find cmd/receiver internal -type f \( -name '*
 ICON_SRC := $(wildcard icons/icon-[0-9]*.png)
 PKG_SRC  := macos/pkg/Distribution.xml $(wildcard macos/pkg/resources/* macos/pkg/resources/*/* macos/pkg/driver-scripts/* macos/pkg/app-scripts/*)
 
-.PHONY: all help app install receiver menubar driver opus icons pkg pkg-unsigned pkg-file \
+.PHONY: all help app install receiver menubar camext driver opus icons pkg pkg-unsigned pkg-file \
         test test-go test-driver check signing signing-request signing-install \
         install-driver uninstall-driver uninstall clean distclean
 
@@ -144,6 +169,25 @@ $(MENUBAR): macos/RemoteVisio.swift
 	swiftc -O -target $(ARCH)-apple-macos$(MIN_MACOS) -o $@ $<
 	@$(call check-minos,$@)
 
+# ---- camera extension -------------------------------------------------------
+# The virtual camera: a Core Media I/O system extension (macos/camera/) that
+# the receiver feeds the remote device's camera into. Its Info.plist takes
+# the app's version and build number (@VERSION@, @BUILD@: CFBundleShortVersionString
+# and CFBundleVersion of macos/Info.plist) and minimum macOS (@MINOS@). macOS
+# replaces an installed extension only when one of the two version fields
+# differs, so a release that changes the extension must bump one of them in
+# macos/Info.plist (the build number is enough). Signed inside the app by
+# macos/assemble-app.sh; never installed on its own.
+camext: $(CAMEXT_BIN) ## the virtual camera extension (bundled into the app only with Developer ID + profile)
+$(CAMEXT_BIN): macos/camera/main.swift macos/camera/Info.plist $(SIGNING_INFO)
+	@echo "==> compiling the camera extension $(CAMEXT_ID) $(VERSION) ($(BUILD))"
+	@rm -rf $(CAMEXT); mkdir -p $(dir $@)
+	@sed -e 's/@VERSION@/$(VERSION)/g' -e 's/@BUILD@/$(BUILD)/g' -e 's/@MINOS@/$(MIN_MACOS)/g' macos/camera/Info.plist > $(CAMEXT)/Contents/Info.plist
+	@plutil -lint $(CAMEXT)/Contents/Info.plist >/dev/null
+	swiftc -O -target $(ARCH)-apple-macos$(MIN_MACOS) -framework CoreMediaIO -framework CoreMedia -framework CoreVideo \
+		-framework CoreGraphics -framework CoreText -framework Foundation -o $@ macos/camera/main.swift
+	@$(call check-minos,$@)
+
 # ---- driver -----------------------------------------------------------------
 # Warnings are not errors here on purpose: this compiles on end users' Macs
 # with whatever clang they have, and a new diagnostic must not block an
@@ -170,7 +214,8 @@ $(LOCAL_APP)/Contents/MacOS/RemoteVisio: $(APP_BIN)
 	@echo "==> built $(LOCAL_APP)"
 
 $(APP_BIN): $(RECEIVER) $(MENUBAR) bin/.icons macos/Info.plist macos/pkg/uninstall.sh \
-            macos/app.entitlements macos/receiver.entitlements macos/signing.sh macos/assemble-app.sh $(SIGNING_INFO)
+            macos/app.entitlements macos/receiver.entitlements macos/signing.sh macos/assemble-app.sh $(SIGNING_INFO) \
+            $(CAMERA_DEPS)
 	@macos/assemble-app.sh $(APP) "$(OPUS_COPYING)"
 
 install: $(APP_BIN) ## build and install the app to /Applications (relaunches it if it was running)
@@ -236,14 +281,14 @@ signing: ## Developer ID signing: what is in place, what to do next
 	@macos/setup-signing.sh
 signing-request: ## make the keys and certificate requests (NAME="..." EMAIL=... optional; NEW=1 replaces valid ones)
 	@macos/setup-signing.sh request $(if $(NEW),--new) "$(NAME)" "$(EMAIL)"
-signing-install: ## put the downloaded certificates in the keychain (CER=file optional; default: ~/Downloads)
+signing-install: ## put the downloaded certificates in the keychain, a .provisionprofile next to the keys (CER=file; default: ~/Downloads)
 	@macos/setup-signing.sh install $(if $(CER),"$(CER)")
 
 # ---- cleaning ---------------------------------------------------------------
 clean: ## remove build products (keeps the libopus build)
 	@macos/lib.sh forget $(abspath $(LOCAL_APP))
 	rm -rf bin/.build bin/.pkg-stage $(SIGNING_INFO) bin/.icons bin/opus-static \
-		$(RECEIVER) $(MENUBAR) $(DRIVER) $(SAN) $(HARNESS) $(HARNESS).dSYM bin/RemoteVisio-*.pkg
+		$(RECEIVER) $(MENUBAR) $(CAMEXT) $(DRIVER) $(SAN) $(HARNESS) $(HARNESS).dSYM bin/RemoteVisio-*.pkg
 distclean: ## remove bin/ entirely, the libopus build included
 	@macos/lib.sh forget $(abspath $(LOCAL_APP))
 	rm -rf bin

@@ -16,6 +16,9 @@
 #   REMOTEVISIO_PKG_SIGN_ID="..."   exact installer-signing identity (name)
 #   REMOTEVISIO_SIGN=adhoc          force ad-hoc signing even if a certificate exists
 #   REMOTEVISIO_NOTARY_PROFILE=...  notarytool keychain profile (default: remotevisio)
+#   REMOTEVISIO_PROFILE=...         the Developer ID provisioning profile for the camera
+#                                   extension (default: RemoteVisio.provisionprofile in
+#                                   REMOTEVISIO_SIGNING_DIR, ~/.config/remotevisio/signing)
 #
 # The Makefile looks the identities up once per run and passes them down as
 # REMOTEVISIO_SIGN_ID / REMOTEVISIO_PKG_SIGN_ID (with REMOTEVISIO_PKG_SIGN_COUNT,
@@ -24,6 +27,64 @@
 
 REMOTEVISIO_TEAM_ID="${REMOTEVISIO_TEAM_ID:-99F33YCKX9}"
 NOTARY_PROFILE="${REMOTEVISIO_NOTARY_PROFILE:-remotevisio}"
+# Where macos/setup-signing.sh keeps the private keys, and next to them the
+# Developer ID provisioning profile that lets the app carry its camera system
+# extension (macos/README.md, "Virtual camera"). macos/assemble-app.sh bundles
+# the extension only when the profile is there and the signature is Developer
+# ID; the Makefile has the same default and passes REMOTEVISIO_PROFILE down.
+REMOTEVISIO_SIGNING_DIR="${REMOTEVISIO_SIGNING_DIR:-$HOME/.config/remotevisio/signing}"
+REMOTEVISIO_PROFILE="${REMOTEVISIO_PROFILE:-$REMOTEVISIO_SIGNING_DIR/RemoteVisio.provisionprofile}"
+# The App ID the profile must be for (the app's bundle identifier).
+PROFILE_APP_ID=com.remotevisio.app
+
+# profile_read FILE: decode a provisioning profile into PROFILE_NAME,
+# PROFILE_EXPIRES (YYYY-MM-DD), PROFILE_APPID, PROFILE_SYSEXT (true when it
+# grants com.apple.developer.system-extension.install), PROFILE_ALL (true
+# for a Developer ID profile, which provisions every Mac) and PROFILE_CERTS
+# (the SHA-1 of each certificate it authorizes, one per line). False if FILE
+# is not a profile.
+profile_read() {
+    local tmp i der
+    PROFILE_NAME=""; PROFILE_EXPIRES=""; PROFILE_APPID=""; PROFILE_SYSEXT=""; PROFILE_ALL=""; PROFILE_CERTS=""
+    tmp=$(mktemp "${TMPDIR:-/tmp}/remotevisio-profile.XXXXXX")
+    if ! security cms -D -i "$1" -o "$tmp" 2>/dev/null; then
+        rm -f "$tmp"
+        return 1
+    fi
+    PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print :Name' "$tmp" 2>/dev/null || true)
+    PROFILE_EXPIRES=$(plutil -extract ExpirationDate raw -o - "$tmp" 2>/dev/null | cut -c1-10 || true)
+    PROFILE_APPID=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' "$tmp" 2>/dev/null || true)
+    PROFILE_SYSEXT=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.system-extension.install' "$tmp" 2>/dev/null || true)
+    PROFILE_ALL=$(/usr/libexec/PlistBuddy -c 'Print :ProvisionsAllDevices' "$tmp" 2>/dev/null || true)
+    # The certificates are DER blobs; plutil hands them out as base64. Apple's
+    # LibreSSL, not a Homebrew OpenSSL that may come first in PATH.
+    for ((i = 0; i < 20; i++)); do
+        der=$(plutil -extract "DeveloperCertificates.$i" raw -o - "$tmp" 2>/dev/null) || break
+        /usr/bin/openssl base64 -d -A <<<"$der" > "$tmp.cer" 2>/dev/null || continue
+        PROFILE_CERTS+="$(/usr/bin/openssl x509 -inform DER -in "$tmp.cer" -noout -fingerprint -sha1 2>/dev/null \
+            | sed 's/.*=//; s/://g')"$'\n'
+    done
+    rm -f "$tmp" "$tmp.cer"
+    return 0
+}
+
+# profile_problem [SHA1]: after profile_read, print why the profile cannot
+# serve the camera extension, or nothing when it can: the App ID, the
+# entitlement, expiry and, when the signing certificate's SHA-1 is given,
+# whether the profile authorizes that certificate (an app signed with one
+# the profile does not list is killed at launch on every Mac).
+profile_problem() {
+    local sha=${1:-}
+    if [[ "$PROFILE_APPID" != "$REMOTEVISIO_TEAM_ID.$PROFILE_APP_ID" ]]; then
+        echo "for \"${PROFILE_APPID:-?}\", not the App ID $PROFILE_APP_ID of team $REMOTEVISIO_TEAM_ID"
+    elif [[ "$PROFILE_SYSEXT" != true ]]; then
+        echo "without com.apple.developer.system-extension.install (the App ID lacks the \"System Extension\" capability)"
+    elif [[ -n "$PROFILE_EXPIRES" && ! "$PROFILE_EXPIRES" > "$(date -u +%Y-%m-%d)" ]]; then
+        echo "expired on $PROFILE_EXPIRES"
+    elif [[ -n "$sha" ]] && ! grep -qx "$sha" <<<"$PROFILE_CERTS"; then
+        echo "not made for the signing certificate (it authorizes other Developer ID Application certificates)"
+    fi
+}
 
 # remotevisio_identities KIND [-v] [KEYCHAIN]: print "SHA1<TAB>name" for every
 # identity named "KIND: ... (TEAM)". With -v only valid (trusted, unexpired)
@@ -131,6 +192,17 @@ sign_code() {
     fi
     [[ "${REMOTEVISIO_RELEASE:-}" == "1" ]] && ts=--timestamp
     retry_timestamp codesign --force --sign "$SIGN_ID" --options runtime "$ts" ${ent:+--entitlements "$ent"} "$path"
+}
+
+# sign_sha1: the SHA-1 of the code-signing identity, looked up when
+# REMOTEVISIO_SIGN_ID gave a name; empty when ad-hoc or not found.
+sign_sha1() {
+    [[ -n "$SIGN_ID" ]] || return 0
+    if [[ "$SIGN_ID" =~ ^[0-9A-F]{40}$ ]]; then
+        echo "$SIGN_ID"
+        return 0
+    fi
+    remotevisio_identities "Developer ID Application" -v | grep -F "	$SIGN_ID" | head -n1 | cut -f1 || true
 }
 
 describe_signing() {

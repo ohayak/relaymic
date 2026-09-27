@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Entitlements of the Remote Visio virtual camera system extension.
+     A camera extension must be sandboxed, and the app group is what lets
+     its mach service name (99F33YCKX9.com.remotevisio.app.camera in
+     camera/Info.plist) be registered. Nothing else: it does not use a
+     camera itself, and hardened-runtime relaxations are not allowed on a
+     system extension. -->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>99F33YCKX9.com.remotevisio.app</string>
+    </array>
+</dict>
+</plist>
