@@ -11,7 +11,9 @@
 # certificates are in the keychain (macos/signing.sh); `make signing` shows
 # the state and how to set it up. The virtual camera (a system extension,
 # `camext`) goes into the app only with a Developer ID signature and the
-# provisioning profile below; without them the app is built as before.
+# provisioning profile below; without them the app is built as before. The
+# browser camera (browser-extension/, a Chromium extension, and its
+# installer macos/browser-extension.sh) goes into every build.
 SHELL := /bin/bash
 .DELETE_ON_ERROR:
 .SUFFIXES:
@@ -35,7 +37,7 @@ REMOTEVISIO_SIGN ?=
 REMOTEVISIO_RELEASE ?=
 export REMOTEVISIO_SIGN REMOTEVISIO_RELEASE
 SIGNING_INFO   := bin/.signing-info
-UNSIGNED_GOALS := help clean distclean test-go check signing signing-request signing-install icons uninstall uninstall-driver
+UNSIGNED_GOALS := help clean distclean test-go check check-extension extension-zip signing signing-request signing-install uninstall uninstall-driver
 ifneq ($(filter-out $(UNSIGNED_GOALS),$(or $(MAKECMDGOALS),app)),)
 $(shell mkdir -p bin; REMOTEVISIO_SIGN='$(REMOTEVISIO_SIGN)' REMOTEVISIO_SIGN_ID='$(REMOTEVISIO_SIGN_ID)' \
 	REMOTEVISIO_PKG_SIGN_ID='$(REMOTEVISIO_PKG_SIGN_ID)' REMOTEVISIO_PKG_SIGN_COUNT='$(REMOTEVISIO_PKG_SIGN_COUNT)' \
@@ -122,11 +124,14 @@ OPUS_PREFIX  := $(firstword $(wildcard /opt/homebrew/opt/opus /usr/local/opt/opu
 STATICLIB    := bin/opus-static
 
 GO_SRC   := go.mod go.sum $(shell find cmd/receiver internal -type f \( -name '*.go' -o -name '*.h' -o -name '*.m' -o -name '*.html' -o -name '*.png' \))
-ICON_SRC := $(wildcard icons/icon-[0-9]*.png)
 PKG_SRC  := macos/pkg/Distribution.xml $(wildcard macos/pkg/resources/* macos/pkg/resources/*/* macos/pkg/driver-scripts/* macos/pkg/app-scripts/*)
+# The browser extension as macos/assemble-app.sh bundles it (its README and
+# hidden files stay out). A file added or removed is noticed only once
+# another one changes, as for GO_SRC.
+BROWSER_EXT_SRC := $(shell find browser-extension -type f ! -name '.*' ! -name README.md 2>/dev/null)
 
-.PHONY: all help app install receiver menubar camext driver opus icons pkg pkg-unsigned pkg-file \
-        test test-go test-driver check signing signing-request signing-install \
+.PHONY: all help app install receiver menubar camext driver opus pkg pkg-unsigned pkg-file \
+        test test-go test-driver check check-extension extension-zip signing signing-request signing-install \
         install-driver uninstall-driver uninstall clean distclean
 
 all: app
@@ -150,7 +155,7 @@ bin/opus-%/lib/libopus.a:
 	@test -f $@ || { echo "!!  macos/build-opus.sh did not produce $@" >&2; exit 1; }
 
 receiver: $(RECEIVER) ## the receiver binary, Opus linked statically
-$(RECEIVER): $(GO_SRC) $(OPUS_LIB) bin/.icons
+$(RECEIVER): $(GO_SRC) $(OPUS_LIB)
 	@echo "==> building remotevisio-receiver for macOS $(MIN_MACOS)+ (Opus linked statically)"
 	@[[ "$(REMOTEVISIO_RELEASE)" != 1 || "$(OPUS_LIB)" == bin/* ]] \
 		|| { echo "!!  a release build needs the libopus built for macOS $(MIN_MACOS), not $(OPUS_LIB)" >&2; exit 1; }
@@ -200,12 +205,6 @@ $(DRIVER_BIN): driver/RemoteVisio.c driver/Info.plist macos/signing.sh $(SIGNING
 		-framework CoreAudio -framework CoreFoundation -o $@ driver/RemoteVisio.c
 	@source macos/signing.sh; sign_code $(DRIVER) >/dev/null || { echo "!!  codesign failed for $(DRIVER)" >&2; exit 1; }
 
-# ---- icons ------------------------------------------------------------------
-icons: bin/.icons ## every icon file in the repository, derived from icons/icon-*.png
-bin/.icons: $(ICON_SRC) macos/icons.py
-	@python3 macos/icons.py
-	@mkdir -p bin; touch $@
-
 # ---- app --------------------------------------------------------------------
 app: $(LOCAL_APP)/Contents/MacOS/RemoteVisio ## bin/RemoteVisio.app (the default)
 	@[[ ! -d $(INSTALLED) ]] || echo "note: $(INSTALLED) is also installed; Launchpad lists both until one is removed"
@@ -213,9 +212,9 @@ $(LOCAL_APP)/Contents/MacOS/RemoteVisio: $(APP_BIN)
 	@macos/lib.sh forget $(abspath $(LOCAL_APP)); cp -R $(APP) $(LOCAL_APP)
 	@echo "==> built $(LOCAL_APP)"
 
-$(APP_BIN): $(RECEIVER) $(MENUBAR) bin/.icons macos/Info.plist macos/pkg/uninstall.sh \
+$(APP_BIN): $(RECEIVER) $(MENUBAR) macos/Info.plist macos/pkg/uninstall.sh \
             macos/app.entitlements macos/receiver.entitlements macos/signing.sh macos/assemble-app.sh $(SIGNING_INFO) \
-            $(CAMERA_DEPS)
+            $(CAMERA_DEPS) $(BROWSER_EXT_SRC) macos/browser-extension.sh
 	@macos/assemble-app.sh $(APP) "$(OPUS_COPYING)"
 
 install: $(APP_BIN) ## build and install the app to /Applications (relaunches it if it was running)
@@ -272,9 +271,60 @@ test-go: ## go tests
 test-driver: $(DRIVER_BIN) $(SAN_BIN) $(HARNESS) ## the driver harness, no install and no admin rights
 	@echo "==> harness against the sanitized driver"; ASAN_OPTIONS=detect_leaks=0 $(HARNESS) $(SAN_BIN)
 	@echo "==> harness against the release driver"; ASAN_OPTIONS=detect_leaks=0 $(HARNESS) $(DRIVER_BIN)
-check: ## gofmt and go vet
+check: check-extension ## gofmt, go vet and check-extension
 	@test -z "$$(gofmt -l cmd internal)" || { echo "!!  gofmt:"; gofmt -l cmd internal; exit 1; }
 	go vet -tags nolibopusfile ./...
+# The extension has no build step: what is in browser-extension/ is what the
+# browser runs, so this is where its mistakes get caught. Its ID is not
+# written anywhere in it: Chromium derives it from the manifest's public key
+# (the first 128 bits of the key's SHA-256, as letters a-p), and the
+# receiver lets that ID in (internal/browsercam, next to the Chrome Web
+# Store's), so a changed key would lock unpacked copies out.
+check-extension: ## the browser extension: JSON, JavaScript syntax (needs node), its ID against the receiver's
+	@test -f browser-extension/manifest.json || { echo "!!  browser-extension/manifest.json is missing" >&2; exit 1; }
+	@for f in $(filter %.json,$(BROWSER_EXT_SRC)); do \
+		python3 -m json.tool "$$f" >/dev/null || { echo "!!  $$f is not valid JSON" >&2; exit 1; }; \
+	done
+	@if command -v node >/dev/null 2>&1; then \
+		for f in $(filter %.js,$(BROWSER_EXT_SRC)); do node --check "$$f" || { echo "!!  $$f: syntax error" >&2; exit 1; }; done; \
+	else echo "note: node not found; the extension's JavaScript was not checked"; fi
+	@bash -n macos/browser-extension.sh || { echo "!!  macos/browser-extension.sh: syntax error" >&2; exit 1; }
+	@id=$$(python3 -c 'import json, base64, hashlib; key = json.load(open("browser-extension/manifest.json"))["key"]; \
+		print("".join(chr(97 + int(c, 16)) for c in hashlib.sha256(base64.b64decode(key)).hexdigest()[:32]))' 2>/dev/null) \
+		|| { echo "!!  browser-extension/manifest.json has no usable \"key\"" >&2; exit 1; }; \
+	want=$$(sed -n 's/^[[:space:]]*ExtensionID[[:space:]]*=[[:space:]]*"\([a-p]*\)".*/\1/p' internal/browsercam/browsercam.go); \
+	[[ -n "$$want" && "$$id" == "$$want" ]] \
+		|| { echo "!!  the manifest's key gives the extension ID $$id, the receiver expects $${want:-?} (internal/browsercam)" >&2; exit 1; }; \
+	echo "==> browser extension: $(words $(BROWSER_EXT_SRC)) files, ID $$id"
+
+# ---- Chrome Web Store package ----------------------------------------------
+# The extension as the Chrome Web Store takes it: a zip with the manifest at
+# its root and only the files a browser loads (as macos/assemble-app.sh
+# bundles them). Two changes from the source tree. The version is the app's
+# (version.build from macos/Info.plist): the store wants a higher one for
+# every upload. The manifest's "key" goes: the store refuses it and signs the
+# item with its own key, which gives the store's copy its own ID
+# (browsercam.StoreExtensionID). The manifest keeps the unpacked copy's key
+# (browsercam.ExtensionID) and the receiver lets both in, so do not replace
+# it: unpacked copies would be locked out.
+EXT_VERSION = $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' macos/Info.plist).$(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' macos/Info.plist)
+EXT_ZIP     := bin/RemoteVisioCamera-$(EXT_VERSION).zip
+extension-zip: $(EXT_ZIP) ## bin/RemoteVisioCamera-<version>.zip, the extension for the Chrome Web Store
+$(EXT_ZIP): $(BROWSER_EXT_SRC) macos/Info.plist | check-extension
+	@echo "==> packaging the browser extension $(EXT_VERSION) for the Chrome Web Store"
+	@rm -rf bin/.ext-zip $@; mkdir -p bin/.ext-zip
+	@cp -X browser-extension/manifest.json browser-extension/*.js browser-extension/*.html browser-extension/*.css bin/.ext-zip/
+	@cp -RX browser-extension/_locales browser-extension/icons bin/.ext-zip/
+	@find bin/.ext-zip -mindepth 1 -name '.*' -prune -exec rm -rf {} +
+	@python3 -c 'import json, re, sys; \
+		v = sys.argv[2]; \
+		assert re.fullmatch(r"(0|[1-9][0-9]{0,4})(\.(0|[1-9][0-9]{0,4})){0,3}", v) and all(int(p) <= 65535 for p in v.split(".")), v + " is not an extension version"; \
+		m = json.load(open(sys.argv[1])); m.pop("key", None); m["version"] = v; \
+		json.dump(m, open(sys.argv[1], "w"), indent=2, ensure_ascii=False); open(sys.argv[1], "a").write("\n")' \
+		bin/.ext-zip/manifest.json "$(EXT_VERSION)"
+	@cd bin/.ext-zip && zip -qrXD ../$(notdir $@) .
+	@rm -rf bin/.ext-zip
+	@echo "==> built $@ ($$(unzip -l $@ | tail -1 | awk '{print $$2}') files)"
 
 # ---- signing setup ----------------------------------------------------------
 signing: ## Developer ID signing: what is in place, what to do next
@@ -287,7 +337,7 @@ signing-install: ## put the downloaded certificates in the keychain, a .provisio
 # ---- cleaning ---------------------------------------------------------------
 clean: ## remove build products (keeps the libopus build)
 	@macos/lib.sh forget $(abspath $(LOCAL_APP))
-	rm -rf bin/.build bin/.pkg-stage $(SIGNING_INFO) bin/.icons bin/opus-static \
+	rm -rf bin/.build bin/.pkg-stage $(SIGNING_INFO) bin/opus-static \
 		$(RECEIVER) $(MENUBAR) $(CAMEXT) $(DRIVER) $(SAN) $(HARNESS) $(HARNESS).dSYM bin/RemoteVisio-*.pkg
 distclean: ## remove bin/ entirely, the libopus build included
 	@macos/lib.sh forget $(abspath $(LOCAL_APP))

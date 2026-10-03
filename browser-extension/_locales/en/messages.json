@@ -1,0 +1,234 @@
+{
+  "ext_name": {
+    "message": "Remote Visio Camera",
+    "description": "Extension name; also the camera name pages show. Not translated."
+  },
+  "ext_description": {
+    "message": "Offers web pages a Remote Visio Camera: the camera of the device sending to this Mac through Remote Visio.",
+    "description": "Extension description in the extensions page (at most 132 characters)."
+  },
+  "slate_connecting": {
+    "message": "Connecting to Remote Visio…",
+    "description": "Slate (the picture shown instead of the camera): connecting to the receiver."
+  },
+  "slate_waiting": {
+    "message": "Waiting for the remote camera",
+    "description": "Slate: connected, but the sending device sends no camera."
+  },
+  "slate_waiting_hint": {
+    "message": "Turn on “Send this device's camera” on the sending device",
+    "description": "Slate, under slate_waiting. Quotes the sender page's checkbox label."
+  },
+  "slate_down": {
+    "message": "Remote Visio is not running on this Mac",
+    "description": "Slate: the Remote Visio receiver does not answer."
+  },
+  "slate_down_hint": {
+    "message": "Already running? If its menu has no “Browser Camera”, update Remote Visio.",
+    "description": "Slate, under slate_down. An older Remote Visio has no browser camera and reads as not running; quotes the menu item bcam_toggle of the menu-bar app."
+  },
+  "slate_refused": {
+    "message": "Remote Visio does not accept this copy of the extension",
+    "description": "Slate: the receiver refused this extension's ID: a copy it does not know, such as one unpacked from the Chrome Web Store zip (no key, so an ID of its own)."
+  },
+  "slate_refused_hint": {
+    "message": "Remove it on the browser's extensions page, then choose “Install Browser Camera Extension…” in the Remote Visio menu.",
+    "description": "Under slate_refused. Quotes the menu item bcam_install of the menu-bar app."
+  },
+  "slate_off": {
+    "message": "The browser camera is turned off in the Remote Visio menu",
+    "description": "Slate: the receiver runs with the browser camera switched off in its menu."
+  },
+  "slate_busy": {
+    "message": "The camera is busy: too many pages are using it",
+    "description": "Slate: the receiver serves too many pages already."
+  },
+  "slate_codec": {
+    "message": "This browser cannot play the camera's H.264 video",
+    "description": "Slate: the browser offered no H.264 decoder."
+  },
+  "slate_blocked": {
+    "message": "This browser blocked the local connection to Remote Visio",
+    "description": "Slate: the receiver answered, but the browser never let the connection to it come up (a WebRTC policy or setting, or a refused local network access)."
+  },
+  "slate_blocked_hint": {
+    "message": "In this site's settings, allow it to access other apps and services on this device, or ask your IT department about the browser's WebRTC policy",
+    "description": "Slate, under slate_blocked."
+  },
+  "popup_question": {
+    "message": "$SITE$ is waiting for your answer",
+    "description": "Popup: a consent window is open for this site, and may have gone behind the browser's window; popup_question_show brings it back.",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "meet.google.com"
+      }
+    }
+  },
+  "popup_question_show": {
+    "message": "Show",
+    "description": "Popup: button next to popup_question that brings the consent window to the front."
+  },
+  "popup_checking": {
+    "message": "Checking…",
+    "description": "Popup status before the first answer."
+  },
+  "popup_status_down": {
+    "message": "Remote Visio is not running on this Mac",
+    "description": "Popup status: the receiver does not answer."
+  },
+  "popup_status_down_hint": {
+    "message": "Already running? If its menu has no “Browser Camera”, update Remote Visio.",
+    "description": "Popup, under popup_status_down. An older Remote Visio has no browser camera and reads as not running; quotes the menu item bcam_toggle of the menu-bar app."
+  },
+  "popup_status_refused": {
+    "message": "Remote Visio does not accept this copy of the extension",
+    "description": "Popup status: the receiver refused this extension's ID: a copy it does not know, such as one unpacked from the Chrome Web Store zip (no key, so an ID of its own)."
+  },
+  "popup_status_refused_hint": {
+    "message": "Remove it on the browser's extensions page, then choose “Install Browser Camera Extension…” in the Remote Visio menu.",
+    "description": "Under popup_status_refused. Quotes the menu item bcam_install of the menu-bar app."
+  },
+  "popup_status_off": {
+    "message": "The browser camera is turned off in the Remote Visio menu",
+    "description": "Popup status: browser camera switched off in the menu-bar app."
+  },
+  "popup_status_waiting": {
+    "message": "Waiting for the remote camera",
+    "description": "Popup status: no video arriving."
+  },
+  "popup_status_waiting_hint": {
+    "message": "Turn on “Send this device's camera” on the sending device.",
+    "description": "Popup, under popup_status_waiting."
+  },
+  "popup_status_receiving": {
+    "message": "Receiving the remote camera, $FPS$ fps",
+    "description": "Popup status: video arriving.",
+    "placeholders": {
+      "fps": {
+        "content": "$1",
+        "example": "30"
+      }
+    }
+  },
+  "popup_in_use": {
+    "message": "In use by $PAGES$",
+    "description": "Popup: the sites watching now.",
+    "placeholders": {
+      "pages": {
+        "content": "$1",
+        "example": "meet.google.com, teams.microsoft.com"
+      }
+    }
+  },
+  "popup_in_use_count": {
+    "message": "In use by $PAGES$ ($COUNT$ connections)",
+    "description": "Popup: the sites watching now, when there are more connections than sites (several pages of a site, or connections that named no site). COUNT is always 2 or more.",
+    "placeholders": {
+      "pages": {
+        "content": "$1",
+        "example": "meet.google.com"
+      },
+      "count": {
+        "content": "$2",
+        "example": "3"
+      }
+    }
+  },
+  "popup_in_use_unnamed": {
+    "message": "Connections that named no site: $COUNT$",
+    "description": "Popup: connections watching that did not come from a site through this extension.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "popup_enabled": {
+    "message": "Offer Remote Visio Camera to websites",
+    "description": "Popup switch: add the camera to web pages."
+  },
+  "popup_enabled_hint": {
+    "message": "Sites list it with their cameras. You are asked before a site uses it for the first time.",
+    "description": "Popup, under popup_enabled."
+  },
+  "popup_prefer": {
+    "message": "Use it when a site asks for any camera",
+    "description": "Popup switch: answer requests for any camera with this one."
+  },
+  "popup_prefer_hint": {
+    "message": "Instead of this Mac's own camera.",
+    "description": "Popup, under popup_prefer."
+  },
+  "popup_sites": {
+    "message": "Sites",
+    "description": "Popup: heading of the list of sites."
+  },
+  "popup_no_sites": {
+    "message": "No site has asked for the camera yet.",
+    "description": "Popup: the list of sites is empty."
+  },
+  "popup_site_allowed": {
+    "message": "Allowed",
+    "description": "Popup: a site the user allowed."
+  },
+  "popup_site_blocked": {
+    "message": "Blocked",
+    "description": "Popup: a site the user refused."
+  },
+  "popup_site_remove": {
+    "message": "Remove",
+    "description": "Popup: button that forgets a site's answer."
+  },
+  "popup_version": {
+    "message": "Version $VERSION$",
+    "description": "Popup footer.",
+    "placeholders": {
+      "version": {
+        "content": "$1",
+        "example": "1.0.0"
+      }
+    }
+  },
+  "consent_question": {
+    "message": "Allow $ORIGIN$ to use Remote Visio Camera?",
+    "description": "Consent window question.",
+    "placeholders": {
+      "origin": {
+        "content": "$1",
+        "example": "meet.google.com"
+      }
+    }
+  },
+  "consent_embedded": {
+    "message": "Asked by $FRAME$, embedded in this site.",
+    "description": "Consent window, under the question, when a frame of another site embedded in the page asked.",
+    "placeholders": {
+      "frame": {
+        "content": "$1",
+        "example": "meet.jit.si"
+      }
+    }
+  },
+  "consent_body": {
+    "message": "The site will see the remote device's camera.",
+    "description": "Consent window, under the question."
+  },
+  "consent_note": {
+    "message": "You can change this later in the Extensions menu (the puzzle-piece icon) › Remote Visio Camera.",
+    "description": "Consent window, small print. Chrome's Extensions menu, whose toolbar icon is a puzzle piece."
+  },
+  "consent_allow": {
+    "message": "Allow",
+    "description": "Consent window button."
+  },
+  "consent_deny": {
+    "message": "Don't allow",
+    "description": "Consent window button."
+  },
+  "consent_invalid": {
+    "message": "This request is no longer valid.",
+    "description": "Consent window opened without a valid site."
+  }
+}

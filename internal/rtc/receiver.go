@@ -14,6 +14,7 @@ import (
 	"github.com/hraban/opus"
 	"github.com/pion/interceptor"
 	"github.com/pion/rtcp"
+	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v4"
 	"github.com/pion/webrtc/v4/pkg/media/samplebuilder"
@@ -40,6 +41,7 @@ type Receiver struct {
 	onPCM   func([]int16)
 	onState func(webrtc.PeerConnectionState)
 	onPath  func(string)
+	onNote  func(string)
 
 	stats RTPStats
 
@@ -58,11 +60,13 @@ type Receiver struct {
 	spkMu    sync.Mutex
 	spkTrack *webrtc.TrackLocalStaticSample
 
-	// Camera path: where the sender's H.264 access units go. nil means no
-	// virtual camera, and the video m-line is refused so the browser does not
-	// send frames nobody decodes.
+	// Camera path: where the sender's H.264 goes. The sink takes decoded
+	// access units (the camera system extension), the forwarder the raw RTP
+	// packets (the browser camera). With neither, the video m-line is refused
+	// so the browser does not send frames nobody uses.
 	sinkMu    sync.Mutex
 	videoSink VideoSink
+	videoFwd  VideoForwarder
 	video     videoStats
 }
 
@@ -89,9 +93,35 @@ func (r *Receiver) currentVideoSink() VideoSink {
 	return r.videoSink
 }
 
+// VideoForwarder takes the camera track's RTP packets as they arrive, before
+// any reassembly, to relay them on without decoding (the browser camera,
+// internal/browsercam). StartTrack is called when a camera track starts,
+// with its negotiated codec and a function that asks the sender for a
+// keyframe (rate-limited, callable from any goroutine). It returns the
+// function that takes each of the track's packets and the one to call when
+// the track ends. write must neither keep nor modify the packet: the
+// decoding path holds on to it.
+type VideoForwarder interface {
+	StartTrack(codec webrtc.RTPCodecParameters, requestKeyframe func()) (write func(*rtp.Packet), end func())
+}
+
+// SetVideoForwarder sets where the camera's RTP packets are relayed; nil
+// turns that off for the connections negotiated from now on.
+func (r *Receiver) SetVideoForwarder(f VideoForwarder) {
+	r.sinkMu.Lock()
+	r.videoFwd = f
+	r.sinkMu.Unlock()
+}
+
+func (r *Receiver) currentVideoForwarder() VideoForwarder {
+	r.sinkMu.Lock()
+	defer r.sinkMu.Unlock()
+	return r.videoFwd
+}
+
 // VideoStats counts what arrived on the camera track.
 type VideoStats struct {
-	Frames  uint64 // access units reassembled and handed to the sink
+	Frames  uint64 // access units: reassembled for the sink, or counted by marker bit when only forwarded
 	Packets uint64 // RTP packets received
 	Bytes   uint64 // RTP bytes received, header included
 }
@@ -419,6 +449,63 @@ func (r *Receiver) Stats() *RTPStats { return &r.stats }
 // virtual interface address whose path still goes halfway around the world.
 func (r *Receiver) OnPath(fn func(string)) { r.onPath = fn }
 
+// OnNote registers a callback for negotiation notes worth a log line: what an
+// answer offers, and a candidate gathering that did not finish in time.
+func (r *Receiver) OnNote(fn func(string)) { r.onNote = fn }
+
+func (r *Receiver) note(format string, args ...any) {
+	if r.onNote != nil {
+		r.onNote(fmt.Sprintf(format, args...))
+	}
+}
+
+// gatherWait bounds the wait for candidate gathering in Answer. Gathering
+// normally takes well under a second (each STUN query is capped at 2s, see
+// buildAPI), but pion resolves each STUN server's name with no deadline
+// before that cap applies, so a DNS lookup that never returns would hold the
+// answer for ever, and with it the sender page, which sat on "Connecting"
+// with no answer and no retry. After gatherWait the answer goes with the
+// candidates found so far: the host ones, which are what a LAN or an overlay
+// network needs. A variable, so a test can shorten it.
+var gatherWait = 4 * time.Second
+
+// describeCandidates counts an SDP's candidates by type, for the log:
+// "9 candidates (host 7, srflx 2)".
+func describeCandidates(sdp string) string {
+	count := map[string]int{}
+	var order []string
+	total := 0
+	for _, line := range strings.Split(sdp, "\n") {
+		if !strings.HasPrefix(line, "a=candidate:") {
+			continue
+		}
+		total++
+		f := strings.Fields(line)
+		typ := "?"
+		for i := 0; i+1 < len(f); i++ {
+			if f[i] == "typ" {
+				typ = f[i+1]
+				break
+			}
+		}
+		if count[typ] == 0 {
+			order = append(order, typ)
+		}
+		count[typ]++
+	}
+	parts := make([]string, 0, len(order))
+	for _, typ := range order {
+		parts = append(parts, fmt.Sprintf("%s %d", typ, count[typ]))
+	}
+	switch total {
+	case 0:
+		return "no candidates"
+	case 1:
+		return "1 candidate (" + strings.Join(parts, ", ") + ")"
+	}
+	return fmt.Sprintf("%d candidates (%s)", total, strings.Join(parts, ", "))
+}
+
 // describePath reconstructs the selected path from the ICE stats.
 func describePath(pc *webrtc.PeerConnection) string {
 	stats := pc.GetStats()
@@ -507,18 +594,19 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrt
 		return nil, fmt.Errorf("add audio receive transceiver: %w", err)
 	}
 
-	// The camera sink is fixed at negotiation time: the answer either accepts
-	// the video m-line for this sink or refuses it, and the track that arrives
-	// later must go to the same place.
-	sink := r.currentVideoSink()
+	// The camera's destinations are fixed at negotiation time: the answer
+	// either accepts the video m-line for them or refuses it, and the track
+	// that arrives later must go to the same places.
+	sink, fwd := r.currentVideoSink(), r.currentVideoForwarder()
+	wantVideo := sink != nil || fwd != nil
 	pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 		go DrainRTCP(receiver)
 		switch track.Kind() {
 		case webrtc.RTPCodecTypeAudio:
 			r.consume(track)
 		case webrtc.RTPCodecTypeVideo:
-			if sink != nil {
-				r.consumeVideo(pc, track, sink)
+			if wantVideo {
+				r.consumeVideo(pc, track, sink, fwd)
 			}
 		}
 	})
@@ -546,10 +634,11 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrt
 		return nil, fmt.Errorf("set remote description: %w", err)
 	}
 
-	// Without a virtual camera, refuse the camera: pion has created a recvonly
-	// transceiver for the offered video m-line, and stopping it answers that
-	// m-line as inactive, so the browser sends no frames nobody would decode.
-	if sink == nil {
+	// Without a virtual camera of either kind, refuse the camera: pion has
+	// created a recvonly transceiver for the offered video m-line, and
+	// stopping it answers that m-line as inactive, so the browser sends no
+	// frames nobody would use.
+	if !wantVideo {
 		for _, tr := range pc.GetTransceivers() {
 			if tr.Kind() == webrtc.RTPCodecTypeVideo {
 				if err := tr.Stop(); err != nil {
@@ -566,13 +655,20 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrt
 		return nil, fmt.Errorf("create answer: %w", err)
 	}
 
-	// No separate signaling channel: wait for ICE gathering and return the complete SDP in one go.
+	// No separate signaling channel: wait for ICE gathering and return the complete SDP in one go,
+	// for at most gatherWait (see there); the local description then holds the candidates found so far.
 	gathered := webrtc.GatheringCompletePromise(pc)
+	started := time.Now()
 	if err := pc.SetLocalDescription(answer); err != nil {
 		pc.Close()
 		return nil, fmt.Errorf("set local description: %w", err)
 	}
-	<-gathered
+	complete := true
+	select {
+	case <-gathered:
+	case <-time.After(gatherWait):
+		complete = false
+	}
 
 	// New connection is up; retire the old one. The return-path track follows the new connection (nil if it has none).
 	r.mu.Lock()
@@ -589,6 +685,12 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrt
 	// receive state already set up locally.
 	final := *pc.LocalDescription()
 	final.SDP = withOpusParams(final.SDP, r.opusParams())
+	if complete {
+		r.note("answer: %s, gathered in %d ms", describeCandidates(final.SDP), time.Since(started).Milliseconds())
+	} else {
+		r.note("answer: candidate gathering not finished after %v (a STUN server's name did not resolve?); answering with %s",
+			gatherWait, describeCandidates(final.SDP))
+	}
 
 	return &final, nil
 }
@@ -614,34 +716,69 @@ const (
 	maxAccessUnitPackets = 2048
 )
 
-// consumeVideo reassembles the camera track's packets into access units and
-// hands them to the sink until the track ends.
+// consumeVideo hands the camera track to its destinations until the track
+// ends: every RTP packet to the forwarder as it arrives, and access units,
+// reassembled, to the sink. Either may be nil, not both.
 //
-// The samplebuilder does the jitter handling: at most 150 ms of waiting for
-// a missing packet (the NACK interceptor has asked for it by then; a frame
-// later than that is not worth showing), and frames of any realistic size
-// (maxAccessUnitPackets). A keyframe is requested at the start, whenever the
-// builder had to drop a frame (the frames after it reference it, so the
-// picture would drift until the next IDR) and whenever the sink says it
-// cannot decode, rate-limited so a burst of undecodable frames does not
-// turn into a burst of PLIs.
-func (r *Receiver) consumeVideo(pc *webrtc.PeerConnection, track *webrtc.TrackRemote, sink VideoSink) {
-	sb := samplebuilder.New(maxAccessUnitPackets, &codecs.H264Packet{}, VideoClockRate,
-		samplebuilder.WithMaxTimeDelay(150*time.Millisecond))
-
-	var lastPLI time.Time
-	requestKeyframe := func() {
-		if !lastPLI.IsZero() && time.Since(lastPLI) < pliInterval {
+// The samplebuilder does the sink's jitter handling: at most 150 ms of
+// waiting for a missing packet (the NACK interceptor has asked for it by
+// then; a frame later than that is not worth showing), and frames of any
+// realistic size (maxAccessUnitPackets). A keyframe is requested at the
+// start, whenever the builder had to drop a frame (the frames after it
+// reference it, so the picture would drift until the next IDR), whenever the
+// sink says it cannot decode and whenever the forwarder asks (a page started
+// watching, or its decoder lost track), rate-limited so a burst of requests
+// does not turn into a burst of PLIs: one inside the interval is deferred to
+// its end rather than dropped, so the last request is always answered,
+// unless a keyframe arrived meanwhile and answered it already.
+func (r *Receiver) consumeVideo(pc *webrtc.PeerConnection, track *webrtc.TrackRemote, sink VideoSink, fwd VideoForwarder) {
+	var (
+		pliMu     sync.Mutex
+		lastPLI   time.Time
+		deferred  bool
+		keyframes uint64 // keyframes that started arriving; a deferred request they answered is dropped
+	)
+	var requestKeyframe func()
+	requestKeyframe = func() {
+		pliMu.Lock()
+		if wait := pliInterval - time.Since(lastPLI); !lastPLI.IsZero() && wait > 0 {
+			if !deferred {
+				deferred = true
+				armed := keyframes
+				time.AfterFunc(wait, func() {
+					pliMu.Lock()
+					deferred = false
+					answered := keyframes != armed
+					pliMu.Unlock()
+					if !answered {
+						requestKeyframe()
+					}
+				})
+			}
+			pliMu.Unlock()
 			return
 		}
 		lastPLI = time.Now()
+		pliMu.Unlock()
 		_ = pc.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(track.SSRC())}})
 	}
-	// A new track is a new encoder on a new RTP timeline: the sink keeps its
-	// decoder across connections and must not take the first frames of this
-	// one for continuations of the last.
-	if s, ok := sink.(interface{ Reset() }); ok {
-		s.Reset()
+
+	var sb *samplebuilder.SampleBuilder
+	if sink != nil {
+		sb = samplebuilder.New(maxAccessUnitPackets, &codecs.H264Packet{}, VideoClockRate,
+			samplebuilder.WithMaxTimeDelay(150*time.Millisecond))
+		// A new track is a new encoder on a new RTP timeline: the sink keeps its
+		// decoder across connections and must not take the first frames of this
+		// one for continuations of the last.
+		if s, ok := sink.(interface{ Reset() }); ok {
+			s.Reset()
+		}
+	}
+	var forward func(*rtp.Packet)
+	if fwd != nil {
+		var end func()
+		forward, end = fwd.StartTrack(track.Codec(), requestKeyframe)
+		defer end()
 	}
 	requestKeyframe()
 
@@ -651,6 +788,20 @@ func (r *Receiver) consumeVideo(pc *webrtc.PeerConnection, track *webrtc.TrackRe
 			return // track ended; the next offer rebuilds
 		}
 		r.video.packet(pkt.MarshalSize())
+		if H264KeyframeStart(pkt.Payload) {
+			pliMu.Lock()
+			keyframes++
+			pliMu.Unlock()
+		}
+		if forward != nil {
+			forward(pkt)
+		}
+		if sb == nil {
+			if pkt.Marker {
+				r.video.frame() // the last packet of a frame; nothing reassembles them here
+			}
+			continue
+		}
 		sb.Push(pkt)
 		for s := sb.Pop(); s != nil; s = sb.Pop() {
 			r.video.frame()
@@ -662,6 +813,35 @@ func (r *Receiver) consumeVideo(pc *webrtc.PeerConnection, track *webrtc.TrackRe
 			}
 		}
 	}
+}
+
+// H264KeyframeStart reports whether an H.264 RTP payload (RFC 6184) starts a
+// keyframe: an SPS or an IDR slice on its own, inside a STAP-A aggregate, or
+// as the first fragment of an FU-A. Browsers send the SPS and PPS right
+// before every IDR, so the SPS is where a keyframe begins.
+func H264KeyframeStart(payload []byte) bool {
+	key := func(nal byte) bool { t := nal & 0x1f; return t == 5 || t == 7 }
+	if len(payload) == 0 {
+		return false
+	}
+	switch payload[0] & 0x1f {
+	case 5, 7:
+		return true
+	case 24: // STAP-A: header, then (16-bit size, NAL unit) pairs
+		for i := 1; i+2 < len(payload); {
+			size := int(payload[i])<<8 | int(payload[i+1])
+			if size == 0 {
+				return false
+			}
+			if key(payload[i+2]) {
+				return true
+			}
+			i += 2 + size
+		}
+	case 28: // FU-A: indicator, then the FU header with the start bit and the NAL type
+		return len(payload) > 1 && payload[1]&0x80 != 0 && key(payload[1])
+	}
+	return false
 }
 
 // Decode decodes an Opus track to 48kHz interleaved stereo PCM until the track ends.

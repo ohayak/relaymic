@@ -1,0 +1,195 @@
+{
+  "ext_name": {
+    "message": "Remote Visio Camera"
+  },
+  "ext_description": {
+    "message": "वेब पेजों को Remote Visio Camera देता है: उस डिवाइस का कैमरा जो Remote Visio से इस Mac पर भेज रहा है।"
+  },
+  "slate_connecting": {
+    "message": "Remote Visio से कनेक्ट हो रहा है…"
+  },
+  "slate_waiting": {
+    "message": "दूर वाले कैमरे का इंतज़ार है"
+  },
+  "slate_waiting_hint": {
+    "message": "भेजने वाले डिवाइस पर “इस डिवाइस का कैमरा भेजें” चालू करें"
+  },
+  "slate_down": {
+    "message": "इस Mac पर Remote Visio नहीं चल रहा है"
+  },
+  "slate_down_hint": {
+    "message": "पहले से चल रहा है? अगर उसके मेन्यू में “ब्राउज़र कैमरा” नहीं है, तो Remote Visio अपडेट करें।",
+    "description": "Slate, under slate_down. An older Remote Visio has no browser camera and reads as not running; quotes the menu item bcam_toggle of the menu-bar app."
+  },
+  "slate_refused": {
+    "message": "Remote Visio एक्सटेंशन की इस कॉपी को स्वीकार नहीं करता",
+    "description": "Slate: the receiver refused this extension's ID: a copy it does not know, such as one unpacked from the Chrome Web Store zip (no key, so an ID of its own)."
+  },
+  "slate_refused_hint": {
+    "message": "इसे ब्राउज़र के एक्सटेंशन पेज से हटाएँ, फिर Remote Visio मेन्यू में “ब्राउज़र कैमरा एक्सटेंशन इंस्टॉल करें…” चुनें।",
+    "description": "Under slate_refused. Quotes the menu item bcam_install of the menu-bar app."
+  },
+  "slate_off": {
+    "message": "Remote Visio मेन्यू में ब्राउज़र कैमरा बंद है"
+  },
+  "slate_busy": {
+    "message": "कैमरा व्यस्त है: बहुत सारे पेज इसे इस्तेमाल कर रहे हैं"
+  },
+  "slate_codec": {
+    "message": "यह ब्राउज़र कैमरे का H.264 वीडियो नहीं चला सकता"
+  },
+  "slate_blocked": {
+    "message": "इस ब्राउज़र ने Remote Visio से लोकल कनेक्शन ब्लॉक कर दिया"
+  },
+  "slate_blocked_hint": {
+    "message": "इस साइट की सेटिंग में इसे इस डिवाइस के दूसरे ऐप और सेवाएँ इस्तेमाल करने की अनुमति दें, या ब्राउज़र की WebRTC नीति के बारे में अपने IT विभाग से पूछें"
+  },
+  "popup_question": {
+    "message": "$SITE$ आपके जवाब का इंतज़ार कर रहा है",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "meet.google.com"
+      }
+    }
+  },
+  "popup_question_show": {
+    "message": "दिखाएँ"
+  },
+  "popup_checking": {
+    "message": "जाँच हो रही है…"
+  },
+  "popup_status_down": {
+    "message": "इस Mac पर Remote Visio नहीं चल रहा है"
+  },
+  "popup_status_down_hint": {
+    "message": "पहले से चल रहा है? अगर उसके मेन्यू में “ब्राउज़र कैमरा” नहीं है, तो Remote Visio अपडेट करें।",
+    "description": "Popup, under popup_status_down. An older Remote Visio has no browser camera and reads as not running; quotes the menu item bcam_toggle of the menu-bar app."
+  },
+  "popup_status_refused": {
+    "message": "Remote Visio एक्सटेंशन की इस कॉपी को स्वीकार नहीं करता",
+    "description": "Popup status: the receiver refused this extension's ID: a copy it does not know, such as one unpacked from the Chrome Web Store zip (no key, so an ID of its own)."
+  },
+  "popup_status_refused_hint": {
+    "message": "इसे ब्राउज़र के एक्सटेंशन पेज से हटाएँ, फिर Remote Visio मेन्यू में “ब्राउज़र कैमरा एक्सटेंशन इंस्टॉल करें…” चुनें।",
+    "description": "Under popup_status_refused. Quotes the menu item bcam_install of the menu-bar app."
+  },
+  "popup_status_off": {
+    "message": "Remote Visio मेन्यू में ब्राउज़र कैमरा बंद है"
+  },
+  "popup_status_waiting": {
+    "message": "दूर वाले कैमरे का इंतज़ार है"
+  },
+  "popup_status_waiting_hint": {
+    "message": "भेजने वाले डिवाइस पर “इस डिवाइस का कैमरा भेजें” चालू करें।"
+  },
+  "popup_status_receiving": {
+    "message": "दूर वाला कैमरा आ रहा है, $FPS$ fps",
+    "placeholders": {
+      "fps": {
+        "content": "$1",
+        "example": "30"
+      }
+    }
+  },
+  "popup_in_use": {
+    "message": "$PAGES$ इस्तेमाल कर रहा है",
+    "placeholders": {
+      "pages": {
+        "content": "$1",
+        "example": "meet.google.com, teams.microsoft.com"
+      }
+    }
+  },
+  "popup_in_use_count": {
+    "message": "$PAGES$ इस्तेमाल कर रहा है ($COUNT$ कनेक्शन)",
+    "placeholders": {
+      "pages": {
+        "content": "$1",
+        "example": "meet.google.com"
+      },
+      "count": {
+        "content": "$2",
+        "example": "3"
+      }
+    }
+  },
+  "popup_in_use_unnamed": {
+    "message": "ऐसे कनेक्शन जिन्होंने कोई साइट नहीं बताई: $COUNT$",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "popup_enabled": {
+    "message": "वेबसाइटों को Remote Visio Camera दें"
+  },
+  "popup_enabled_hint": {
+    "message": "साइटें इसे अपने कैमरों के साथ दिखाती हैं। कोई साइट पहली बार इसे इस्तेमाल करे, उससे पहले आपसे पूछा जाता है।"
+  },
+  "popup_prefer": {
+    "message": "जब कोई साइट कोई भी कैमरा माँगे, तो इसे इस्तेमाल करें"
+  },
+  "popup_prefer_hint": {
+    "message": "इस Mac के अपने कैमरे की जगह।"
+  },
+  "popup_sites": {
+    "message": "साइटें"
+  },
+  "popup_no_sites": {
+    "message": "अभी तक किसी साइट ने कैमरा नहीं माँगा है।"
+  },
+  "popup_site_allowed": {
+    "message": "अनुमति है"
+  },
+  "popup_site_blocked": {
+    "message": "ब्लॉक है"
+  },
+  "popup_site_remove": {
+    "message": "हटाएँ"
+  },
+  "popup_version": {
+    "message": "संस्करण $VERSION$",
+    "placeholders": {
+      "version": {
+        "content": "$1",
+        "example": "1.0.0"
+      }
+    }
+  },
+  "consent_question": {
+    "message": "क्या $ORIGIN$ को Remote Visio Camera इस्तेमाल करने दें?",
+    "placeholders": {
+      "origin": {
+        "content": "$1",
+        "example": "meet.google.com"
+      }
+    }
+  },
+  "consent_embedded": {
+    "message": "यह अनुरोध $FRAME$ से आया है, जो इस साइट में एम्बेड है।",
+    "placeholders": {
+      "frame": {
+        "content": "$1",
+        "example": "meet.jit.si"
+      }
+    }
+  },
+  "consent_body": {
+    "message": "साइट दूर वाले डिवाइस का कैमरा देखेगी।"
+  },
+  "consent_note": {
+    "message": "आप इसे बाद में एक्सटेंशन मेन्यू (पज़ल के टुकड़े वाला आइकन) › Remote Visio Camera में बदल सकते हैं।"
+  },
+  "consent_allow": {
+    "message": "अनुमति दें"
+  },
+  "consent_deny": {
+    "message": "अनुमति न दें"
+  },
+  "consent_invalid": {
+    "message": "यह अनुरोध अब मान्य नहीं है।"
+  }
+}

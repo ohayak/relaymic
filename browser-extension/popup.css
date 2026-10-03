@@ -1,0 +1,111 @@
+/* The popup and the consent window. Same look as the receiver's monitor page
+   (system font, bordered cards, the same color tokens), in the browser's
+   light or dark appearance. */
+:root {
+  color-scheme: dark;
+  --bg: #0f1115;
+  --fg: #e8eaed;
+  --dim: #8a8f98;
+  --line: #262a33;
+  --ok: #35c46b;
+  --warn: #e0a034;
+  --err: #e05a4f;
+  --knob: #e8eaed;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --bg: #ffffff;
+    --fg: #1d2024;
+    --dim: #646a73;
+    --line: #e1e4e8;
+    --ok: #1f9d55;
+    --warn: #b7791f;
+    --err: #c9372c;
+    --knob: #ffffff;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); }
+body { font: 13px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; }
+button { font: inherit; color: inherit; }
+
+.brand { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
+.brand img { width: 20px; height: 20px; }
+.brand h1, .brand span { font-size: 14px; font-weight: 600; margin: 0; }
+
+.card { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+.card h2 { font-size: 12px; font-weight: 600; color: var(--dim); margin: 0 0 8px; }
+
+.ok { color: var(--ok); } .warn { color: var(--warn); } .err { color: var(--err); } .dim { color: var(--dim); }
+
+/* ---- Popup ---- */
+body.popup { width: 340px; padding: 14px; }
+
+#state { font-weight: 600; }
+.detail { color: var(--dim); font-size: 12px; margin-top: 2px; word-break: break-word; }
+.detail:empty { display: none; }
+
+.switch-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; cursor: pointer; }
+.switch-row + .switch-row { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; }
+.switch-row .text { display: flex; flex-direction: column; }
+.switch-row small { color: var(--dim); font-size: 12px; }
+.switch-row.disabled { cursor: default; opacity: .5; }
+
+/* A checkbox drawn as a switch. */
+input.switch {
+  appearance: none; -webkit-appearance: none; flex: 0 0 auto;
+  width: 34px; height: 20px; margin: 1px 0 0; border-radius: 10px;
+  background: var(--line); position: relative; cursor: pointer; transition: background .15s;
+}
+input.switch::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--knob); box-shadow: 0 1px 2px rgba(0, 0, 0, .3); transition: transform .15s;
+}
+input.switch:checked { background: var(--ok); }
+input.switch:checked::after { transform: translateX(14px); }
+input.switch:disabled { cursor: default; }
+input.switch:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+
+#sites { list-style: none; margin: 0; padding: 0; }
+#sites li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+#sites li:first-child { border-top: 0; padding-top: 0; }
+#sites .origin { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#sites .decision { font-size: 12px; }
+#sites .remove {
+  flex: 0 0 auto; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px;
+  background: transparent; color: var(--dim); font-size: 16px; line-height: 22px; cursor: pointer;
+}
+#sites .remove:hover, #sites .remove:focus-visible { background: var(--line); color: var(--fg); }
+/* The questions waiting in consent windows, each with a button to show it. */
+#questions[hidden] { display: none; }
+#questionList { list-style: none; margin: 0; padding: 0; }
+#questionList li { display: flex; align-items: center; gap: 8px; }
+#questionList li + li { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; }
+#questionList .question { flex: 1; min-width: 0; color: var(--warn); overflow-wrap: anywhere; }
+#questionList .show {
+  flex: 0 0 auto; padding: 3px 10px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line); background: transparent;
+}
+#questionList .show:hover, #questionList .show:focus-visible { background: var(--line); }
+
+.empty { color: var(--dim); font-size: 12px; }
+.empty[hidden] { display: none; }
+
+footer { color: var(--dim); font-size: 11px; text-align: center; }
+
+/* ---- Consent window ---- */
+body.consent { padding: 18px 20px; }
+body.consent h1 { font-size: 16px; font-weight: 600; margin: 0 0 8px; line-height: 1.35; }
+body.consent h1 b, body.consent #embedded b { word-break: break-all; }
+body.consent #embedded[hidden] { display: none; }
+body.consent p { margin: 0 0 6px; }
+.buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.buttons button {
+  min-width: 96px; padding: 6px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--line); background: transparent;
+}
+.buttons button.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); font-weight: 600; }
+.buttons button:focus-visible { outline: 2px solid var(--ok); outline-offset: 2px; }
+.buttons button:disabled { opacity: .5; cursor: default; }

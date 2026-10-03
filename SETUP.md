@@ -46,6 +46,10 @@ The Mac's own sound (meeting audio, alerts, video)
 The user's camera (optional, installer package built with the provisioning profile only)
   ↓ H.264 over the same connection → the Remote Visio Camera virtual camera (a system extension)
 Video apps on the Mac (Zoom, FaceTime …) read Remote Visio Camera as an ordinary webcam
+
+  or, where that extension can't be installed (optional browser camera, Step 7):
+  ↓ the same H.264, undecoded, over the Mac's loopback → the Remote Visio Camera browser extension
+Web meetings in a Chromium browser (Meet, Teams or Zoom on the web …) read it as a webcam
 ```
 
 Remote Visio needs **macOS 14.2 or later** on the remote Mac: that is the first release with
@@ -53,7 +57,9 @@ the Core Audio tap the return path uses. The return path also needs a one-time "
 Recording" permission; see Step 6. The virtual camera needs a one-time approval of its
 extension in System Settings; it only exists in packages built with the team's Developer ID
 and provisioning profile (`macos/README.md`, "Virtual camera"), and everything else works
-without it.
+without it. Where it cannot be used (a build without it, a Mac whose management policy refuses
+it, nobody to approve it), the optional browser camera (Step 7) brings the same camera to web
+meetings in Chromium browsers, with no administrator and no approval in System Settings.
 
 Remote Visio does **not** replace the remote desktop tool — it runs alongside whichever one the user
 already has.
@@ -156,6 +162,9 @@ Running the package:
    `Camera: needs approval in System Settings` until then, and `Camera: active` afterwards; the
    `Relay the Camera` item in the same menu turns the relay off and on.
 
+The browser camera (Step 7) is not part of that: it is optional, and the user installs it from
+the menu-bar menu when they want it.
+
 **Gatekeeper**: `make pkg` signs the package with the team's Developer ID
 certificates and has Apple notarize it, so it opens anywhere. A test package built with
 `make pkg-unsigned` (`RemoteVisio-2.0-arm64-unsigned.pkg`) is for the Mac that built it; on another
@@ -172,13 +181,15 @@ systemextensionsctl list | grep com.remotevisio.app.camera   # camera builds onl
 Then continue at **Step 4**. The sender URL is also listed in the menu-bar icon's menu. If the
 camera line says `[activated waiting for user]`, the approval in item 4 above is still pending;
 if the extension is not listed at all, the package was built without it (the menu-bar menu then
-shows no camera items) — audio is unaffected.
+shows no `Camera:` line) — audio is unaffected, and the browser camera (Step 7) can stand in for
+web meetings.
 
 - Upgrade: run the new package. It quits the running app, replaces everything, restarts
   coreaudiod and relaunches the app.
 - Uninstall everything: **Uninstall Remote Visio…** in the menu-bar menu, or `/Applications/RemoteVisio.app/Contents/Resources/uninstall.sh` (asks for
-  the admin password; removes the login item, the camera extension, the app, the driver and the
-  package receipts).
+  the admin password; removes the login item, the camera extension, the app, the driver, the
+  package receipts and the browser camera's folder). If the browser camera was installed, the
+  user also removes "Remote Visio Camera" from the browser's extensions page.
 - Building the package, on a Mac that has the prerequisites above plus
   `brew install opus pkg-config`: `make pkg` → `bin/RemoteVisio-<version>-<arch>.pkg`
   (currently `bin/RemoteVisio-2.0-arm64.pkg`), signed and notarized with the team's Developer ID
@@ -366,7 +377,7 @@ There is also a monitor page at `https://<mac-ip>:7420/monitor` with waveforms a
 
 The receiver also sends the Mac's system audio back to the sender — meeting participants,
 alerts, a video — so the user can turn audio off in the remote desktop tool and hear everything
-through the same low-latency connection. It is on by default (`-speaker`). The Mac keeps playing the sound locally too; `-speaker-mute` silences its own speakers while relaying, and the menu-bar app has a toggle for that. Nothing to install:
+through the same low-latency connection. It is on by default (`-speaker`). The Mac keeps playing the sound locally too; `-speaker-mute` silences its own speakers while relaying, and the menu-bar app has a toggle for that (**Mute This Mac's Speakers**). Its neighbour, **Mute This Mac's Microphone** (`-mic-mute`), mutes the Mac's own microphones (built-in, USB, Bluetooth; never Remote Visio's device) while the receiver runs, so a meeting or dictation on the Mac picks up only the remote voice, not the room or the Mac's speakers; each one plugged in meanwhile is muted too. Unlike the speakers' mute, a microphone's mute is the device's own setting and outlives the process, so the receiver writes each microphone's setting down first (`~/.config/remotevisio/mic-mute.json`) and puts it back when it stops; after a crash, the next start does, and `-mic-restore` (which the uninstaller runs) does it on its own. Nothing to install:
 it uses a Core Audio system-audio tap, so there is no second virtual device and the Mac's own
 output device is untouched. The tap carries whatever plays through the Mac's **default output
 device**; an app that is pointed at some other output device by hand is not heard. The log line
@@ -398,6 +409,109 @@ On the sending side:
 
 ---
 
+## Step 7: the browser camera (optional)
+
+**Only when the user wants their camera in web meetings and the camera system extension is not
+available**: the menu says `Camera: failed (blocked by this Mac's management policy…)`, it has
+no `Camera:` line (a build without the extension), or nobody can approve the extension. If the
+camera extension is active, skip this step.
+
+The browser camera is **Remote Visio Camera**, a browser extension for Chromium browsers
+(Chrome, Edge, Brave, Arc, Vivaldi, Opera …). It adds a camera of that name to the camera list
+of web pages, so Google Meet, Teams on the web, Zoom's web client and the like can pick it. It
+needs no administrator and no approval in System Settings. Tell the user its limits up front:
+
+- **web pages only**: the Zoom, Teams and FaceTime apps cannot see it; for those meetings the
+  user joins from the browser instead (Zoom: "Join from your browser"; Teams: "Continue on this
+  browser");
+- **Chromium browsers only**: Safari and Firefox cannot load it;
+- **one browser profile**: it works in the profile it is loaded into (see "Profiles" below).
+  Private windows (Incognito; InPrivate in Edge) get it only once **Allow in Incognito** (Edge:
+  Allow in InPrivate) is on in the extension's **Details**; Guest windows cannot use extensions.
+
+**Install** (the menu-bar app, from the installer package or `make install`). The extension is in
+the Chrome Web Store, ID `bhijcffjnmjijifjiaeibbogmbohdmon`. Have the user choose **Install
+Browser Camera Extension…** in the menu-bar menu. The app finds the default browser (when that is
+not a Chromium browser it offers the ones installed, or says there is none: install Chrome, Edge,
+Brave or Arc and try again), opens the extension's store page there and turns the browser camera
+on (the receiver restarts once; a connected sender reconnects by itself). When the browser itself
+is managed by an organization whose policy forbids the extension, the app says instead what the
+organization's IT would have to change (for a store extension, usually allowing its ID) and
+offers the other Chromium browsers installed. Then the user, in the browser:
+
+1. clicks **Add to Chrome** on the store page (**Get** in Edge, which may first ask to allow
+   extensions from other stores: allow it), then **Add extension**;
+2. pins it, so that its button stays in the toolbar: the Extensions button (the puzzle piece),
+   then the pin next to **Remote Visio Camera**. That button holds the extension's settings and
+   the sites it has asked about;
+3. reloads meeting pages that were already open, picks **Remote Visio Camera** as the camera in
+   the meeting, and clicks **Allow** when the extension asks whether the site may use it. It
+   asks once per site, the one in the address bar (a meeting embedded in another site's page
+   counts as that site), and remembers the answer.
+
+**Browser Camera** in the menu turns the relay on and off, and the install item becomes
+**Reinstall Browser Camera Extension…**. A user who added the extension straight from the store,
+without the menu item, turns **Browser Camera** on there. `Relay the Camera` is the master
+switch: off, neither camera gets the video. The store updates the extension by itself.
+
+**Profiles.** The extension belongs to one browser profile, and the store page opens in the
+profile used last. If the user's meetings run in another profile (in Arc: a Space tied to another
+profile), add it in a window of that profile too; likewise for a second browser.
+
+**Without the store** (a policy that blocks store extensions but not this way, no access to the
+store, or a developer's checkout): the install alert's **Load Unpacked Instead…** copies the
+extension to `~/Library/Application Support/RemoteVisio/Browser Camera Extension`, opens the
+browser's extensions page, shows the folder in Finder and puts its path on the clipboard. The
+user then turns on **Developer mode** (a switch at the top right in Chrome, Brave and Arc; in the
+left column in Edge) and **leaves it on**, since the browser switches such an extension off while
+it is off; clicks **Load unpacked** and chooses that folder (in the file dialog, Command-Shift-G,
+paste the path, Return), or drags the folder onto the page; then pins it as above. Edge may show,
+when it starts, a notice offering to turn off extensions in developer mode: close it without
+turning them off. The app keeps that copy up to date at every launch; the browser picks the new
+files up at its next restart.
+
+**From source, without the app**: start the receiver with `-browser-camera` (in the launchd
+plist, one more `<string>-browser-camera</string>` in `ProgramArguments`), then
+`macos/browser-extension.sh install` does what the menu item does (`--unpacked` for the unpacked
+way), from the repository; or have the user load `browser-extension/` unpacked directly.
+
+**Verify** on the Mac:
+
+```bash
+curl -s -X POST -H 'Origin: chrome-extension://jmiffhdbakchdlfbfdiaclkilcdhcgkf' \
+  http://127.0.0.1:7421/camera/status
+```
+
+It answers `{"protocol":1,"on":true,"video":false,"fps":0,"viewers":0,"pages":[]}`. `"on":false`
+means the `Browser Camera` item (or `Relay the Camera`) is off. No answer, or an answer that is
+not this JSON, means the receiver is not running or another program holds port 7421 (see
+Troubleshooting). With **Send this device's camera** ticked on the sender page, `"video"` turns
+true and `fps` counts frames; once a meeting page uses the camera, `viewers` counts it and
+`pages` names the site. The monitor page shows the same on its `Browser camera` line, naming
+the sites only when it is opened on this Mac (other machines see how many pages); when the
+receiver could not open port 7421 that line says unavailable, and why. Until video arrives, the
+camera shows a dark card titled "Remote Visio Camera" whose second line says what it is
+waiting for.
+
+How it works, if the user asks: the receiver forwards the camera's H.264 packets to the page as
+they arrive, without decoding them, over a WebRTC connection inside the Mac that the extension
+sets up at `127.0.0.1:7421`; the browser decodes them. That address cannot be reached from
+other machines, and the receiver answers only requests carrying the extension's origin, which
+web pages cannot send; programs running on the Mac itself are not kept out by that check. Each
+site needs the user's permission once, and nothing on that leg leaves the Mac. The extension's
+button shows its state, the sites allowed or blocked (removing one makes it ask again) and a
+switch to offer the camera to websites at all; taking a site's permission back there, or
+switching that off, disconnects a page that is using the camera at once.
+
+**Updates**: the store updates its extension by itself, once a new version is published there
+(the browser checks every few hours). For an unpacked copy, each time the app starts after an
+update it refreshes the extension's folder; the browser picks the new files up at its next
+restart (or at once with the reload arrow on the extension's card in the extensions page).
+**Removal**: Remove on the extension's card (Remove from Chrome, for the store's); the app's
+uninstaller deletes the unpacked folder, if there is one.
+
+---
+
 ## Common flags
 
 ```bash
@@ -408,8 +522,16 @@ On the sending side:
   -speaker=false \        # don't send the Mac's system audio back (default: on)
   -speaker-bitrate 64000 \# Opus bitrate of the return path, bps
   -speaker-mute \         # keep this Mac's own speakers silent while relaying (sender still hears it)
+  -mic-mute \             # mute this Mac's own microphones while running (put back when it stops)
+  -camera=false \         # don't relay the camera into the camera system extension (default: on)
+  -browser-camera \       # relay the camera to the browser extension (Step 7; default: off)
   -meter                  # print levels, for diagnosis
 ```
+
+The browser camera has two more flags, for testing: `-browser-camera-addr` (default
+`127.0.0.1:7421`, loopback addresses only; the extension has that address built in, and an empty
+value turns the listener off) and `-browser-camera-origins` (the extension origins allowed to
+connect, comma-separated; unset or empty, the Remote Visio Camera extension's).
 
 **Don't casually lower `-buffer 150`.** 150 ms was measured on real networks. 20 ms sounds
 great on a LAN and falls apart on hotel Wi-Fi. Likewise `-dtx` is off by default because silence
@@ -478,13 +600,24 @@ running executable lets macOS mix old and new, and the symptom is bizarre behavi
 | Startup reports `audio initialization failed` | Core Audio itself could not be initialised (the text after the colon says why); it is not about the Remote Visio device. `sudo killall coreaudiod`, or reboot |
 | No microphone permission prompt in the browser | The page isn't HTTPS, or the user denied it earlier. Reset the permission in the browser's site settings |
 | The page won't load at all | Port 7420 isn't reachable. This is a signalling problem, not a WebRTC one — check both ends are online with `tailscale status` |
-| Page loads but won't connect | Signalling works, media doesn't. Rare inside Tailscale; across the public internet you need TURN |
+| Page loads but won't connect (stays on "Connecting...") | Signalling works, media doesn't. Rare inside Tailscale; across the public internet you need TURN. To see why, open the sender page with `?debug=1` (or tap **Debug log** at the bottom), press Start, wait 15 seconds and tap **Copy**: the log lists this device's and the receiver's ICE candidates, the connection's states, and every candidate pair with the checks sent and answered each way. Checks sent but never answered: the network drops UDP between the two devices (Wi-Fi client isolation, a VPN, a firewall). No candidate pairs at all: the two sides have no address in common. Only `.local` addresses on this device's side: the browser hides its addresses until the microphone is allowed, and the network drops multicast DNS. The log stops at `sending the offer` and, 15 s later, says `The receiver did not answer`: the receiver took the offer and never answered. Its log (`~/Library/Logs/RemoteVisio.log`) then has `connection state: connecting` but no `sender connected from`; a receiver from before this check waited for ever on its candidate gathering, a current one answers after 4 s at most and logs `answer: candidate gathering not finished` |
 | Connected but the Mac hears nothing | Wrong input device in the app. It must be `Remote Visio` |
 | Choppy audio | Network jitter. Raise `-buffer` to 200–300 |
 | Dictation drops the first syllable | Don't enable `-dtx` (it's off by default) |
 | The sender hears nothing from the Mac | Monitor page shows `silent`: the "System Audio Recording" permission is missing (Step 6). Also check the page's **Hear the remote Mac** checkbox is on |
-| No "Remote Visio Camera" in the video app; the menu says `Camera: needs approval in System Settings`, or the log says `virtual camera unavailable` | The camera extension is not active yet. Approve it under System Settings > General > Login Items & Extensions > Camera Extensions (macOS 14: Privacy & Security), then reopen the video app. If the menu-bar menu shows no camera items at all, the package was built without the extension (ad-hoc build, or no provisioning profile on the build Mac; `macos/README.md`, "Virtual camera"): rebuild it with the profile, or do without — audio works either way |
-| The menu says `Camera: failed (blocked by this Mac's management policy…)` | The Mac is managed (MDM) and its system-extension policy activates only the extensions the administrator lists; nothing on the Mac itself can override it. Ask whoever manages it to allow team ID `99F33YCKX9`, bundle `com.remotevisio.app.camera` (a Camera / Core Media I/O extension) in that policy, or use an unmanaged Mac. Audio is unaffected |
+| No "Remote Visio Camera" in the video app; the menu says `Camera: needs approval in System Settings`, or the log says `virtual camera (system extension) unavailable` | The camera extension is not active yet. Approve it under System Settings > General > Login Items & Extensions > Camera Extensions (macOS 14: Privacy & Security), then reopen the video app. If the menu-bar menu shows no `Camera:` line at all, the package was built without the extension (ad-hoc build, or no provisioning profile on the build Mac; `macos/README.md`, "Virtual camera"): rebuild it with the profile, use the browser camera for web meetings (Step 7), or do without — audio works either way |
+| The menu says `Camera: failed (blocked by this Mac's management policy…)` | The Mac is managed (MDM) and its system-extension policy activates only the extensions the administrator lists; nothing on the Mac itself can override it. Ask whoever manages it to allow team ID `99F33YCKX9`, bundle `com.remotevisio.app.camera` (a Camera / Core Media I/O extension) in that policy, or use an unmanaged Mac. For web meetings, the browser camera (Step 7) needs no such approval. Audio is unaffected |
+| "Remote Visio Camera" is missing from a web meeting's camera list | In turn: the extension is not loaded in this browser profile (look at the extensions page in a window of the profile the meeting runs in; its card must be there and on), the page was open before it was loaded (reload the page), the window is private (turn on **Allow in Incognito**, Edge: Allow in InPrivate, in the extension's Details; Guest windows cannot use it), or the site is not a web page in a Chromium browser: Safari, Firefox and the Zoom / Teams / FaceTime apps cannot see it (Step 7). If the site picks a camera by itself and offers no choice, turn on "Use it when a site asks for any camera" in the extension's button (in the toolbar once pinned, otherwise in the Extensions menu, the puzzle piece) |
+| The camera is gone and the extension's card says "Turn on developer mode to use this extension" | Developer mode was turned off on the extensions page, and the browser switches unpacked extensions off without it. Turn it back on (the extension comes back by itself) and reload the meeting page |
+| Edge: the camera was there, and after a restart of Edge it is gone (the extension's card is off) | Edge offered at startup to turn off extensions in developer mode, and that was accepted. Switch the card back on and reload the meeting page; next time, close that notice without turning them off |
+| The browser camera's card says Remote Visio is not running on this Mac | The receiver is not running, or it is an older one without the browser camera (its menu has no **Browser Camera**: update Remote Visio): start the app (or the receiver); the popup and the camera recover by themselves within a few seconds, without reloading the page. If Remote Visio is running (audio works), another program holds port 7421: the monitor's `Browser camera` line says unavailable, and the log (`~/Library/Logs/RemoteVisio.log`) has `browser camera unavailable: … address already in use`. `lsof -nP -iTCP:7421 -sTCP:LISTEN` names that program; quit it, then quit and reopen Remote Visio |
+| The browser camera's card says Remote Visio does not accept this copy of the extension | The extension was loaded from a folder without its key, such as the unzipped `bin/RemoteVisioCamera-<version>.zip` (that zip is for the Chrome Web Store only), so the browser gave it an ID of its own, which the receiver refuses. Remove it on the browser's extensions page (`chrome://extensions`), then choose **Install Browser Camera Extension…** in the menu |
+| The browser camera's card says it is turned off in the Remote Visio menu | `Browser Camera` (or the master switch `Relay the Camera`) is off in the menu-bar menu; bare receiver: start it with `-browser-camera`. The item is greyed out while `Relay the Camera` is off: turn that on first. After adding the extension straight from the store, without the menu's install item, tick `Browser Camera` once |
+| The browser camera's card waits for the remote camera | Nothing is coming from the sender: tick **Send this device's camera** on the sender page. The Step 7 `curl` shows `"video":true` once it arrives |
+| The browser camera's card says the browser blocked the local connection, or stays on "Connecting to Remote Visio…" while the extension's button shows the camera arriving | A browser setting or policy keeps the page from connecting to Remote Visio on this Mac (`127.0.0.1`): the organization's WebRTC policies (`chrome://policy`; ask IT), another extension that blocks WebRTC, or, in browser versions that ask, a declined prompt letting the site "access other apps and services on this device". Allow that for the site in its site settings (the icon at the left of the address bar), then reload the page |
+| A site gets no browser camera and does not ask for it | The user answered Don't allow for that site once. The extension's button lists the sites; remove this one and the site asks again. The site is the one in the address bar: a meeting embedded in another site's page counts as that site |
+| Developer mode cannot be turned on, or the extension is disabled right after loading | The browser itself is managed by the organization and forbids Developer mode or this extension (`chrome://policy` shows what it set); **Install Browser Camera Extension…** says so, names what IT would have to change and offers the other Chromium browsers installed. Use one the organization does not manage, or ask the administrator |
+| After an update of the app the extension behaves like the old version | The browser loads the new files at its next restart; or click the reload arrow on the extension's card in the extensions page |
 | Log says `System audio return unavailable: the Mac's default output device is ...` | Only possible with a non-default `-device`: the Mac's output is set to the device the receiver plays into. `System Settings → Sound → Output` → pick the speakers, then restart the receiver |
 | The user hears their own voice, or the Mac's audio twice | The remote desktop tool is still forwarding audio. Turn it off there — Remote Visio carries the Mac's sound now |
 | Meeting participants hear themselves echo | The user is on the native sender without headphones, or on the web page with the checkbox off while the remote tool plays audio. Headphones, or enable the checkbox so echo cancellation kicks in |
@@ -522,9 +655,18 @@ Don't just say "it's installed". Cover these, in the user's own language:
    tool's settings; the return path is the **Hear the remote Mac** checkbox on the sender page
 7. **Roughly how much latency** — network round trip plus a 150 ms buffer, close to a phone call.
    Fine for talking, dictation and meetings; **not** for monitoring yourself while recording
-8. **Privacy** — the audio goes over an encrypted peer-to-peer connection and doesn't touch a
+8. **The browser camera, if they installed it (Step 7)** — pick `Remote Visio Camera` as the
+   camera in the web meeting; it works on web pages in the browser profile it was loaded into,
+   not in the Zoom / Teams / FaceTime apps, and each new site asks once. Loaded unpacked (without the store),
+   Developer mode stays on (in Edge, decline the startup offer to turn such extensions off). The
+   extension's button (pinned in the toolbar) takes a site's permission back; the
+   `Browser Camera` item in the menu-bar menu turns the whole thing off
+9. **Privacy** — the audio goes over an encrypted peer-to-peer connection and doesn't touch a
    third party when it connects directly. No server of the author's is involved, so there is
-   nothing on that side that could record. The code is open and can be checked
+   nothing on that side that could record. The camera takes the same connection, and the
+   browser camera's last leg stays on the Mac (the extension talks only to the receiver at
+   `127.0.0.1`); which sites use it is shown only on the Mac itself. The code is open and can be
+   checked
 
 If the user's scenario is "an iPhone in the same room as the Mac", tell them they **don't need
 Remote Visio** — Apple's Continuity Microphone does that for free. Remote Visio is about distance:

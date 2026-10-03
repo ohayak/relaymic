@@ -1,0 +1,195 @@
+{
+  "ext_name": {
+    "message": "Remote Visio Camera"
+  },
+  "ext_description": {
+    "message": "Offre alle pagine web una Remote Visio Camera: la fotocamera del dispositivo che invia a questo Mac con Remote Visio."
+  },
+  "slate_connecting": {
+    "message": "Connessione a Remote Visio…"
+  },
+  "slate_waiting": {
+    "message": "In attesa della fotocamera remota"
+  },
+  "slate_waiting_hint": {
+    "message": "Attiva «Invia la fotocamera di questo dispositivo» sul dispositivo che invia"
+  },
+  "slate_down": {
+    "message": "Remote Visio non è in esecuzione su questo Mac"
+  },
+  "slate_down_hint": {
+    "message": "È già aperto? Se nel suo menu manca «Fotocamera del browser», aggiorna Remote Visio.",
+    "description": "Slate, under slate_down. An older Remote Visio has no browser camera and reads as not running; quotes the menu item bcam_toggle of the menu-bar app."
+  },
+  "slate_refused": {
+    "message": "Remote Visio non accetta questa copia dell'estensione",
+    "description": "Slate: the receiver refused this extension's ID: a copy it does not know, such as one unpacked from the Chrome Web Store zip (no key, so an ID of its own)."
+  },
+  "slate_refused_hint": {
+    "message": "Rimuovila dalla pagina delle estensioni del browser, poi scegli «Installa l'estensione fotocamera del browser…» nel menu di Remote Visio.",
+    "description": "Under slate_refused. Quotes the menu item bcam_install of the menu-bar app."
+  },
+  "slate_off": {
+    "message": "La fotocamera del browser è disattivata nel menu di Remote Visio"
+  },
+  "slate_busy": {
+    "message": "La fotocamera è occupata: troppe pagine la stanno usando"
+  },
+  "slate_codec": {
+    "message": "Questo browser non può riprodurre il video H.264 della fotocamera"
+  },
+  "slate_blocked": {
+    "message": "Questo browser ha bloccato la connessione locale a Remote Visio"
+  },
+  "slate_blocked_hint": {
+    "message": "Nelle impostazioni di questo sito, consentigli di accedere ad altre app e servizi di questo dispositivo, oppure chiedi al reparto IT della policy WebRTC del browser"
+  },
+  "popup_question": {
+    "message": "$SITE$ attende la tua risposta",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "meet.google.com"
+      }
+    }
+  },
+  "popup_question_show": {
+    "message": "Mostra"
+  },
+  "popup_checking": {
+    "message": "Verifica in corso…"
+  },
+  "popup_status_down": {
+    "message": "Remote Visio non è in esecuzione su questo Mac"
+  },
+  "popup_status_down_hint": {
+    "message": "È già aperto? Se nel suo menu manca «Fotocamera del browser», aggiorna Remote Visio.",
+    "description": "Popup, under popup_status_down. An older Remote Visio has no browser camera and reads as not running; quotes the menu item bcam_toggle of the menu-bar app."
+  },
+  "popup_status_refused": {
+    "message": "Remote Visio non accetta questa copia dell'estensione",
+    "description": "Popup status: the receiver refused this extension's ID: a copy it does not know, such as one unpacked from the Chrome Web Store zip (no key, so an ID of its own)."
+  },
+  "popup_status_refused_hint": {
+    "message": "Rimuovila dalla pagina delle estensioni del browser, poi scegli «Installa l'estensione fotocamera del browser…» nel menu di Remote Visio.",
+    "description": "Under popup_status_refused. Quotes the menu item bcam_install of the menu-bar app."
+  },
+  "popup_status_off": {
+    "message": "La fotocamera del browser è disattivata nel menu di Remote Visio"
+  },
+  "popup_status_waiting": {
+    "message": "In attesa della fotocamera remota"
+  },
+  "popup_status_waiting_hint": {
+    "message": "Attiva «Invia la fotocamera di questo dispositivo» sul dispositivo che invia."
+  },
+  "popup_status_receiving": {
+    "message": "Ricezione della fotocamera remota, $FPS$ fps",
+    "placeholders": {
+      "fps": {
+        "content": "$1",
+        "example": "30"
+      }
+    }
+  },
+  "popup_in_use": {
+    "message": "Usata da $PAGES$",
+    "placeholders": {
+      "pages": {
+        "content": "$1",
+        "example": "meet.google.com, teams.microsoft.com"
+      }
+    }
+  },
+  "popup_in_use_count": {
+    "message": "Usata da $PAGES$ ($COUNT$ connessioni)",
+    "placeholders": {
+      "pages": {
+        "content": "$1",
+        "example": "meet.google.com"
+      },
+      "count": {
+        "content": "$2",
+        "example": "3"
+      }
+    }
+  },
+  "popup_in_use_unnamed": {
+    "message": "Connessioni che non indicano alcun sito: $COUNT$",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "popup_enabled": {
+    "message": "Offri Remote Visio Camera ai siti web"
+  },
+  "popup_enabled_hint": {
+    "message": "I siti la mostrano insieme alle loro fotocamere. Ti viene chiesto prima che un sito la usi per la prima volta."
+  },
+  "popup_prefer": {
+    "message": "Usala quando un sito chiede una fotocamera qualsiasi"
+  },
+  "popup_prefer_hint": {
+    "message": "Al posto della fotocamera di questo Mac."
+  },
+  "popup_sites": {
+    "message": "Siti"
+  },
+  "popup_no_sites": {
+    "message": "Nessun sito ha ancora chiesto la fotocamera."
+  },
+  "popup_site_allowed": {
+    "message": "Consentito"
+  },
+  "popup_site_blocked": {
+    "message": "Bloccato"
+  },
+  "popup_site_remove": {
+    "message": "Rimuovi"
+  },
+  "popup_version": {
+    "message": "Versione $VERSION$",
+    "placeholders": {
+      "version": {
+        "content": "$1",
+        "example": "1.0.0"
+      }
+    }
+  },
+  "consent_question": {
+    "message": "Consentire a $ORIGIN$ di usare Remote Visio Camera?",
+    "placeholders": {
+      "origin": {
+        "content": "$1",
+        "example": "meet.google.com"
+      }
+    }
+  },
+  "consent_embedded": {
+    "message": "Richiesta da $FRAME$, incorporato in questo sito.",
+    "placeholders": {
+      "frame": {
+        "content": "$1",
+        "example": "meet.jit.si"
+      }
+    }
+  },
+  "consent_body": {
+    "message": "Il sito vedrà la fotocamera del dispositivo remoto."
+  },
+  "consent_note": {
+    "message": "Puoi cambiare idea più tardi dal menu Estensioni (l'icona a forma di pezzo di puzzle) › Remote Visio Camera."
+  },
+  "consent_allow": {
+    "message": "Consenti"
+  },
+  "consent_deny": {
+    "message": "Non consentire"
+  },
+  "consent_invalid": {
+    "message": "Questa richiesta non è più valida."
+  }
+}

@@ -1,0 +1,195 @@
+{
+  "ext_name": {
+    "message": "Remote Visio Camera"
+  },
+  "ext_description": {
+    "message": "为网页提供 Remote Visio Camera：通过 Remote Visio 向这台 Mac 发送画面的那台设备的摄像头。"
+  },
+  "slate_connecting": {
+    "message": "正在连接 Remote Visio…"
+  },
+  "slate_waiting": {
+    "message": "等待远端摄像头"
+  },
+  "slate_waiting_hint": {
+    "message": "在发送端设备上打开“发送这台设备的摄像头”"
+  },
+  "slate_down": {
+    "message": "这台 Mac 上的 Remote Visio 没有运行"
+  },
+  "slate_down_hint": {
+    "message": "已经打开了？如果它的菜单里没有“浏览器摄像头”，请更新 Remote Visio。",
+    "description": "Slate, under slate_down. An older Remote Visio has no browser camera and reads as not running; quotes the menu item bcam_toggle of the menu-bar app."
+  },
+  "slate_refused": {
+    "message": "Remote Visio 不接受这份扩展副本",
+    "description": "Slate: the receiver refused this extension's ID: a copy it does not know, such as one unpacked from the Chrome Web Store zip (no key, so an ID of its own)."
+  },
+  "slate_refused_hint": {
+    "message": "请在浏览器的扩展程序页面移除它，然后在 Remote Visio 菜单里选择“安装浏览器摄像头扩展…”。",
+    "description": "Under slate_refused. Quotes the menu item bcam_install of the menu-bar app."
+  },
+  "slate_off": {
+    "message": "浏览器摄像头已在 Remote Visio 菜单里关闭"
+  },
+  "slate_busy": {
+    "message": "摄像头忙：使用它的页面太多"
+  },
+  "slate_codec": {
+    "message": "这个浏览器播放不了摄像头的 H.264 视频"
+  },
+  "slate_blocked": {
+    "message": "这个浏览器阻止了与 Remote Visio 的本地连接"
+  },
+  "slate_blocked_hint": {
+    "message": "在这个网站的设置里允许它访问这台设备上的其他应用和服务，或者向 IT 部门询问浏览器的 WebRTC 策略"
+  },
+  "popup_question": {
+    "message": "$SITE$ 正在等待你的回答",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "meet.google.com"
+      }
+    }
+  },
+  "popup_question_show": {
+    "message": "显示"
+  },
+  "popup_checking": {
+    "message": "正在检查…"
+  },
+  "popup_status_down": {
+    "message": "这台 Mac 上的 Remote Visio 没有运行"
+  },
+  "popup_status_down_hint": {
+    "message": "已经打开了？如果它的菜单里没有“浏览器摄像头”，请更新 Remote Visio。",
+    "description": "Popup, under popup_status_down. An older Remote Visio has no browser camera and reads as not running; quotes the menu item bcam_toggle of the menu-bar app."
+  },
+  "popup_status_refused": {
+    "message": "Remote Visio 不接受这份扩展副本",
+    "description": "Popup status: the receiver refused this extension's ID: a copy it does not know, such as one unpacked from the Chrome Web Store zip (no key, so an ID of its own)."
+  },
+  "popup_status_refused_hint": {
+    "message": "请在浏览器的扩展程序页面移除它，然后在 Remote Visio 菜单里选择“安装浏览器摄像头扩展…”。",
+    "description": "Under popup_status_refused. Quotes the menu item bcam_install of the menu-bar app."
+  },
+  "popup_status_off": {
+    "message": "浏览器摄像头已在 Remote Visio 菜单里关闭"
+  },
+  "popup_status_waiting": {
+    "message": "等待远端摄像头"
+  },
+  "popup_status_waiting_hint": {
+    "message": "在发送端设备上打开“发送这台设备的摄像头”。"
+  },
+  "popup_status_receiving": {
+    "message": "正在接收远端摄像头，$FPS$ fps",
+    "placeholders": {
+      "fps": {
+        "content": "$1",
+        "example": "30"
+      }
+    }
+  },
+  "popup_in_use": {
+    "message": "$PAGES$ 在用",
+    "placeholders": {
+      "pages": {
+        "content": "$1",
+        "example": "meet.google.com, teams.microsoft.com"
+      }
+    }
+  },
+  "popup_in_use_count": {
+    "message": "$PAGES$ 在用（共 $COUNT$ 个连接）",
+    "placeholders": {
+      "pages": {
+        "content": "$1",
+        "example": "meet.google.com"
+      },
+      "count": {
+        "content": "$2",
+        "example": "3"
+      }
+    }
+  },
+  "popup_in_use_unnamed": {
+    "message": "没有注明网站的连接：$COUNT$ 个",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "popup_enabled": {
+    "message": "向网站提供 Remote Visio Camera"
+  },
+  "popup_enabled_hint": {
+    "message": "网站会把它和其他摄像头列在一起。网站第一次使用前会先问你。"
+  },
+  "popup_prefer": {
+    "message": "网站请求任意摄像头时用它"
+  },
+  "popup_prefer_hint": {
+    "message": "代替这台 Mac 自己的摄像头。"
+  },
+  "popup_sites": {
+    "message": "网站"
+  },
+  "popup_no_sites": {
+    "message": "还没有网站请求过摄像头。"
+  },
+  "popup_site_allowed": {
+    "message": "已允许"
+  },
+  "popup_site_blocked": {
+    "message": "已阻止"
+  },
+  "popup_site_remove": {
+    "message": "移除"
+  },
+  "popup_version": {
+    "message": "版本 $VERSION$",
+    "placeholders": {
+      "version": {
+        "content": "$1",
+        "example": "1.0.0"
+      }
+    }
+  },
+  "consent_question": {
+    "message": "允许 $ORIGIN$ 使用 Remote Visio Camera？",
+    "placeholders": {
+      "origin": {
+        "content": "$1",
+        "example": "meet.google.com"
+      }
+    }
+  },
+  "consent_embedded": {
+    "message": "请求来自嵌入在这个网站里的 $FRAME$。",
+    "placeholders": {
+      "frame": {
+        "content": "$1",
+        "example": "meet.jit.si"
+      }
+    }
+  },
+  "consent_body": {
+    "message": "该网站将看到远端设备的摄像头画面。"
+  },
+  "consent_note": {
+    "message": "之后可以在扩展程序菜单（拼图图标）› Remote Visio Camera 里更改。"
+  },
+  "consent_allow": {
+    "message": "允许"
+  },
+  "consent_deny": {
+    "message": "不允许"
+  },
+  "consent_invalid": {
+    "message": "这个请求已失效。"
+  }
+}

@@ -1,6 +1,6 @@
 // Package icons holds the icon tile the Go programs show: the favicons the
 // receiver serves for its pages and the sender GUI's window icon are the
-// same picture, so it lives once. macos/icons.py derives the files from icons/.
+// same picture, so it lives once (the white-on-ink tile of icons/).
 package icons
 
 import (

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Remote Visio Camera</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body class="consent">
+<main>
+  <div class="brand">
+    <img src="icons/icon-32.png" alt="">
+    <span data-i18n="ext_name">Remote Visio Camera</span>
+  </div>
+  <h1 id="question"></h1>
+  <p id="embedded" class="dim" hidden></p>
+  <p data-i18n="consent_body">The site will see the remote device's camera.</p>
+  <p class="dim" data-i18n="consent_note"></p>
+  <div class="buttons">
+    <button type="button" id="deny" data-i18n="consent_deny" disabled>Don't allow</button>
+    <button type="button" id="allow" class="primary" data-i18n="consent_allow" disabled>Allow</button>
+  </div>
+</main>
+<script src="consent.js"></script>
+</body>
+</html>

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/hueshu/relaymic/internal/audio"
+	"github.com/hueshu/relaymic/internal/browsercam"
 	"github.com/hueshu/relaymic/internal/discover"
 	"github.com/hueshu/relaymic/internal/icons"
 	"github.com/hueshu/relaymic/internal/rtc"
@@ -82,13 +83,79 @@ func main() {
 	// The remote Mac is usually playing meeting audio into an empty room. Mute its
 	// own speakers; the return path is unaffected.
 	speakerMute := flag.Bool("speaker-mute", false, "silence this Mac's own speakers while its audio is relayed (the sender still hears everything)")
+	micMute := flag.Bool("mic-mute", false, "mute this Mac's own microphones (built-in, USB, Bluetooth) while the receiver runs, so apps hear only the remote voice; they are put back when it stops")
+	micRestore := flag.Bool("mic-restore", false, "put back the microphones a -mic-mute run left muted (it crashed, or was killed), then exit")
 	// Camera: the sender's browser camera arrives as H.264, is decoded with
 	// VideoToolbox and pushed into the Remote Visio Camera system extension, so
 	// Zoom or FaceTime on this Mac can pick it as a camera.
 	camera := flag.Bool("camera", true, "relay the remote camera into the Remote Visio Camera virtual camera")
+	// Browser camera: the same camera, forwarded undecoded over this Mac's
+	// loopback to the Remote Visio Camera browser extension (Chromium), for
+	// Macs where the camera system extension cannot be installed. Off unless
+	// asked for: the menu-bar app turns it on once the user has installed the
+	// extension. The listener itself always runs, so the extension can tell
+	// "turned off" from "not running".
+	browserCamera := flag.Bool("browser-camera", false, "relay the remote camera to the Remote Visio Camera browser extension over this Mac's loopback")
+	browserCameraAddr := flag.String("browser-camera-addr", browsercam.DefaultAddr, "loopback address the browser extension connects to; empty disables the listener")
+	browserCameraOrigins := flag.String("browser-camera-origins", browsercam.DefaultOrigins, "extension origins allowed to connect pages, comma-separated (the Chrome Web Store's and the unpacked one)")
 	flag.Parse()
 
 	log.SetFlags(log.Ltime)
+
+	// This Mac's own microphones, before anything else can fail: their mute
+	// outlives the process, so every start first puts back what a crashed run
+	// left muted (RestoreMics), unless -mic-mute keeps them muted anyway.
+	micState := filepath.Join(defaultCertDir(), "mic-mute.json")
+	if *micRestore {
+		if m, err := audio.RestoreMics(micState, log.Printf); err != nil {
+			log.Fatalln("microphones:", err)
+		} else {
+			m.Close()
+		}
+		return
+	}
+	var mics *audio.MicMuter
+	var err error
+	if *micMute {
+		mics, err = audio.MuteMics(micState, log.Printf)
+	} else {
+		mics, err = audio.RestoreMics(micState, log.Printf)
+	}
+	if err != nil {
+		log.Println("microphones:", err)
+	}
+	defer mics.Close()
+
+	// Browser camera, before anything opens a device: a wrong flag must exit
+	// here, not after the audio tap and the camera sink are open. Its
+	// listener only ever binds a loopback address (the pages that connect run
+	// on this Mac, nothing else may), and it binds now, so a port another
+	// program holds is known before the receiver says what it offers.
+	if *browserCameraAddr != "" && !browsercam.IsLoopbackAddr(*browserCameraAddr) {
+		log.Fatalf("-browser-camera-addr %q is not a loopback address (127.0.0.1:port, localhost:port or [::1]:port)", *browserCameraAddr)
+	}
+	// Without a listener no page can connect: the browser camera is off, as
+	// the startup line says, whatever -browser-camera asks for.
+	bcam, err := browsercam.New(*browserCamera && *browserCameraAddr != "", strings.Split(*browserCameraOrigins, ","))
+	if err != nil {
+		log.Fatalln("browser camera:", err)
+	}
+	var bcamLn net.Listener
+	var bcamErr error
+	if *browserCameraAddr != "" {
+		if bcamLn, bcamErr = net.Listen("tcp", *browserCameraAddr); bcamErr != nil {
+			bcam.SetUnavailable(bcamErr)
+		}
+	}
+	var bcamSrv *http.Server
+	if bcamLn != nil {
+		bcamSrv = &http.Server{Handler: bcam.Handler(), ReadHeaderTimeout: 5 * time.Second}
+		go func() {
+			if err := bcamSrv.Serve(bcamLn); err != nil && err != http.ErrServerClosed {
+				log.Printf("browser camera stopped: %v", err)
+			}
+		}()
+	}
 
 	// A non-zero exit code must wait until every defer (recording finalization,
 	// device, context) has run: this defer is registered first, so it runs last.
@@ -366,6 +433,7 @@ func main() {
 		log.Println("path:", path)
 		st.setPath(path)
 	})
+	receiver.OnNote(func(note string) { log.Println(note) })
 	receiver.ExcludeCGNAT(*noCGNAT)
 	receiver.SetICEServers(ice)
 	receiver.SetDTX(*dtx)
@@ -412,6 +480,12 @@ func main() {
 		// Closed after receiver.Close() at the end of main: the decoder drains
 		// before the sink stream stops.
 		defer cam.close()
+	}
+
+	// Browser camera: the forwarder is attached only when it can work, so a
+	// sender does not upload video that no page could ever receive.
+	if *browserCamera && bcamLn != nil {
+		receiver.SetVideoForwarder(bcam)
 	}
 
 	// Same-machine detection needs every address (IPv6 included); the certificate SAN and the printed URLs only IPv4.
@@ -540,7 +614,7 @@ func main() {
 				"output":  speakerOutput,
 				"levelDb": speakerDB,
 			},
-			"camera": cam.status(),
+			"camera": cam.status(browserStatus(bcam, r.RemoteAddr, selfAddrs)),
 		})
 	})
 	toJSON := func(r *audio.SegmentRecorder) []segmentJSON {
@@ -647,6 +721,17 @@ func main() {
 	go func() {
 		log.Printf("virtual microphone: %s", dev.Name)
 		log.Println(cam.describe())
+		switch {
+		case *browserCameraAddr == "":
+			log.Println("browser camera: off (-browser-camera-addr is empty)")
+		case bcamErr != nil:
+			_, bport, _ := net.SplitHostPort(*browserCameraAddr)
+			log.Printf("browser camera unavailable: %v (another program holds the port? lsof -nP -iTCP:%s -sTCP:LISTEN)", bcamErr, bport)
+		case *browserCamera:
+			log.Printf("browser camera: on, for the Remote Visio Camera extension at http://%s", *browserCameraAddr)
+		default:
+			log.Println("browser camera: off (-browser-camera)")
+		}
 		log.Printf("sender URL: %s://localhost:%s", scheme, port)
 		log.Printf("monitor page: %s://localhost:%s/monitor", scheme, port)
 		for _, ip := range ips {
@@ -698,6 +783,7 @@ func main() {
 	go func() {
 		for range time.Tick(time.Second) {
 			cam.tick()
+			bcam.Tick()
 			spkDB := audio.SilenceDBFS
 			if spk != nil {
 				spkDB = spk.TakePeakDBFS()
@@ -736,14 +822,21 @@ func main() {
 			os.Exit(3)
 		})
 	}
+	// The microphones first: if a later step hangs and the app has to kill
+	// this process, they are back already.
+	mics.Close()
 	_ = srv.Close()
+	if bcamSrv != nil {
+		_ = bcamSrv.Close()
+	}
 	// Teardown order: close the connection first (decoding stops, nothing writes to
-	// the player or the camera relay any more), then the loopback capture, and only
+	// the player, the camera relay or the pages any more), then the pages, the loopback capture, and only
 	// then the deferred camera relay (decoder drained, then the sink stream stopped),
 	// recording finalization, return-path capture, player and audio context. The
 	// devices must be fully closed before the context so the process exits within
 	// seconds instead of being cut off midway by the wrapper app's SIGKILL.
 	receiver.Close()
+	bcam.Close()
 	closeLoop()
 }
 
@@ -801,7 +894,7 @@ func (c *cameraState) describe() string {
 	case c.relay != nil:
 		return fmt.Sprintf("virtual camera: %s (%s)", video.DeviceName, c.relay.Stream)
 	default:
-		return fmt.Sprintf("virtual camera unavailable: %v; the camera relay is off", c.lastErr)
+		return fmt.Sprintf("virtual camera (system extension) unavailable: %v", c.lastErr)
 	}
 }
 
@@ -828,8 +921,9 @@ func (c *cameraState) tick() {
 	c.lastFrames = frames
 }
 
-// status is the "camera" object of /api/status.
-func (c *cameraState) status() map[string]any {
+// status is the "camera" object of /api/status; the browser camera's state
+// goes in as "browser".
+func (c *cameraState) status(browser browsercam.Status) map[string]any {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	out := map[string]any{
@@ -841,6 +935,7 @@ func (c *cameraState) status() map[string]any {
 		"height":    0,
 		"hardware":  false,
 		"dropped":   uint64(0),
+		"browser":   browser,
 	}
 	if c.relay != nil {
 		s := c.relay.Stats()
@@ -932,6 +1027,17 @@ func openReturnPath(actx *audio.Context, receiver *rtc.Receiver, dev audio.Devic
 		tap.Close()
 	}
 	return spk, tap.Output, closeFn, nil
+}
+
+// browserStatus is the browser camera's part of /api/status. Which sites use
+// the camera is this Mac's business: the monitor page is also read from other
+// machines, which see only how many pages watch.
+func browserStatus(bcam *browsercam.Forwarder, remoteAddr string, self []net.IP) browsercam.Status {
+	st := bcam.Status()
+	if !isLocalSender(remoteAddr, self) {
+		st.Pages = []string{}
+	}
+	return st
 }
 
 // statusState holds the /api/status values that only callbacks and timers know.

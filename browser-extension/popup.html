@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Remote Visio Camera</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body class="popup">
+<main>
+  <header class="brand">
+    <img src="icons/icon-32.png" alt="">
+    <h1 data-i18n="ext_name">Remote Visio Camera</h1>
+  </header>
+
+  <section class="card" id="questions" aria-live="polite" hidden>
+    <ul id="questionList"></ul>
+  </section>
+
+  <section class="card" aria-live="polite">
+    <div id="state" class="dim" data-i18n="popup_checking">Checking…</div>
+    <div id="hint" class="detail"></div>
+    <div id="pages" class="detail"></div>
+  </section>
+
+  <section class="card">
+    <label class="switch-row" id="enabledRow">
+      <span class="text">
+        <span data-i18n="popup_enabled">Offer Remote Visio Camera to websites</span>
+        <small data-i18n="popup_enabled_hint"></small>
+      </span>
+      <input type="checkbox" id="enabled" class="switch" role="switch">
+    </label>
+    <label class="switch-row" id="preferRow">
+      <span class="text">
+        <span data-i18n="popup_prefer">Use it when a site asks for any camera</span>
+        <small data-i18n="popup_prefer_hint"></small>
+      </span>
+      <input type="checkbox" id="prefer" class="switch" role="switch">
+    </label>
+  </section>
+
+  <section class="card">
+    <h2 data-i18n="popup_sites">Sites</h2>
+    <ul id="sites"></ul>
+    <div id="noSites" class="empty" data-i18n="popup_no_sites"></div>
+  </section>
+
+  <footer id="version"></footer>
+</main>
+<script src="popup.js"></script>
+</body>
+</html>

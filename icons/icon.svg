@@ -1,0 +1,30 @@
+<!--
+  The Remote Visio Camera extension's large icons (browser-extension/icons/
+  icon-48.png and icon-128.png), as the Chrome Web Store wants them: 96 px
+  of artwork centred in a 128 px square with 16 px of transparent padding.
+  The glyph is the Remote Visio icon (icons/icon-96.png) redrawn as vectors
+  on its 96-unit grid, so it stays sharp at any size; the tile is the site's
+  ink colour. Those two PNGs, and the black variants in icons/, were
+  rendered from this drawing once; it stays as their vector source.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect id="tile" x="16" y="16" width="96" height="96" rx="20" fill="#131417"/>
+  <!-- The glyph's 96-unit box, scaled and centred on the tile. -->
+  <g id="glyph" transform="translate(64 64) scale(0.76) translate(-48 -49)"
+     fill="none" stroke="#ffffff" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round">
+    <!-- The camera body, with the raised top in the middle. -->
+    <path d="M7.5 22.5 H31 L35.4 15.3 Q36.5 13.5 38.6 13.5 H57.4 Q59.5 13.5 60.6 15.3 L65 22.5
+             H88.5 Q91.5 22.5 91.5 25.5 V81.5 Q91.5 84.5 88.5 84.5 H7.5 Q4.5 84.5 4.5 81.5
+             V25.5 Q4.5 22.5 7.5 22.5 Z"/>
+    <!-- Shutter button and viewfinder on top. -->
+    <path d="M13.5 22.5 V18.5 Q13.5 16.5 15.5 16.5 H23.5 Q25.5 16.5 25.5 18.5 V22.5"/>
+    <path d="M75 22.5 A4 4 0 0 1 83 22.5"/>
+    <!-- The microphone: capsule, holder, stem and base. -->
+    <rect x="38" y="28.5" width="20" height="30" rx="10"/>
+    <path d="M31.75 46.5 V49.5 A16.25 16.25 0 0 0 64.25 49.5 V46.5"/>
+    <path d="M48 65.75 V73"/>
+    <path d="M37.5 73 H58.5"/>
+    <!-- The signal: three bars on each side. -->
+    <path d="M10 46.5 V49.5 M17.5 46.5 V49.5 M25 46.5 V49.5 M71 46.5 V49.5 M78.5 46.5 V49.5 M86 46.5 V49.5"/>
+  </g>
+</svg>

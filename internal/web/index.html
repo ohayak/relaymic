@@ -142,6 +142,35 @@
     opacity: .45;
   }
   .src a { color: inherit; }
+
+  /* Debug log (?debug=1, or the link at the bottom): wider, so a candidate pair fits on a line. */
+  main.debugging { max-width: 720px; }
+  .debug { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 12px; }
+  .debughead { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--dim); margin-bottom: 8px; }
+  .debughead span { flex: 1; }
+  .debughead button {
+    width: auto;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--fg);
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+  .debuglog {
+    margin: 0;
+    max-height: 50vh;
+    overflow: auto;
+    padding: 8px;
+    font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--dim);
+    white-space: pre-wrap;
+    word-break: break-all;
+    background: #0a0c0f;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
 </style>
 </head>
 <body>
@@ -162,11 +191,21 @@
   <div id="camstate" class="micstate camstate"></div>
   <div id="conns" class="conns"><div class="empty" data-i18n="not_connected">Not connected</div></div>
 
+  <section id="debug" class="debug" hidden>
+    <div class="debughead">
+      <span data-i18n="debug">Debug log</span>
+      <button type="button" id="debugcopy" data-i18n="debug_copy">Copy</button>
+      <button type="button" id="debugclear" data-i18n="debug_clear">Clear</button>
+    </div>
+    <pre id="debuglog" class="debuglog"></pre>
+  </section>
+
   <!-- AGPL-3.0 section 13: users interacting with this program over a network must be able to get
        the matching source. The sender is this page, so the link lives here; it is not optional decoration.
        If you modify this code and serve it to others, point this link at your own copy. -->
   <footer class="src">
     Remote Visio · <a href="https://github.com/hueshu/relaymic" target="_blank" rel="noopener" data-i18n="source">Source (AGPL-3.0)</a>
+    · <a href="#" id="debuglink" data-i18n="debug">Debug log</a>
   </footer>
 </main>
 
@@ -206,6 +245,8 @@ const STRINGS = {
     cam_noh264: 'This browser cannot send H.264 video; the camera will not be relayed',
     sending_video: 'Sending the camera',
     cam_declined: 'camera not relayed: no virtual camera on the Mac',
+    debug: 'Debug log', debug_copy: 'Copy', debug_clear: 'Clear', debug_copied: 'Copied',
+    no_answer: 'The receiver did not answer within {s}s',
   },
   es: {
     title: 'Remote Visio',
@@ -238,6 +279,8 @@ const STRINGS = {
     cam_noh264: 'Este navegador no puede enviar vídeo H.264; la cámara no se retransmitirá',
     sending_video: 'Enviando la cámara',
     cam_declined: 'cámara no retransmitida: el Mac no tiene cámara virtual',
+    debug: 'Registro de depuración', debug_copy: 'Copiar', debug_clear: 'Borrar', debug_copied: 'Copiado',
+    no_answer: 'El receptor no respondió en {s} s',
   },
   fr: {
     title: 'Remote Visio',
@@ -270,6 +313,8 @@ const STRINGS = {
     cam_noh264: 'Ce navigateur ne peut pas envoyer de vidéo H.264 ; la caméra ne sera pas relayée',
     sending_video: 'Envoi de la caméra',
     cam_declined: 'caméra non relayée : pas de caméra virtuelle sur le Mac',
+    debug: 'Journal de débogage', debug_copy: 'Copier', debug_clear: 'Effacer', debug_copied: 'Copié',
+    no_answer: 'Le récepteur n\'a pas répondu en {s} s',
   },
   zh: {
     title: 'Remote Visio',
@@ -302,6 +347,8 @@ const STRINGS = {
     cam_noh264: '这个浏览器发不了 H.264 视频，摄像头画面不会被转发',
     sending_video: '正在发送摄像头画面',
     cam_declined: '摄像头未转发：Mac 上没有虚拟摄像头',
+    debug: '调试日志', debug_copy: '复制', debug_clear: '清除', debug_copied: '已复制',
+    no_answer: '接收端 {s}s 内没有应答',
   },
   de: {
     title: 'Remote Visio',
@@ -334,6 +381,8 @@ const STRINGS = {
     cam_noh264: 'Dieser Browser kann kein H.264-Video senden; die Kamera wird nicht weitergeleitet',
     sending_video: 'Kamera wird gesendet',
     cam_declined: 'Kamera nicht weitergeleitet: keine virtuelle Kamera auf dem Mac',
+    debug: 'Debug-Protokoll', debug_copy: 'Kopieren', debug_clear: 'Leeren', debug_copied: 'Kopiert',
+    no_answer: 'Der Empfänger hat nicht innerhalb von {s} s geantwortet',
   },
   it: {
     title: 'Remote Visio',
@@ -366,6 +415,8 @@ const STRINGS = {
     cam_noh264: 'Questo browser non può inviare video H.264; la fotocamera non verrà inoltrata',
     sending_video: 'Invio della fotocamera',
     cam_declined: 'fotocamera non inoltrata: nessuna fotocamera virtuale sul Mac',
+    debug: 'Log di debug', debug_copy: 'Copia', debug_clear: 'Cancella', debug_copied: 'Copiato',
+    no_answer: 'Il ricevitore non ha risposto entro {s} s',
   },
   hi: {
     title: 'Remote Visio',
@@ -398,6 +449,8 @@ const STRINGS = {
     cam_noh264: 'यह ब्राउज़र H.264 वीडियो नहीं भेज सकता; कैमरा आगे नहीं भेजा जाएगा',
     sending_video: 'कैमरा भेजा जा रहा है',
     cam_declined: 'कैमरा नहीं भेजा गया: Mac पर वर्चुअल कैमरा नहीं है',
+    debug: 'डीबग लॉग', debug_copy: 'कॉपी करें', debug_clear: 'साफ़ करें', debug_copied: 'कॉपी हो गया',
+    no_answer: 'रिसीवर ने {s} सेकंड में जवाब नहीं दिया',
   },
 };
 </script>
@@ -411,6 +464,138 @@ let live = false, discoverTimer = null;
 const conns = new Map();
 
 $('target').textContent = t('target', { host: location.host });
+
+// Debug log. A connection stuck on "Connecting" says nothing about why, and a phone has no developer tools. So the
+// page keeps a log of what it does -- permissions, discovery, and for each connection its ICE candidates (this
+// device's and the receiver's), its states, and its candidate pairs with the checks sent and answered each way -- and
+// shows it under the connections with ?debug=1, or the link at the bottom (?debug=0 hides it again; the choice is
+// remembered). It is kept either way, so turning it on shows what already happened. It holds network addresses but
+// never TURN credentials, and leaves this page only when the user copies it.
+const DEBUG_MAX = 1500;
+const debugLines = [];
+let debugOn = (() => {
+  const q = new URLSearchParams(location.search).get('debug');
+  if (q === '1' || q === '0') localStorage.setItem('debug', q);
+  return localStorage.getItem('debug') === '1';
+})();
+
+function dlog(...parts) {
+  const d = new Date();
+  const line = d.toTimeString().slice(0, 8) + '.' + String(d.getMilliseconds()).padStart(3, '0') + ' ' + parts.join(' ');
+  debugLines.push(line);
+  if (debugLines.length > DEBUG_MAX) debugLines.shift();
+  console.debug('[remotevisio]', line);
+  if (!debugOn) return;
+  const pre = $('debuglog');
+  const atEnd = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 4;
+  pre.append(line + '\n');
+  while (pre.childNodes.length > DEBUG_MAX) pre.firstChild.remove();
+  if (atEnd) pre.scrollTop = pre.scrollHeight;
+}
+
+function renderDebug() {
+  $('debug').hidden = !debugOn;
+  document.querySelector('main').classList.toggle('debugging', debugOn);
+  const pre = $('debuglog');
+  if (!debugOn) { pre.replaceChildren(); return; }
+  pre.replaceChildren(...debugLines.map(l => l + '\n'));
+  pre.scrollTop = pre.scrollHeight;
+}
+renderDebug();
+
+$('debuglink').onclick = e => {
+  e.preventDefault();
+  debugOn = !debugOn;
+  localStorage.setItem('debug', debugOn ? '1' : '0');
+  renderDebug();
+};
+$('debugclear').onclick = () => { debugLines.length = 0; $('debuglog').replaceChildren(); };
+$('debugcopy').onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(debugLines.join('\n') + '\n');
+  } catch {
+    // No clipboard access (an older browser): select the log, so it can be copied by hand.
+    const r = document.createRange();
+    r.selectNodeContents($('debuglog'));
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+    return;
+  }
+  $('debugcopy').textContent = t('debug_copied');
+  setTimeout(() => { $('debugcopy').textContent = t('debug_copy'); }, 1500);
+};
+
+dlog('page', location.href);
+dlog('browser', navigator.userAgent);
+dlog('secure context', isSecureContext, '| WebRTC', typeof RTCPeerConnection === 'function', '| language', LANG);
+addEventListener('error', e => dlog('page error:', e.message, e.filename ? `(${e.filename}:${e.lineno})` : ''));
+addEventListener('unhandledrejection', e => dlog('unhandled rejection:', String((e.reason && e.reason.message) || e.reason)));
+
+// describeCandidate turns an ICE candidate line ("candidate:... 1 udp 2122260223 192.168.1.5 54321 typ host ...")
+// into "host udp 192.168.1.5:54321"; a server-reflexive or relay candidate also names the address it stands for.
+function describeCandidate(line) {
+  const f = String(line).replace(/^a=/, '').replace(/^candidate:/, '').trim().split(/\s+/);
+  if (f.length < 8 || f[6] !== 'typ') return String(line);
+  let s = `${f[7]} ${f[2].toLowerCase()} ${f[4]}:${f[5]}`;
+  const ra = f.indexOf('raddr'), rp = f.indexOf('rport');
+  if (ra > 0 && rp > 0) s += ` (for ${f[ra + 1]}:${f[rp + 1]})`;
+  const tt = f.indexOf('tcptype');
+  if (tt > 0) s += ` tcptype ${f[tt + 1]}`;
+  if (f[1] !== '1') s += ` component ${f[1]}`;
+  return s;
+}
+
+// describeTrack names a microphone or camera and the settings the browser gave it.
+function describeTrack(track) {
+  if (!track) return 'none';
+  const s = track.getSettings ? track.getSettings() : {};
+  const keep = ['width', 'height', 'frameRate', 'sampleRate', 'channelCount', 'echoCancellation', 'noiseSuppression', 'autoGainControl'];
+  const parts = keep.filter(k => s[k] !== undefined).map(k => `${k}=${typeof s[k] === 'number' ? Math.round(s[k] * 100) / 100 : s[k]}`);
+  return (track.label || '(no name)') + (parts.length ? ' ' + parts.join(' ') : '');
+}
+
+// describeICE lists the STUN/TURN servers' URLs; never their credentials.
+function describeICE(servers) {
+  const urls = (servers || []).flatMap(s => [].concat(s.urls || s.url || []));
+  return urls.length ? urls.join(', ') : 'none';
+}
+
+// debugPairs logs a connection's candidate pairs. While it is not connected: all of them, every few seconds (or at
+// once with force), each with the checks sent and answered in both directions -- that tells "nothing gets through"
+// from "only one way does". Once connected: the pair in use, when it changes.
+function debugPairs(c, pc, stats, force) {
+  const h = hostOf(c.target);
+  const state = pc.iceConnectionState;
+  const pairs = [];
+  let chosen = null;
+  stats.forEach(r => {
+    if (r.type === 'candidate-pair') pairs.push(r);
+    if (r.type === 'transport' && r.selectedCandidatePairId) chosen = r.selectedCandidatePairId;
+  });
+  const side = id => {
+    const x = stats.get(id);
+    return x ? `${x.candidateType} ${x.protocol} ${x.address ?? x.ip}:${x.port}` : '?';
+  };
+  const describe = p => `${side(p.localCandidateId)} -> ${side(p.remoteCandidateId)}: ${p.state}${p.nominated ? ', nominated' : ''}` +
+    `, checks sent ${p.requestsSent ?? 0} answered ${p.responsesReceived ?? 0}` +
+    `, checks received ${p.requestsReceived ?? 0} answered ${p.responsesSent ?? 0}`;
+  if (state === 'connected' || state === 'completed') {
+    const p = (chosen && stats.get(chosen)) || pairs.find(x => x.state === 'succeeded' && x.nominated);
+    const key = p ? p.localCandidateId + '|' + p.remoteCandidateId : '';
+    if (p && key !== c.debugChosen) {
+      c.debugChosen = key;
+      dlog(h, 'in use:', describe(p) + (p.currentRoundTripTime != null ? `, RTT ${Math.round(p.currentRoundTripTime * 1000)} ms` : ''));
+    }
+    return;
+  }
+  c.debugChosen = '';
+  const now = Date.now();
+  if (!force && now - (c.debugPairsAt || 0) < 5000) return;
+  c.debugPairsAt = now;
+  if (!pairs.length) { dlog(h, `ICE ${state}: no candidate pairs${state === 'new' || state === 'checking' ? ' yet' : ''}`); return; }
+  dlog(h, `ICE ${state}: ${pairs.length} candidate pair${pairs.length === 1 ? '' : 's'}`);
+  for (const p of pairs) dlog(h, '  ' + describe(p));
+}
 
 $('toggle').onclick = () => (live ? stop() : start());
 
@@ -595,7 +780,9 @@ async function acquireCamNow(want) {
     }
     showCam(next, want);
     camErr = '';
+    dlog('camera:', describeTrack(next.getVideoTracks()[0]));
   } catch (err) {
+    dlog('camera failed:', err.name || '', err.message || '');
     camErr = explainCamError(err);
     // The new camera failed after the old one was let go of: bring the old one back, so the picture stays and the
     // picker returns to it. The failed pick is not remembered; choosing it again is a fresh try.
@@ -682,6 +869,7 @@ async function listCams() {
 
 async function start() {
   live = true;
+  dlog('start: profile', profile, '| return path', hear ? 'on' : 'off', '| camera', cam ? 'on' : 'off');
   $('toggle').textContent = t('stop');
   $('toggle').classList.add('live');
 
@@ -700,7 +888,9 @@ async function start() {
     stream = await getMic();
     clearTimeout(hint);
     $('micstate').textContent = '';
+    dlog('microphone:', describeTrack(stream.getAudioTracks()[0]));
   } catch (err) {
+    dlog('microphone failed:', err.name || '', err.message || '');
     $('micstate').textContent = explainMicError(err);
     stop();
     return;
@@ -713,15 +903,24 @@ async function start() {
 
 // discover finds all receivers: the one that served this page plus the others it scanned for us.
 // The browser can't reach the Tailscale device list itself, so the receiver does it (/api/receivers).
+let lastDiscovered = null; // the debug log notes the list when it changes, not every 30 s
 async function discover() {
   if (!live) return;
   ensureConn(location.origin);
+  let found;
   try {
     const res = await fetch('/api/receivers');
     if (res.ok) {
-      for (const t of await res.json()) ensureConn(t);
+      const list = await res.json();
+      found = list.length ? list.join(', ') : 'none';
+      for (const t of list) ensureConn(t);
+    } else {
+      found = `failed (HTTP ${res.status})`;
     }
-  } catch { /* no list: connect to this receiver only */ }
+  } catch (err) { /* no list: connect to this receiver only */
+    found = `failed (${err.message || err})`;
+  }
+  if (found !== lastDiscovered) { lastDiscovered = found; dlog('other receivers:', found); }
 }
 
 function ensureConn(target) {
@@ -764,12 +963,33 @@ function senderOf(pc, kind) {
   return tx ? tx.sender : null;
 }
 
+// fetchWithin is fetch with a deadline for the response to begin. A receiver that takes the request and never answers
+// would otherwise hold its connection on "Negotiating..." for ever, with no retry: seen with a receiver whose
+// candidate gathering never finished. The error then says so, and the usual retry follows.
+async function fetchWithin(ms, url, init) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: ctl.signal });
+  } catch (err) {
+    if (!ctl.signal.aborted) throw err;
+    const late = new Error(t('no_answer', { s: Math.round(ms / 1000) }));
+    late.name = 'TimeoutError';
+    throw late;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Each receiver serves its own /ice-config (same TURN set); fetched cross-origin.
 async function loadICE(target) {
   try {
-    const res = await fetch(target + '/ice-config');
+    const res = await fetchWithin(5000, target + '/ice-config');
     if (res.ok) return await res.json();
-  } catch { /* fall back to the default below */ }
+    dlog(hostOf(target), 'ice-config: HTTP', res.status, '(using the default STUN server)');
+  } catch (err) { /* fall back to the default below */
+    dlog(hostOf(target), 'ice-config failed:', err.message || err, '(using the default STUN server)');
+  }
   return { iceServers: [{ urls: 'stun:stun.miwifi.com:3478' }] };
 }
 
@@ -786,14 +1006,46 @@ async function connectOne(c) {
   const gen = c.gen = (c.gen || 0) + 1;
   const stale = () => c.gen !== gen || !live;
 
+  const h = hostOf(c.target);
   try {
     setConnState(c, t('establishing'), 'warn');
+    dlog(h, `--- connecting (attempt ${c.retry + 1})`);
     const cfg = await loadICE(c.target);
     if (stale()) return;
     if (cfg.name) { c.name = cfg.name; }
+    dlog(h, 'receiver', cfg.name ? `"${cfg.name}"` : '(no name)', '| ICE servers:', describeICE(cfg.iceServers));
     const pc = new RTCPeerConnection({ iceServers: cfg.iceServers });
     c.pc = pc;
     c.camDeclined = false;
+    // Debug log: everything this connection goes through. Listeners, not on* handlers, which the code below sets.
+    let localCount = 0, mdns = false;
+    pc.addEventListener('icecandidate', e => {
+      if (c.pc !== pc) return;
+      if (e.candidate && e.candidate.candidate) {
+        localCount++;
+        if (/\s[0-9a-f-]{36}\.local\s/i.test(e.candidate.candidate)) mdns = true;
+        dlog(h, 'local candidate:', describeCandidate(e.candidate.candidate));
+      } else {
+        dlog(h, `local candidates: ${localCount}, done`);
+        // Until the page has the microphone (or camera), the browser hides this device's addresses behind random .local
+        // names, which the receiver must resolve over multicast DNS; networks that drop multicast leave them unusable.
+        if (mdns) dlog(h, 'note: this device\'s addresses are hidden behind .local names (the browser does so until a microphone or camera is allowed)');
+      }
+    });
+    pc.addEventListener('icecandidateerror', e => {
+      if (c.pc !== pc) return;
+      dlog(h, 'candidate error:', e.url || '', e.errorCode, e.errorText || '', e.address ? `(from ${e.address}:${e.port})` : '');
+    });
+    pc.addEventListener('icegatheringstatechange', () => { if (c.pc === pc) dlog(h, 'gathering:', pc.iceGatheringState); });
+    pc.addEventListener('signalingstatechange', () => { if (c.pc === pc) dlog(h, 'signaling:', pc.signalingState); });
+    pc.addEventListener('connectionstatechange', () => { if (c.pc === pc) dlog(h, 'connection:', pc.connectionState); });
+    pc.addEventListener('iceconnectionstatechange', () => {
+      if (c.pc !== pc) return;
+      const s = pc.iceConnectionState;
+      dlog(h, 'ICE:', s);
+      // Failing or stalling: the candidate pairs say why; log them now, before a retry closes this connection.
+      if (s === 'failed' || s === 'disconnected') pc.getStats().then(st => debugPairs(c, pc, st, true), () => {});
+    });
     // Declare an audio transceiver up front to claim the m-line so ICE gathering starts right away; attachMic
     // fills in the real track once the mic is ready. On reconnect the mic is already in hand, so attach it now.
     // With the return path on, this m-line is sendrecv and the receiver sends the remote Mac's system audio back over it.
@@ -856,10 +1108,11 @@ async function connectOne(c) {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     if (vtx) { noH264 = !/ H264\//.test(offer.sdp); renderCamState(); }
+    if (vtx && noH264) dlog(h, 'this browser offers no H.264: the camera cannot be relayed');
     // Wait for candidate gathering, but at most 3 s: when STUN is unreachable, don't sit through the browser's full 10 s.
     await new Promise(done => {
       if (pc.iceGatheringState === 'complete') return done();
-      const cap = setTimeout(done, 3000);
+      const cap = setTimeout(() => { dlog(h, 'gathering not complete after 3 s: sending the candidates found so far'); done(); }, 3000);
       pc.onicegatheringstatechange = () => {
         if (pc.iceGatheringState === 'complete') { clearTimeout(cap); done(); }
       };
@@ -867,23 +1120,33 @@ async function connectOne(c) {
     if (stale()) { pc.close(); return; }
 
     setConnState(c, t('negotiating'), 'warn');
-    const res = await fetch(c.target + '/offer', {
+    const sent = (pc.localDescription.sdp.match(/^a=candidate:/gm) || []).length;
+    dlog(h, `sending the offer (${sent} candidate${sent === 1 ? '' : 's'})`);
+    const asked = performance.now();
+    const res = await fetchWithin(15000, c.target + '/offer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(pc.localDescription),
     });
     if (stale()) { pc.close(); return; }
+    dlog(h, `offer answered: HTTP ${res.status} in ${Math.round(performance.now() - asked)} ms`);
     if (!res.ok) throw new Error(await res.text());
-    await pc.setRemoteDescription(await res.json());
+    const answer = await res.json();
+    const theirs = String(answer.sdp || '').split(/\r?\n/).filter(l => l.startsWith('a=candidate:'));
+    for (const l of theirs) dlog(h, 'receiver candidate:', describeCandidate(l));
+    if (!theirs.length) dlog(h, 'the receiver sent no candidates');
+    await pc.setRemoteDescription(answer);
     if (stale()) { pc.close(); return; }
     // The receiver takes the camera line as recvonly; inactive means it has no virtual camera (or nothing it can
     // decode from this browser). The track stays attached to an idle line, so the row says so instead of the badge.
     if (vtx) { c.camDeclined = vtx.currentDirection !== 'sendonly'; renderConns(); }
+    if (vtx) dlog(h, 'camera line:', vtx.currentDirection, c.camDeclined ? '(declined by the receiver)' : '');
     if (vtx) preferFramerate(vtx.sender);
 
     if (!statsTimer) statsTimer = setInterval(poll, 1000);
   } catch (err) {
     if (stale()) return; // a stale attempt's failure doesn't count; don't schedule a retry on behalf of the newer one
+    dlog(h, 'attempt failed:', err.name || '', err.message || String(err));
     // A cross-origin fetch blowing up (TypeError) on a target other than this receiver most likely means
     // its self-signed cert hasn't been accepted in this browser yet -- prompt to open it once; the retry picks it up.
     if (err instanceof TypeError && hostOf(c.target) !== location.hostname) {
@@ -915,11 +1178,13 @@ function scheduleRetry(c, why) {
   if (!live || c.retryTimer) return;
   const delay = Math.min(1000 * 2 ** c.retry, 15000);
   c.retry++;
+  dlog(hostOf(c.target), `retrying in ${Math.round(delay / 1000)} s: ${why}`);
   setConnState(c, t('retry', { why, s: Math.round(delay / 1000) }), 'warn');
   c.retryTimer = setTimeout(() => { c.retryTimer = null; connectOne(c); }, delay);
 }
 
 function stop() {
+  if (live) dlog('stop');
   live = false;
   clearInterval(discoverTimer); discoverTimer = null;
   clearInterval(statsTimer); statsTimer = null;
@@ -1022,7 +1287,9 @@ async function poll() {
   let dirty = false;
   for (const c of conns.values()) {
     if (!c.pc || c.pc.connectionState === 'closed') continue;
-    const stats = await c.pc.getStats();
+    const pc = c.pc;
+    const stats = await pc.getStats();
+    if (c.pc === pc) debugPairs(c, pc, stats, false);
     let pair = null, video = null;
     stats.forEach(r => {
       if (r.type === 'candidate-pair' && r.state === 'succeeded' && r.nominated !== false) pair = r;

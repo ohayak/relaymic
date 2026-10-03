@@ -9,15 +9,24 @@ A small AppKit wrapper that runs `remotevisio-receiver` behind a menu bar icon:
 - **Quit Remote Visio** stops the receiver cleanly (also on SIGTERM/logout);
 - **Start at Login** toggles the login item (the installer package
   turns it on);
-- **Relay the Camera** and a `Camera: …` status line appear when the build
-  carries the virtual camera (see "Virtual camera" below): the toggle restarts
-  the receiver with `-camera=false`, the line says whether the camera extension
-  is active, waiting for approval in System Settings (click it to get there),
-  or failed;
+- a `Camera: …` status line appears when the build carries the virtual camera
+  (see "Virtual camera" below): it says whether the camera extension is active,
+  waiting for approval in System Settings (click it to get there), or failed;
+- **Relay the Camera** is the master switch for both cameras: off, it
+  restarts the receiver with `-camera=false` and without `-browser-camera`;
+- **Browser Camera** (see "Browser camera" below) restarts the receiver with
+  or without `-browser-camera`; it is always there, since the extension can be
+  added straight from the Chrome Web Store;
+- **Install Browser Camera Extension…** (**Reinstall…** once done) opens the
+  extension's Chrome Web Store page in the default browser, or in another
+  Chromium browser it offers when the default cannot take it, and turns
+  **Browser Camera** on;
 - **Uninstall Remote Visio…** removes the audio device, the camera extension, the
-  app, the login item and the package receipts after a confirmation and the
-  admin password dialog (twice when the camera extension is installed: once to
-  deactivate it, once for the rest);
+  app, the login item, the package receipts and the browser camera's folder
+  after a confirmation and the admin password dialog (twice when the camera
+  extension is installed: once to deactivate it, once for the rest); the
+  browser keeps listing "Remote Visio Camera" until the user removes it on the
+  browser's extensions page, which the confirmation says;
 - receiver output goes to `~/Library/Logs/RemoteVisio.log` (fresh each time the
   app launches; appended to when the app relaunches the receiver);
 - on first launch macOS asks for **System Audio Recording** — that is the return
@@ -60,8 +69,9 @@ Media I/O *system extension* (source in `macos/camera/`, its own
 `RemoteVisio.app/Contents/Library/SystemExtensions/com.remotevisio.app.camera.systemextension`
 and is activated by the app itself on launch, with the user's approval, the
 way macOS wants camera extensions installed. It is optional in two senses:
-the receiver works without it (the log then says `virtual camera unavailable:
-…`), and not every build carries it.
+the receiver works without it (the log then says `virtual camera (system
+extension) unavailable: …`), and not every build carries it; where it cannot
+be used, the browser camera (below) covers web meetings.
 
 **Which builds carry it.** macOS only activates an extension whose host app
 holds the restricted entitlement `com.apple.developer.system-extension.install`,
@@ -128,7 +138,8 @@ Mac can override it: the administrator has to allow team ID `99F33YCKX9` /
 `com.remotevisio.app.camera` in the policy, or the camera is tested on an
 unmanaged Mac. Everything up to that decision (signature, entitlements,
 profile) is exercised on the managed Mac too, so a denial there says nothing
-about the build.
+about the build. For web meetings, the browser camera (below) needs none of
+this.
 
 **Reset.** If the camera grant or the extension ever gets stuck after an
 upgrade: `tccutil reset Camera com.remotevisio.app`, and
@@ -156,6 +167,134 @@ the version or the build number there; the build number alone is enough.
 `bin/RemoteVisioCamera.systemextension` (unsigned; it is signed inside the
 app).
 
+## Browser camera
+
+Where the camera extension cannot be activated (a management policy, as
+above; nobody with an administrator account to approve it; a build without
+the profile), the camera can still reach web meetings: **Remote Visio
+Camera** is also a browser extension, for Chromium browsers (Chrome, Edge,
+Brave, Arc, Vivaldi, Opera …; source and details in `browser-extension/` and
+its `README.md`). It adds a camera of that name to the camera list of web
+pages (Meet, Teams and Zoom on the web …) and feeds it from the receiver.
+Native apps (Zoom, Teams, FaceTime) cannot see it, and neither can Safari or
+Firefox. It needs no administrator: no system extension, no approval in
+System Settings, nothing outside the user's home folder. It is optional, and
+only the user installs it.
+
+**Receiver side** (`internal/browsercam`). With `-browser-camera` the receiver
+forwards the camera's H.264 packets to the pages as they arrive, without
+decoding them (the browser decodes, in hardware), each page on its own
+WebRTC connection between two of this Mac's own addresses, so the video never
+leaves the Mac. The extension sets each one up with a single offer and answer
+on a loopback-only HTTP listener at `127.0.0.1:7421` (`-browser-camera-addr`;
+the extension has that address built in). The listener runs even with the
+flag off, so the extension can tell "turned off in the menu" from "not
+running". Web pages do not get through: every request must carry the
+extension's origin (the store's,
+`chrome-extension://bhijcffjnmjijifjiaeibbogmbohdmon`, or the unpacked
+copy's, `chrome-extension://jmiffhdbakchdlfbfdiaclkilcdhcgkf`), which a web
+page cannot set (`-browser-camera-origins` changes the list),
+and a loopback `Host`, which a DNS rebinding cannot fake. A program running
+on this Mac can send both, so the loopback address and these checks keep
+out other machines and web pages, not local programs. The extension asks the user once per site
+before a page gets the camera, and when the user takes a site's permission
+back or switches the camera off in the extension, it has the receiver
+disconnect those pages at once (`/camera/revoke`). The pages stay connected
+when the sender reconnects. The app passes `-browser-camera` when **Browser
+Camera** is on and **Relay the Camera** is not off; the log then says
+`browser camera: on, for the Remote Visio Camera extension at
+http://127.0.0.1:7421`, and the monitor page has a `Browser camera` line,
+which names the sites using the camera only when opened on this Mac (other
+machines see how many). When another program already holds the port, the
+log says `browser camera unavailable: … address already in use` instead,
+with the `lsof` command that names that program, and the monitor's line says
+unavailable.
+
+**Installing.** The extension is in the Chrome Web Store (unlisted, ID
+`bhijcffjnmjijifjiaeibbogmbohdmon`), where the browser's own prompt adds it
+and keeps it up to date; only the user can click that prompt. **Install
+Browser Camera Extension…** in the menu gets everything else ready by running
+`Contents/Resources/browser-extension.sh install`, which
+
+1. finds the default browser (NSWorkspace through JavaScript for Automation;
+   LaunchServices' preferences as a fallback) and checks that it is a
+   Chromium browser: a list of known bundle IDs, plus any browser with
+   Chromium's crash handler inside its framework. When it is not (Safari,
+   Firefox), the app offers up to three installed Chromium browsers instead,
+   or says that none is installed;
+2. checks the browser's management policy (see "Managed browsers");
+3. opens the extension's store page
+   (`https://chromewebstore.google.com/detail/<ID>`) in that browser.
+
+The app then turns **Browser Camera** on (restarting the receiver) and shows
+the user the rest: **Add to Chrome** (**Get** in Edge, which may first ask to
+allow extensions from other stores), pin it from the Extensions menu (the
+puzzle piece) so its button stays in the toolbar, reload meeting pages that
+were already open, then pick "Remote Visio Camera" in the meeting and click
+Allow. The extension belongs to one browser profile, and the store page opens
+in the profile used last, so a user whose meetings run in another profile (an
+Arc Space tied to another profile, say) adds it there too.
+
+**Unpacked, when the store cannot be used.** The alert's **Load Unpacked
+Instead…** runs `browser-extension.sh install --unpacked`, which copies the
+extension (`Contents/Resources/BrowserExtension/`) to `~/Library/Application
+Support/RemoteVisio/Browser Camera Extension`, replacing an older copy, opens
+the browser's extensions page (always as `chrome://extensions`: Chromium's
+startup code drops the other schemes a URL can arrive with), shows the folder
+in Finder and copies its path. The user turns Developer mode on and leaves it
+on (the browser switches unpacked extensions off without it), clicks **Load
+unpacked** and chooses the folder (Command-Shift-G and paste in the dialog, or
+drag the folder onto the page); Edge may offer at startup to turn off
+extensions in developer mode, and declining keeps the camera. This copy has
+another ID, `jmiffhdbakchdlfbfdiaclkilcdhcgkf`, fixed by the public key in its
+manifest; the receiver lets both IDs in (`-browser-camera-origins`). The
+matching private key is not in the repository and only matters for packing
+the extension, never for loading it unpacked.
+
+**Updates.** The store updates its copy by itself. For an unpacked copy, the
+app runs `browser-extension.sh sync` in the background at every launch: when
+the installed copy differs from the one in the app, it is replaced, and the
+browser picks the new files up at its next restart (or at once with the
+reload arrow on the extension's card). The app remembers which way the
+extension was installed (`browserCameraMode` in its preferences).
+
+**Publishing.** `make extension-zip` makes `bin/RemoteVisioCamera-<version>.zip`
+for the store's developer dashboard: the files a browser loads, the app's
+version (the store wants a higher one for each upload), and no `key` (the
+store has its own for the item). It is not for loading unpacked: without the
+key the browser gives it an ID of its own, which the receiver refuses.
+
+**From Terminal.** The script also runs from the source tree, where it uses
+`browser-extension/` in the repository: `macos/browser-extension.sh detect`
+prints the default browser and the Chromium browsers installed,
+`install [--browser <bundle id>] [--unpacked]` is the menu item, and `sync`,
+`remove` and `path` do what they say. Its output is `key=value` lines, for
+the app.
+
+**Removing.** **Uninstall Remote Visio…** runs `browser-extension.sh remove`
+as the user, and `uninstall.sh` from Terminal deletes the folder too; the
+entry in the browser stays until the user removes it on the extensions page.
+
+**Managed browsers.** An organization that manages the browser itself (not
+just the Mac) can forbid Developer mode or extensions altogether;
+`chrome://policy` shows what it set. The script reads the policies the
+organization pushed (`/Library/Managed Preferences`) before opening
+anything, for the way the install takes (store or unpacked), and when they
+block the extension it exits with status 5 and `policy=developer-mode`
+(unpacked only: Developer mode is disallowed; setting
+ExtensionDeveloperModeSettings to 0 is enough), `blocklist` (the extension's
+ID is blocked), `blocklist-all` (every extension is blocked by default,
+through `*` in ExtensionInstallBlocklist or ExtensionSettings, or
+CloudExtensionRequestEnabled; from the store, allowing the store's ID in
+ExtensionInstallAllowlist gets through, while unpacked nothing but lifting
+the block does) or `types` (extensions are not an allowed type), plus a
+`policy_blocked=` line for each installed Chromium browser the policy also
+blocks. The comment above `policy_problem` in the script is the reference.
+The app then names what IT would have to change and offers the other
+Chromium browsers installed, which the script checks in turn. An
+organization can also install the extension for its users without asking
+them, by its store ID (ExtensionInstallForcelist or ExtensionSettings).
+
 ## Build
 
 ```sh
@@ -168,12 +307,18 @@ The `Makefile` at the repository root holds the dependency graph and the
 compile rules; each multi-step procedure is a short script next to what it
 concerns, which the targets call and which reads on its own: `assemble-app.sh`
 (assemble and sign the bundle), `install-app.sh`, `build-pkg.sh` (package,
-notarize, staple, check), `build-opus.sh`, `icons.py`, `setup-signing.sh`
+notarize, staple, check), `build-opus.sh`, `setup-signing.sh`
 (Developer ID setup), `signing.sh` (identity lookup and notarization helpers,
-sourced by the others) and `lib.sh` (quit and unregister helpers shared by the
-install scripts) here, `driver/install.sh` and `driver/uninstall.sh` for the
-audio device. `make camext` compiles the camera extension (`macos/camera/`),
-which `assemble-app.sh` copies into the app when it can be activated.
+sourced by the others), `lib.sh` (quit and unregister helpers shared by the
+install scripts) and `browser-extension.sh` (the browser camera's installer,
+shipped inside the app) here, `driver/install.sh` and `driver/uninstall.sh`
+for the audio device. `make camext` compiles the camera extension
+(`macos/camera/`), which `assemble-app.sh` copies into the app when it can be
+activated. `assemble-app.sh` always copies the browser extension's runtime
+files from `browser-extension/` (not its README) into
+`Contents/Resources/BrowserExtension/`, and `browser-extension.sh` next to
+them; `make check` also checks the extension's files (JavaScript syntax with
+`node --check` when Node is installed, JSON validity).
 
 Building requires the Go toolchain, Xcode Command Line Tools (`swiftc`), and the
 receiver's usual build deps (`brew install opus pkg-config`). Opus is linked in
@@ -188,16 +333,15 @@ Audio Recording and microphone grants survive rebuilds. If a grant ever stops
 applying after an upgrade, remove Remote Visio and add it again under System
 Settings → Privacy & Security → Screen & System Audio Recording.
 
-Every icon comes from the PNGs in `icons/` (black strokes on transparency):
-`make icons` derives the app icon `macos/favicon.icns`, white and
-dark-tile variants, the installer's corner picture (`macos/pkg/resources/`),
+The icons are plain files in the repository, made once: the app icon
+`macos/favicon.icns`, the installer's corner picture (`macos/pkg/resources/`),
 the favicons that the receiver serves and the Windows sender's window icon
-(both from `internal/icons/`), the landing site's (`site/public/assets/`), and the
-Windows sender's `.exe` icon (`icons/RemoteVisio.ico`). The 16 and 32 px files double as the menu-bar image,
-which macOS recolours for light and dark menu bars. Drop a larger master
-(`icons/icon-1024.png`) in and run `make icons` again for sharper large sizes. After
-an upgrade the Dock may keep showing the old icon until it restarts
-(`killall Dock`).
+(both in `internal/icons/`), the landing site's (`site/public/assets/`), the
+Windows sender's `.exe` icon (`icons/RemoteVisio.ico`) and the browser
+extension's (`browser-extension/icons/`, drawn as `icons/icon.svg`). The black
+`icons/icon-16.png` and `icon-32.png` double as the menu-bar image, which
+macOS recolours for light and dark menu bars. After an upgrade the Dock may
+keep showing the old icon until it restarts (`killall Dock`).
 
 Keep only one copy of `RemoteVisio.app` around: macOS registers every copy it
 finds (including one sitting in `bin/`) and shows each as a separate icon in
@@ -237,7 +381,9 @@ Running the package on a Mac (no Homebrew, Go or Xcode tools needed there):
   its menu toggles that;
 - when the package was built with the provisioning profile (see "Virtual
   camera"), the app activates the **Remote Visio Camera** extension and macOS
-  asks the user to approve it.
+  asks the user to approve it;
+- the browser camera is not installed: the user can set it up later from
+  the menu (see "Browser camera").
 
 macOS then asks for **System Audio Recording** and **Microphone** access for
 Remote Visio; allow both. Pick "Remote Visio" as the microphone in the apps that need it;
@@ -314,7 +460,9 @@ camera extension with the new version.
 
 **Uninstall.** Choose **Uninstall Remote Visio…** in the menu-bar menu, or run the
 script below. Either removes the login item, the camera extension, the app, the
-driver and the package receipts, and asks for the admin password:
+driver, the package receipts and the browser camera's folder, and asks for the
+admin password (the user removes "Remote Visio Camera" from the browser's
+extensions page):
 
 ```sh
 /Applications/RemoteVisio.app/Contents/Resources/uninstall.sh

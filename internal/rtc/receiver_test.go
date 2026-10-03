@@ -6,9 +6,12 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/pion/rtcp"
+	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
 	"github.com/pion/webrtc/v4/pkg/media"
 )
@@ -497,4 +500,266 @@ func senderPeerAV(t *testing.T, audioDirection webrtc.RTPTransceiverDirection) (
 	<-webrtc.GatheringCompletePromise(pc)
 
 	return pc, video
+}
+
+// fakeForwarder records what reaches the browser camera's forwarder.
+type fakeForwarder struct {
+	mu      sync.Mutex
+	codec   webrtc.RTPCodecParameters
+	packets int
+	ended   int
+	keyfr   func()
+	got     chan struct{}
+}
+
+func (f *fakeForwarder) StartTrack(codec webrtc.RTPCodecParameters, requestKeyframe func()) (func(*rtp.Packet), func()) {
+	f.mu.Lock()
+	f.codec, f.keyfr = codec, requestKeyframe
+	f.mu.Unlock()
+	return func(p *rtp.Packet) {
+			f.mu.Lock()
+			f.packets++
+			n := f.packets
+			f.mu.Unlock()
+			if n == 10 {
+				close(f.got)
+			}
+		}, func() {
+			f.mu.Lock()
+			f.ended++
+			f.mu.Unlock()
+		}
+}
+
+// TestForwarderAloneTakesVideo pins the browser camera's side of the
+// negotiation: with no camera extension but a forwarder, the camera m-line
+// is accepted, and the RTP packets reach the forwarder with the codec.
+func TestForwarderAloneTakesVideo(t *testing.T) {
+	r := New(nil, nil)
+	r.SetICEServers(nil)
+	fwd := &fakeForwarder{got: make(chan struct{})}
+	r.SetVideoForwarder(fwd)
+	defer r.Close()
+
+	pc, camera := senderPeerAV(t, webrtc.RTPTransceiverDirectionSendonly)
+	defer pc.Close()
+	answer, err := r.Answer(*pc.LocalDescription(), false)
+	if err != nil {
+		t.Fatalf("negotiation failed: %v", err)
+	}
+	for _, s := range mediaSections(answer.SDP) {
+		if strings.HasPrefix(s, "video") && !strings.Contains(s, "a=recvonly") {
+			t.Fatalf("with a forwarder the video m-line must be recvonly\n%s", s)
+		}
+	}
+	if err := pc.SetRemoteDescription(*answer); err != nil {
+		t.Fatal(err)
+	}
+	au := []byte{0, 0, 0, 1, 0x67, 0x42, 0xe0, 0x1f, 0, 0, 0, 1, 0x68, 0xce, 0x3c, 0x80, 0, 0, 0, 1, 0x65, 0x88, 0x84}
+	tick := time.NewTicker(33 * time.Millisecond)
+	defer tick.Stop()
+	deadline := time.After(15 * time.Second)
+	for done := false; !done; {
+		select {
+		case <-fwd.got:
+			done = true
+		case <-deadline:
+			t.Fatalf("no packets reached the forwarder within 15s (connection state %s)", pc.ConnectionState())
+		case <-tick.C:
+			_ = camera.WriteSample(media.Sample{Data: au, Duration: 33 * time.Millisecond})
+		}
+	}
+	fwd.mu.Lock()
+	codec, kf := fwd.codec, fwd.keyfr
+	fwd.mu.Unlock()
+	if !strings.EqualFold(codec.MimeType, webrtc.MimeTypeH264) || !strings.Contains(codec.SDPFmtpLine, "profile-level-id=42e01f") {
+		t.Errorf("forwarder got codec %+v", codec)
+	}
+	if kf == nil {
+		t.Fatal("forwarder got no keyframe function")
+	}
+	for i := 0; i < 5; i++ {
+		kf() // from any goroutine, rate-limited, never blocking
+	}
+	if v := r.Video(); v.Packets == 0 || v.Frames == 0 {
+		t.Errorf("video stats not counted without a sink: %+v", v)
+	}
+	pc.Close()
+	r.Close()
+	deadline = time.After(10 * time.Second)
+	for {
+		fwd.mu.Lock()
+		ended := fwd.ended
+		fwd.mu.Unlock()
+		if ended == 1 {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("the forwarder was told %d times that the track ended, want 1", ended)
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+}
+
+// needyKeySink asks for a keyframe on its first few access units, as the
+// VideoToolbox sink does after a loss, then decodes.
+type needyKeySink struct {
+	mu    sync.Mutex
+	calls int
+}
+
+func (s *needyKeySink) Decode([]byte, uint32) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls++
+	return s.calls <= 3
+}
+
+// TestDeferredKeyframeRequestDroppedWhenAnswered pins the keyframe request
+// rate limit: requests inside the interval are deferred to its end, and the
+// deferred one is dropped when a keyframe arrived meanwhile (every access
+// unit here is one), so a burst of undecodable frames costs the sender one
+// keyframe, not two.
+func TestDeferredKeyframeRequestDroppedWhenAnswered(t *testing.T) {
+	r := New(nil, nil)
+	r.SetICEServers(nil)
+	sink := &needyKeySink{}
+	r.SetVideoSink(sink)
+	defer r.Close()
+
+	pc, camera := senderPeerAV(t, webrtc.RTPTransceiverDirectionSendonly)
+	defer pc.Close()
+	var plis atomic.Int32
+	for _, s := range pc.GetSenders() {
+		if s.Track() != nil && s.Track().Kind() == webrtc.RTPCodecTypeVideo {
+			go func() {
+				for {
+					pkts, _, err := s.ReadRTCP()
+					if err != nil {
+						return
+					}
+					for _, p := range pkts {
+						if _, ok := p.(*rtcp.PictureLossIndication); ok {
+							plis.Add(1)
+						}
+					}
+				}
+			}()
+		}
+	}
+	answer, err := r.Answer(*pc.LocalDescription(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pc.SetRemoteDescription(*answer); err != nil {
+		t.Fatal(err)
+	}
+	au := []byte{0, 0, 0, 1, 0x67, 0x42, 0xe0, 0x1f, 0, 0, 0, 1, 0x68, 0xce, 0x3c, 0x80, 0, 0, 0, 1, 0x65, 0x88, 0x84}
+	tick := time.NewTicker(33 * time.Millisecond)
+	defer tick.Stop()
+	deadline := time.After(15 * time.Second)
+	var decodedAt time.Time
+	for decodedAt.IsZero() || time.Since(decodedAt) < time.Second {
+		select {
+		case <-deadline:
+			t.Fatalf("the sink got no access units (connection state %s)", pc.ConnectionState())
+		case <-tick.C:
+			_ = camera.WriteSample(media.Sample{Data: au, Duration: 33 * time.Millisecond})
+			sink.mu.Lock()
+			if sink.calls > 3 && decodedAt.IsZero() {
+				decodedAt = time.Now()
+			}
+			sink.mu.Unlock()
+		}
+	}
+	if n := plis.Load(); n != 1 {
+		t.Errorf("the sender got %d keyframe requests, want 1 (the track's first; the deferred one was answered by the keyframes)", n)
+	}
+}
+
+// TestAnswerDoesNotWaitForStuckGathering: a candidate gathering that never
+// finishes (here a TURN server that takes the requests and never replies; on
+// a user's Mac, a STUN server's name that never resolved) must not hold the
+// answer. It goes after gatherWait with the candidates found so far, says so
+// in a note, and the sender still connects over the host candidates.
+func TestAnswerDoesNotWaitForStuckGathering(t *testing.T) {
+	silent, err := net.ListenPacket("udp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer silent.Close()
+	go func() {
+		buf := make([]byte, 1500)
+		for {
+			if _, _, err := silent.ReadFrom(buf); err != nil {
+				return
+			}
+		}
+	}()
+
+	defer func(w time.Duration) { gatherWait = w }(gatherWait)
+	gatherWait = time.Second
+
+	connected := make(chan struct{})
+	var once sync.Once
+	r := New(nil, func(s webrtc.PeerConnectionState) {
+		if s == webrtc.PeerConnectionStateConnected {
+			once.Do(func() { close(connected) })
+		}
+	})
+	r.SetICEServers([]webrtc.ICEServer{{
+		URLs:       []string{"turn:" + silent.LocalAddr().String() + "?transport=udp"},
+		Username:   "user",
+		Credential: "pass",
+	}})
+	var notes []string
+	var notesMu sync.Mutex
+	r.OnNote(func(s string) { notesMu.Lock(); notes = append(notes, s); notesMu.Unlock() })
+	defer r.Close()
+
+	pc := senderPeer(t, webrtc.RTPTransceiverDirectionSendrecv)
+	defer pc.Close()
+	start := time.Now()
+	answer, err := r.Answer(*pc.LocalDescription(), false)
+	took := time.Since(start)
+	if err != nil {
+		t.Fatalf("negotiation failed: %v", err)
+	}
+	if took > 3*time.Second {
+		t.Fatalf("Answer took %v: it waited for the stuck gathering (gatherWait is %v)", took, gatherWait)
+	}
+	if !strings.Contains(answer.SDP, " typ host") {
+		t.Fatalf("the answer must carry the host candidates found so far\n%s", answer.SDP)
+	}
+	notesMu.Lock()
+	got := strings.Join(notes, "\n")
+	notesMu.Unlock()
+	if !strings.Contains(got, "candidate gathering not finished") {
+		t.Errorf("no note about the unfinished gathering; notes: %q", got)
+	}
+	if err := pc.SetRemoteDescription(*answer); err != nil {
+		t.Fatalf("the sender must accept the answer: %v", err)
+	}
+	select {
+	case <-connected:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the sender did not connect over the host candidates")
+	}
+}
+
+func TestDescribeCandidates(t *testing.T) {
+	sdp := "v=0\r\n" +
+		"a=candidate:1 1 udp 2130706431 192.168.1.5 50000 typ host\r\n" +
+		"a=candidate:2 1 udp 2130706431 10.0.0.2 50001 typ host\r\n" +
+		"a=candidate:3 1 udp 1694498815 203.0.113.9 50002 typ srflx raddr 192.168.1.5 rport 50000\r\n"
+	if got, want := describeCandidates(sdp), "3 candidates (host 2, srflx 1)"; got != want {
+		t.Errorf("describeCandidates = %q, want %q", got, want)
+	}
+	if got, want := describeCandidates("a=candidate:1 1 udp 1 10.0.0.1 9 typ host\r\n"), "1 candidate (host 1)"; got != want {
+		t.Errorf("describeCandidates = %q, want %q", got, want)
+	}
+	if got, want := describeCandidates("v=0\r\n"), "no candidates"; got != want {
+		t.Errorf("describeCandidates = %q, want %q", got, want)
+	}
 }

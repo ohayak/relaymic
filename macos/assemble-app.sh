@@ -19,7 +19,17 @@
 # the profile at REMOTEVISIO_PROFILE (macos/signing.sh has the default).
 # Otherwise the app is built as it always was, without a camera, and one
 # line says why.
+#
+# The browser camera goes into every build: the Remote Visio Camera browser
+# extension (browser-extension/, the files a browser loads, not its README)
+# in Contents/Resources/BrowserExtension/, and its installer,
+# macos/browser-extension.sh, next to it. Nothing there is code macOS runs
+# on its own, so it needs no signature of its own; the app's seals it.
 set -euo pipefail
+# The system's own tools first: this relies on their options (BSD sed's
+# `-i ''`, cp's -X), and a Terminal may put GNU ones (Homebrew's gnubin)
+# ahead of them. The rest of PATH stays, after them.
+export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 cd "$(dirname "$0")/.."
 # shellcheck source=signing.sh
 source macos/signing.sh
@@ -30,6 +40,13 @@ CAMEXT_ID=com.remotevisio.app.camera
 CAMEXT=bin/RemoteVisioCamera.systemextension
 for f in bin/remotevisio-receiver bin/remotevisio-menubar macos/favicon.icns "$OPUS_COPYING"; do
     [[ -f "$f" ]] || { echo "!!  $f is missing; run make app" >&2; exit 1; }
+done
+BROWSER_EXT=browser-extension
+for f in "$BROWSER_EXT/manifest.json" macos/browser-extension.sh; do
+    [[ -f "$f" ]] || { echo "!!  $f is missing: the browser camera cannot go into the app (it is part of the repository)" >&2; exit 1; }
+done
+for d in "$BROWSER_EXT/_locales" "$BROWSER_EXT/icons"; do
+    [[ -d "$d" ]] || { echo "!!  $d/ is missing: the browser camera cannot go into the app (it is part of the repository)" >&2; exit 1; }
 done
 
 camera=0
@@ -60,12 +77,42 @@ cp macos/Info.plist "$APP/Contents/Info.plist"
 cp bin/remotevisio-menubar "$APP/Contents/MacOS/RemoteVisio"
 cp bin/remotevisio-receiver "$APP/Contents/MacOS/remotevisio-receiver"
 cp macos/favicon.icns "$APP/Contents/Resources/favicon.icns"
-# Menu-bar image, 16 pt (macos/icons.py describes the icon sources).
+# Menu-bar image, 16 pt: black strokes on transparency (icons/icon-16.png and
+# its 2x, icons/icon-32.png).
 cp icons/icon-16.png "$APP/Contents/Resources/MenuIcon.png"
 cp icons/icon-32.png "$APP/Contents/Resources/MenuIcon@2x.png"
 cp "$OPUS_COPYING" "$APP/Contents/Resources/LICENSE-opus.txt"
 cp macos/pkg/uninstall.sh "$APP/Contents/Resources/uninstall.sh"
 chmod +x "$APP/Contents/Resources/uninstall.sh"
+
+# The browser camera: what a browser loads (the manifest, scripts, pages,
+# styles, _locales/ and icons/) and the script that puts it where the user
+# loads it from. No extended attributes (codesign rejects Finder
+# information and resource forks) and no hidden files (a .DS_Store is of no
+# use to the browser).
+bext="$APP/Contents/Resources/BrowserExtension"
+mkdir -p "$bext"
+cp -X "$BROWSER_EXT/manifest.json" "$bext/"
+for f in "$BROWSER_EXT"/*.js "$BROWSER_EXT"/*.html "$BROWSER_EXT"/*.css; do
+    [[ ! -f "$f" ]] || cp -X "$f" "$bext/"
+done
+cp -RX "$BROWSER_EXT/_locales" "$BROWSER_EXT/icons" "$bext/"
+find "$bext" -mindepth 1 -name '.*' -prune -exec rm -rf {} +
+# The version the browser sees is the app's: version and build number (2.0
+# and 5 make 2.0.5). A browser keeps running the extension's old background
+# worker until the manifest's version changes, so an app update that brings
+# new extension files must also bring a new version; stamping it here makes
+# that automatic. The manifest in the source tree keeps a placeholder
+# version for loading it unpacked straight from the checkout.
+ext_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' macos/Info.plist).$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' macos/Info.plist)"
+[[ "$ext_version" =~ ^(0|[1-9][0-9]{0,4})(\.(0|[1-9][0-9]{0,4})){0,3}$ ]] \
+    || { echo "!!  $ext_version (macos/Info.plist's version.build) is not a browser extension version: at most 4 numbers up to 65535" >&2; exit 1; }
+sed -E -i '' "s/(\"version\"[[:space:]]*:[[:space:]]*\")[^\"]*\"/\1$ext_version\"/" "$bext/manifest.json"
+[[ "$(plutil -extract version raw -o - "$bext/manifest.json" 2>/dev/null)" == "$ext_version" ]] \
+    || { echo "!!  could not set the browser extension's version to $ext_version" >&2; exit 1; }
+cp -X macos/browser-extension.sh "$APP/Contents/Resources/browser-extension.sh"
+chmod +x "$APP/Contents/Resources/browser-extension.sh"
+echo "    browser camera bundled: $(find "$bext" -type f | wc -l | tr -d ' ') extension files, version $(plutil -extract version raw -o - "$bext/manifest.json" 2>/dev/null || echo '?')"
 
 # The nested pieces are signed first, each on its own, then the bundle,
 # whose signature seals them. No --deep: each piece gets its own
