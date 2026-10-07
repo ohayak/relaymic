@@ -1,6 +1,6 @@
 // Remote Visio's sender app in relay mode ("direct mode"): the pairing screens, the paired computers with the one this
 // page sends to, and the store that keeps them (IndexedDB rv-send, on the app's own origin). relay.js loads this
-// module; the receiver never serves it. The design: bin/e2e-harness/DESIGN-direct-mode.md, sections 5.2, 5.4, 5.8 and
+// module; the receiver never serves it. The design: docs/DESIGN-direct-mode.md, sections 5.2, 5.4, 5.8 and
 // 8.2.
 //
 // A pairing, from this side (section 5.4). The Remote Visio extension on the computer shows a link, or its QR code,

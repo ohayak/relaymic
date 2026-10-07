@@ -1,0 +1,27 @@
+<!doctype html><title>test page</title><body><script>
+window.MIC = 'fedc5a10cd08767476ba951aaa00d046d32e389afb0adaaa102d10cfb5d17c98';
+window.SPK = '682e2b9ea878d039d4df8a2e9cf653944cb93b710cd2b0fa27a06faa724db8dd';
+window.CAM = '5f1d3e0c9a7b4c2e8d6f0a1b3c5d7e9f1a2b4c6d8e0f1a3b5c7d9e1f2a4b6c8d';
+window.sleep = (ms) => new Promise(r => setTimeout(r, ms));
+// meter(track): level and dominant frequency of a track, in this realm.
+window.meter = (track) => {
+  const ctx = window.__mctx || (window.__mctx = new AudioContext());
+  const an = ctx.createAnalyser(); an.fftSize = 4096;
+  ctx.createMediaStreamSource(new MediaStream([track])).connect(an);
+  return () => {
+    const a = new Float32Array(an.fftSize); an.getFloatTimeDomainData(a);
+    let s = 0; for (const v of a) s += v * v;
+    const f = new Float32Array(an.frequencyBinCount); an.getFloatFrequencyData(f);
+    let m = -Infinity, k = 0; f.forEach((v, i) => { if (v > m) { m = v; k = i; } });
+    return { rms: Math.sqrt(s / a.length), freq: Math.round(k * ctx.sampleRate / an.fftSize) };
+  };
+};
+// chunks(track, ms): how many audio chunks a track delivers in ms.
+window.chunks = async (track, ms) => {
+  const reader = new MediaStreamTrackProcessor({ track: track.clone() }).readable.getReader();
+  let n = 0, frames = 0, peak = 0; const t = setTimeout(() => reader.cancel(), ms);
+  for (;;) { const r = await reader.read(); if (r.done) break; n++; frames += r.value.numberOfFrames;
+    const b = new Float32Array(r.value.numberOfFrames); r.value.copyTo(b, { planeIndex: 0, format: 'f32-planar' }); for (const v of b) peak = Math.max(peak, Math.abs(v)); r.value.close(); }
+  clearTimeout(t); return { n, frames, peak };
+};
+</script></body>

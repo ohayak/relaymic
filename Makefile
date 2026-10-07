@@ -12,7 +12,7 @@
 # the state and how to set it up. The virtual camera (a system extension,
 # `camext`) goes into the app only with a Developer ID signature and the
 # provisioning profile below; without them the app is built as before. The
-# browser extension (browser-extension/, a Chromium extension that gives web
+# browser extension (chromium/, a Chromium extension that gives web
 # pages the Remote Visio camera, microphone and speaker, and its installer
 # macos/browser-extension.sh) goes into every build.
 SHELL := /bin/bash
@@ -125,14 +125,14 @@ GO_SRC   := go.mod go.sum $(shell find cmd/receiver internal -type f \( -name '*
 PKG_SRC  := macos/pkg/Distribution.xml $(wildcard macos/pkg/resources/* macos/pkg/resources/*/* macos/pkg/app-scripts/*)
 # The browser extension as a browser loads it, which macos/assemble-app.sh
 # bundles into the app and extension-zip into the Chrome Web Store zip: every
-# file of browser-extension/ but its README.md and hidden files, so direct/
+# file of chromium/ but its README.md and hidden files, so direct/
 # (direct mode's hub) and vendor/ (the QR code generator, and the README with
 # its source and licence) go too. EXT_FILES are their paths inside it;
 # check-extension makes sure every file the manifest, the pages and the
 # scripts ask for is among them. A file added or removed is noticed only once
 # another one changes, as for GO_SRC.
-EXT_FILES := $(shell cd browser-extension 2>/dev/null && find . -type f ! -path '*/.*' ! -path ./README.md | sed 's|^\./||' | LC_ALL=C sort)
-BROWSER_EXT_SRC := $(addprefix browser-extension/,$(EXT_FILES))
+EXT_FILES := $(shell cd chromium 2>/dev/null && find . -type f ! -path '*/.*' ! -path ./README.md | sed 's|^\./||' | LC_ALL=C sort)
+BROWSER_EXT_SRC := $(addprefix chromium/,$(EXT_FILES))
 
 .PHONY: all help app install receiver menubar camext opus pkg pkg-unsigned pkg-file \
         test test-go check check-extension extension-zip signing signing-request signing-install \
@@ -245,7 +245,7 @@ test-go: ## go tests
 check: check-extension ## gofmt, go vet and check-extension
 	@test -z "$$(gofmt -l cmd internal)" || { echo "!!  gofmt:"; gofmt -l cmd internal; exit 1; }
 	go vet -tags nolibopusfile ./...
-# The extension has no build step: what is in browser-extension/ is what the
+# The extension has no build step: what is in chromium/ is what the
 # browser runs, so this is where its mistakes get caught. Its ID is not
 # written anywhere in it: Chromium derives it from the manifest's public key
 # (the first 128 bits of the key's SHA-256, as letters a-p), and the
@@ -308,18 +308,18 @@ endef
 export EXT_REFS_PY
 
 check-extension: ## the browser extension: JSON, JavaScript syntax (needs node), what it loads is packaged, its ID against the receiver's
-	@test -f browser-extension/manifest.json || { echo "!!  browser-extension/manifest.json is missing" >&2; exit 1; }
+	@test -f chromium/manifest.json || { echo "!!  chromium/manifest.json is missing" >&2; exit 1; }
 	@for f in $(filter %.json,$(BROWSER_EXT_SRC)); do \
 		python3 -m json.tool "$$f" >/dev/null || { echo "!!  $$f is not valid JSON" >&2; exit 1; }; \
 	done
 	@if command -v node >/dev/null 2>&1; then \
 		for f in $(filter %.js,$(BROWSER_EXT_SRC)); do node --check "$$f" || { echo "!!  $$f: syntax error" >&2; exit 1; }; done; \
 	else echo "note: node not found; the extension's JavaScript was not checked"; fi
-	@python3 -c "$$EXT_REFS_PY" browser-extension $(EXT_FILES)
+	@python3 -c "$$EXT_REFS_PY" chromium $(EXT_FILES)
 	@bash -n macos/browser-extension.sh || { echo "!!  macos/browser-extension.sh: syntax error" >&2; exit 1; }
-	@id=$$(python3 -c 'import json, base64, hashlib; key = json.load(open("browser-extension/manifest.json"))["key"]; \
+	@id=$$(python3 -c 'import json, base64, hashlib; key = json.load(open("chromium/manifest.json"))["key"]; \
 		print("".join(chr(97 + int(c, 16)) for c in hashlib.sha256(base64.b64decode(key)).hexdigest()[:32]))' 2>/dev/null) \
-		|| { echo "!!  browser-extension/manifest.json has no usable \"key\"" >&2; exit 1; }; \
+		|| { echo "!!  chromium/manifest.json has no usable \"key\"" >&2; exit 1; }; \
 	want=$$(sed -n 's/^[[:space:]]*ExtensionID[[:space:]]*=[[:space:]]*"\([a-p]*\)".*/\1/p' internal/browsercam/browsercam.go); \
 	[[ -n "$$want" && "$$id" == "$$want" ]] \
 		|| { echo "!!  the manifest's key gives the extension ID $$id, the receiver expects $${want:-?} (internal/browsercam)" >&2; exit 1; }; \
@@ -343,7 +343,7 @@ $(EXT_ZIP): $(BROWSER_EXT_SRC) macos/Info.plist | check-extension
 	@echo "==> packaging the browser extension $(EXT_VERSION) for the Chrome Web Store"
 	@rm -rf bin/.ext-zip $@; mkdir -p bin/.ext-zip
 	@for f in $(EXT_FILES); do \
-		mkdir -p "bin/.ext-zip/$$(dirname "$$f")" && cp -X "browser-extension/$$f" "bin/.ext-zip/$$f" || exit 1; \
+		mkdir -p "bin/.ext-zip/$$(dirname "$$f")" && cp -X "chromium/$$f" "bin/.ext-zip/$$f" || exit 1; \
 	done
 	@python3 -c 'import json, re, sys; \
 		v = sys.argv[2]; \

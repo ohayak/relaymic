@@ -1,0 +1,10 @@
+<!doctype html><title>early</title><script>
+// Asks for Remote Visio Speaker while the page loads (a stored choice).
+window.early = { t0: performance.now() };
+navigator.mediaDevices.enumerateDevices().then(() => { early.enumAt = performance.now() - early.t0; });
+window.ea = new Audio();
+ea.setSinkId(SPK).then(() => { early.el = 'ok'; early.elAt = performance.now() - early.t0; }, (e) => { early.el = e.name; });
+window.ec = new AudioContext({ sinkId: SPK });
+ec.addEventListener('error', () => { early.ctxError = true; });
+early.ctxSinkAtOnce = ec.sinkId;
+</script><body><p>early</p></body>

@@ -1,0 +1,32 @@
+<!doctype html><title>pull</title><body><script>
+window.res = { frames: 0, rmsSum: 0, n: 0, log: [] };
+(async () => {
+  // A tone source without WebAudio: a generator written by a timer.
+  const src = new MediaStreamTrackGenerator({ kind: 'audio' });
+  const w = src.writable.getWriter();
+  let phase = 0, ts = 0, next = performance.now();
+  setInterval(() => {
+    const t = performance.now();
+    while (next <= t + 20) {
+      const buf = new Float32Array(480);
+      for (let i = 0; i < 480; i++) buf[i] = 0.5 * Math.sin(phase += 2 * Math.PI * 440 / 48000);
+      w.write(new AudioData({ format: 'f32-planar', sampleRate: 48000, numberOfFrames: 480, numberOfChannels: 1, timestamp: ts, data: buf }));
+      ts += 10000; next += 10;
+    }
+  }, 10);
+  const a = new RTCPeerConnection(), b = new RTCPeerConnection();
+  a.onicecandidate = e => e.candidate && b.addIceCandidate(e.candidate);
+  b.onicecandidate = e => e.candidate && a.addIceCandidate(e.candidate);
+  a.addTrack(src);
+  const got = new Promise(r => b.ontrack = e => r(e.track));
+  await a.setLocalDescription(); await b.setRemoteDescription(a.localDescription);
+  await b.setLocalDescription(); await a.setRemoteDescription(b.localDescription);
+  const remote = await got;
+  const v = document.createElement('video'); v.muted = true; v.srcObject = new MediaStream([remote]);
+  v.play().then(() => res.play = 'ok', e => res.play = e.name);
+  const reader = new MediaStreamTrackProcessor({ track: remote }).readable.getReader();
+  for (;;) { const r = await reader.read(); if (r.done) break; const d = r.value; res.frames++;
+    const buf = new Float32Array(d.numberOfFrames); d.copyTo(buf, { planeIndex: 0, format: 'f32-planar' }); let s = 0; for (const x of buf) s += x * x; res.rmsSum += Math.sqrt(s / buf.length); res.n++; d.close(); }
+})();
+setInterval(() => { res.log.push([document.visibilityState, res.frames]); }, 1000);
+</script></body>

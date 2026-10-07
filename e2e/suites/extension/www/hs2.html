@@ -1,0 +1,7 @@
+<!doctype html><title>hs2</title><script>
+window.SPK = '682e2b9ea878d039d4df8a2e9cf653944cb93b710cd2b0fa27a06faa724db8dd'; window.hs = { t0: performance.now() };
+navigator.mediaDevices.enumerateDevices().then(() => { hs.enumAt = Math.round(performance.now() - hs.t0); });
+const q = new URLSearchParams(location.search);
+if (q.has('ctx')) { const t = performance.now(); window.c = new AudioContext(q.get('ctx') === 'ours' ? { sinkId: SPK } : q.get('ctx') === 'none' ? { sinkId: { type: 'none' } } : undefined); hs.ctxMs = Math.round(performance.now() - t); }
+if (q.has('el')) { window.a = new Audio(); a.setSinkId(SPK).then(() => { hs.elAt = Math.round(performance.now() - hs.t0); }, (e) => { hs.el = e.name; }); }
+</script><body>hs</body>

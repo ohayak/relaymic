@@ -1,4 +1,4 @@
-Guidance for the Remote Visio website (https://remotevisio.com). Root guidance: `../CLAUDE.md` if present; product facts: `../README.md`, `../SETUP.md`, `../browser-extension/README.md`, `../macos/README.md`.
+Guidance for the Remote Visio website (https://remotevisio.com). Root guidance: `../CLAUDE.md` if present; product facts: `../README.md`, `../SETUP.md`, `../chromium/README.md`, `../macos/README.md`.
 
 ## Stack & Layout
 
@@ -25,7 +25,7 @@ npm run brand     # regenerate favicons and the OG image
 
 ## Deploy & Gotchas
 
-- Cloudflare Worker `remotevisio-site` (`wrangler.jsonc`): static assets from `./dist`, `worker/index.js` 301s relaymic.com, www.relaymic.com and www.remotevisio.com to https://remotevisio.com with path and query, and `/send` to the sender app's origin (`APP_ORIGIN`). The sender app and the direct-mode relay (send.remotevisio.com) are another Worker, `../relay` (`remotevisio-relay`): nothing of them is in this one, and its custom domain is never listed here. `run_worker_first: true` is required for the redirects; `html_handling: drop-trailing-slash` matches astro's `trailingSlash: "never"`. `npm test` runs the Worker's tests in Node (`worker/test/site.test.mjs`, no wrangler). Deploy = `npm run build && npx wrangler deploy` (by a human; never from an agent; the relay is deployed on its own, from `../relay`)
+- Cloudflare Worker `remotevisio-site` (`wrangler.jsonc`): static assets from `./dist`, `worker/index.js` 301s relaymic.com, www.relaymic.com and www.remotevisio.com to https://remotevisio.com with path and query, and `/send` to the sender app's origin (`APP_ORIGIN`). The sender app and the direct-mode relay (relay.remotevisio.com) are another Worker, `../relay` (`remotevisio-relay`): nothing of them is in this one, and its custom domain is never listed here. `run_worker_first: true` is required for the redirects; `html_handling: drop-trailing-slash` matches astro's `trailingSlash: "never"`. `npm test` runs the Worker's tests in Node (`worker/test/site.test.mjs`, no wrangler). Deploy = `npm run build && npx wrangler deploy` (by a human; never from an agent; the relay is deployed on its own, from `../relay`)
 - `public/_redirects` keeps old URLs alive (`/privacy-policy`, `/terms.html`, `/es/*`, `/zh/*`, `/sitemap.xml`…). **Never redirect `/privacy`**: the Chrome Web Store listing points to it
 - `public/_headers` holds the CSP. Google Analytics (G-RMG8MNGGZQ) loads only from `public/js/consent.js` after Accept; no third-party request before consent. Adding any third-party script, font or image means updating the CSP **and** the cookie/privacy policies
 - Never claim what the product does not do: no audio driver, mic/speaker only in web pages of Chromium browsers, no pairing code, Apple Silicon download only. No App Store badge until `links.macAppStoreUrl` is set; no fake reviews, users or testimonials

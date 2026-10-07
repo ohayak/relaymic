@@ -1,5 +1,5 @@
 {
-  "about": "SHA-256 of every file https://send.remotevisio.com serves, built by relay/scripts/build-sender.mjs from internal/web, browser-extension/direct and site/public. Check the live app with: node relay/scripts/verify-send.mjs",
+  "about": "SHA-256 of every file https://relay.remotevisio.com serves, built by relay/scripts/build-sender.mjs from internal/web, chromium/direct and site/public. Check the live app with: node relay/scripts/verify-send.mjs",
   "sha256": {
     "/": "0668cc5bf71d60faeb938e2e66f6b3defb45fdfcc826b2b431f9061f148e57f9",
     "/apple-touch-icon.png": "e0df05dfd214dab6f03cb527a3f193d43fe0a30d4cde706f267be46fa2771f9c",

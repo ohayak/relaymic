@@ -3,7 +3,7 @@
   // assets, plus a Worker (worker/index.js) that 301s relaymic.com,
   // www.relaymic.com and www.remotevisio.com to https://remotevisio.com, and
   // /send to the sender app. The app and the direct-mode relay
-  // (send.remotevisio.com) are a Worker of their own, ../relay: nothing of
+  // (relay.remotevisio.com) are a Worker of their own, ../relay: nothing of
   // them is here.
   // Build first (npm run build), then deploy with npx wrangler deploy.
   "$schema": "./node_modules/wrangler/config-schema.json",
@@ -29,7 +29,7 @@
   // Custom domains: each zone must be in the same Cloudflare account as this
   // Worker. relaymic.com is still attached to the old Worker ("relaymic-site");
   // remove it there first, or deploy will report the conflict.
-  // send.remotevisio.com belongs to the relay Worker (../relay/wrangler.jsonc)
+  // relay.remotevisio.com belongs to the relay Worker (../relay/wrangler.jsonc)
   // and must never be attached here.
   "routes": [
     { "pattern": "remotevisio.com", "custom_domain": true },
@@ -41,7 +41,7 @@
   // Production values; wrangler dev --var NAME:VALUE overrides them.
   "vars": {
     // Where /send goes: the sender app, served by the relay Worker.
-    "APP_ORIGIN": "https://send.remotevisio.com"
+    "APP_ORIGIN": "https://relay.remotevisio.com"
   },
 
   // Query strings are removed from the URLs Workers Logs keep (a marketing
@@ -64,7 +64,7 @@
     "dev": {
       "routes": [],
       "vars": {
-        "APP_ORIGIN": "http://send.localhost:7660"
+        "APP_ORIGIN": "http://relay.localhost:7660"
       }
     }
   }

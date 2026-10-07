@@ -1,5 +1,5 @@
 // Every fact the site states about Remote Visio lives here, so the pages agree
-// with each other. Sources: README.md, SETUP.md, browser-extension/README.md,
+// with each other. Sources: README.md, SETUP.md, chromium/README.md,
 // macos/README.md. Do not add a claim that is not backed by one of them.
 // This file is imported by Node at build time only: no browser APIs.
 

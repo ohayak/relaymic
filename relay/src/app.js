@@ -1,9 +1,9 @@
-// The app host (send.remotevisio.com; send.localhost:7660 in development):
+// The app host (relay.remotevisio.com; relay.localhost:7660 in development):
 // the sender app and the direct-mode relay, on an origin of their own so no
 // third-party script (the main site's Google Analytics) ever shares the
 // storage that holds the pairing keys. index.js hands every request of this
 // Worker here, whatever its hostname. The design is
-// bin/e2e-harness/DESIGN-direct-mode.md, sections 4.1 and 8.4.
+// docs/DESIGN-direct-mode.md, sections 4.1 and 8.4.
 //
 // The app is built by scripts/build-sender.mjs into dist/ (send/index.html,
 // the scripts under send/, the icons). Every response here gets the app's
@@ -11,7 +11,7 @@
 // the microphone and a WebSocket to this host, and nothing third-party.
 
 import { handleRelay, isLocalHostname } from "./relay.js";
-import { RELAY_PATH } from "../../browser-extension/direct/protocol.js";
+import { RELAY_PATH } from "../../chromium/direct/protocol.js";
 
 // The app's files under /send/: scripts and the like, never a page.
 const APP_FILE = /^\/send\/[A-Za-z0-9][A-Za-z0-9._-]*\.(js|css|json|svg|png|webp|woff2)$/;

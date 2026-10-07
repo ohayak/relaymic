@@ -21,7 +21,7 @@
 # line says why.
 #
 # The browser extension goes into every build: the one that gives web pages
-# the Remote Visio microphone, speaker and camera (browser-extension/, the
+# the Remote Visio microphone, speaker and camera (chromium/, the
 # files a browser loads, direct/ and vendor/ included, not its README; its
 # name in the browser and the store is still "Remote Visio Camera") in
 # Contents/Resources/BrowserExtension/, and its installer,
@@ -43,7 +43,7 @@ CAMEXT=bin/RemoteVisioCamera.systemextension
 for f in bin/remotevisio-receiver bin/remotevisio-menubar macos/favicon.icns "$OPUS_COPYING"; do
     [[ -f "$f" ]] || { echo "!!  $f is missing; run make app" >&2; exit 1; }
 done
-BROWSER_EXT=browser-extension
+BROWSER_EXT=chromium
 for f in "$BROWSER_EXT/manifest.json" macos/browser-extension.sh; do
     [[ -f "$f" ]] || { echo "!!  $f is missing: the browser extension cannot go into the app (it is part of the repository)" >&2; exit 1; }
 done
@@ -89,7 +89,7 @@ chmod +x "$APP/Contents/Resources/uninstall.sh"
 
 # The browser extension: what a browser loads, as the Chrome Web Store zip
 # has it (the Makefile's EXT_FILES, which make check-extension checks): every
-# file of browser-extension/ but its README.md and hidden files, so the
+# file of chromium/ but its README.md and hidden files, so the
 # manifest, the scripts, pages and styles, direct/ (direct mode's hub, which
 # offscreen.html loads), vendor/ (the QR code generator, with the README that
 # carries its source and licence), _locales/ and icons/; and the script that

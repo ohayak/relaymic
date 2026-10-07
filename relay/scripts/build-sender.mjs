@@ -1,11 +1,11 @@
-// Builds the sender app that send.remotevisio.com serves ("direct mode") from
+// Builds the sender app that relay.remotevisio.com serves ("direct mode") from
 // the sender page the Go receiver serves, so both modes run the same code:
 //
 //   ../internal/web/index.html  ->  dist/send/index.html, with its two
 //                                   inline scripts moved to strings.js and
 //                                   app.js (the app's CSP is script-src 'self')
 //   ../internal/web/i18n.js, relay.js, pair-ui.js
-//   ../browser-extension/direct/protocol.js
+//   ../chromium/direct/protocol.js
 //                               ->  dist/send/ as they are
 //   ../site/public/favicon.ico, favicon.svg, apple-touch-icon.png
 //                               ->  dist/ as they are (the site's icons)
@@ -17,7 +17,7 @@
 // dist/send/index.html at / and the scripts under /send/. dist/ is generated
 // (git-ignored); send-manifest.json is tracked, and is committed with every
 // deploy so anyone can check what the app host serves.
-// The design is bin/e2e-harness/DESIGN-direct-mode.md, section 8.4.
+// The design is docs/DESIGN-direct-mode.md, section 8.4.
 //
 // The page's structure is checked before anything is written: if it drifts
 // (a third inline script, a script that moved, an inline event handler the
@@ -43,7 +43,7 @@ const COPIED = {
   "i18n.js": join(web, "i18n.js"),
   "relay.js": join(web, "relay.js"),
   "pair-ui.js": join(web, "pair-ui.js"),
-  "protocol.js": join(repo, "browser-extension/direct/protocol.js"),
+  "protocol.js": join(repo, "chromium/direct/protocol.js"),
 };
 
 // The site's icons (../site/public), which the app host serves too
@@ -201,8 +201,8 @@ for (const [name, content] of files) hashes["/send/" + name] = sha256(content);
 for (const [icon, content] of iconFiles) hashes[icon] = sha256(content);
 const manifest = {
   about:
-    "SHA-256 of every file https://send.remotevisio.com serves, built by relay/scripts/build-sender.mjs from " +
-    "internal/web, browser-extension/direct and site/public. Check the live app with: node relay/scripts/verify-send.mjs",
+    "SHA-256 of every file https://relay.remotevisio.com serves, built by relay/scripts/build-sender.mjs from " +
+    "internal/web, chromium/direct and site/public. Check the live app with: node relay/scripts/verify-send.mjs",
   sha256: Object.fromEntries(Object.keys(hashes).sort().map((path) => [path, hashes[path]])),
 };
 writeFileSync(manifestFile, JSON.stringify(manifest, null, 2) + "\n");

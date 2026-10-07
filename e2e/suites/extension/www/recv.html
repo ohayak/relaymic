@@ -1,0 +1,63 @@
+<!doctype html><title>mock receiver</title><body><script>
+// The mock receiver's WebRTC side: answers the extension's offers like
+// internal/browsercam would (protocol 2), with a tone as the sender's
+// microphone, a canvas as the camera, and a meter on what speaker pages send.
+window.pcs = new Set();
+window.offers = [];
+let ctx, osc, toneTrack, canvasTrack;
+window.setup = async () => {
+  ctx = new AudioContext(); await ctx.resume();
+  osc = ctx.createOscillator(); osc.frequency.value = 440;
+  const d = ctx.createMediaStreamDestination(); osc.connect(d); osc.start();
+  toneTrack = d.stream.getAudioTracks()[0];
+  const c = document.createElement('canvas'); c.width = 640; c.height = 360; const g = c.getContext('2d');
+  setInterval(() => { g.fillStyle = `hsl(${Date.now() / 10 % 360},90%,50%)`; g.fillRect(0, 0, 640, 360); }, 33);
+  canvasTrack = c.captureStream(30).getVideoTracks()[0];
+  window.speakerAn = ctx.createAnalyser(); speakerAn.fftSize = 4096;
+  return ctx.state;
+};
+window.setTone = (f) => { osc.frequency.value = f; };
+window.answer = async (kind, sdp, page) => {
+  const pc = new RTCPeerConnection(); pcs.add(pc); pc.kind = kind; pc.page = page;
+  offers.push({ kind, page, at: Date.now() });
+  pc.onconnectionstatechange = () => { if (pc.connectionState === 'closed' || pc.connectionState === 'failed') pcs.delete(pc); };
+  if (kind === 'speaker') {
+    pc.ontrack = (e) => {
+      const v = document.createElement('video'); v.muted = true; v.srcObject = new MediaStream([e.track]); v.play();
+      const src = ctx.createMediaStreamSource(new MediaStream([e.track])); src.connect(speakerAn);
+      pc.speakerSrc = src;
+    };
+  }
+  await pc.setRemoteDescription({ type: 'offer', sdp });
+  const t = pc.getTransceivers()[0];
+  if (kind === 'microphone') { t.direction = 'sendonly'; await t.sender.replaceTrack(toneTrack); }
+  if (kind === 'camera') { t.direction = 'sendonly'; await t.sender.replaceTrack(canvasTrack); }
+  if (kind === 'speaker') t.direction = 'recvonly';
+  await pc.setLocalDescription();
+  if (pc.iceGatheringState !== 'complete') await new Promise(r => { pc.onicegatheringstatechange = () => pc.iceGatheringState === 'complete' && r(); setTimeout(r, 3000); });
+  return pc.localDescription.sdp;
+};
+window.closeAll = () => { for (const pc of pcs) { pc.close(); if (pc.speakerSrc) pc.speakerSrc.disconnect(); } pcs.clear(); };
+// (Not window.status: that is the browser's status-bar text, which turns
+// any function given to it into a string.)
+window.mockStatus = () => {
+  const by = (k) => [...pcs].filter(p => p.kind === k && p.connectionState !== 'closed');
+  const pages = (l) => [...new Set(l.map(p => p.page).filter(Boolean))];
+  const lvl = level();
+  return {
+    protocol: 2, on: true, unavailable: '', video: true, fps: 30, viewers: by('camera').length, pages: pages(by('camera')),
+    microphone: { on: true, audio: true, listeners: by('microphone').length, pages: pages(by('microphone')) },
+    speaker: { on: true, listening: true, sending: lvl.rms > 0.001, page: pages(by('speaker'))[0] || '', pages: pages(by('speaker')) },
+  };
+};
+window.level = () => {
+  const a = new Float32Array(speakerAn.fftSize); speakerAn.getFloatTimeDomainData(a);
+  let s = 0; for (const v of a) s += v * v;
+  const f = new Float32Array(speakerAn.frequencyBinCount); speakerAn.getFloatFrequencyData(f);
+  // The strongest peaks, for a mix of tones.
+  const peaks = [];
+  for (let i = 2; i < f.length - 2; i++) if (f[i] > -60 && f[i] >= f[i - 1] && f[i] >= f[i + 1] && f[i] > f[i - 2] && f[i] > f[i + 2]) peaks.push([Math.round(i * ctx.sampleRate / speakerAn.fftSize), Math.round(f[i])]);
+  peaks.sort((x, y) => y[1] - x[1]);
+  return { rms: Math.sqrt(s / a.length), peaks: peaks.slice(0, 4).map(p => p[0]) };
+};
+</script></body>

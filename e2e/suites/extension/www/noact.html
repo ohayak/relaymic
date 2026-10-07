@@ -1,0 +1,13 @@
+<!doctype html><title>noact</title><body><script>
+window.res = {};
+const c1 = new AudioContext(); const c2 = new AudioContext({ sinkId: { type: 'none' } });
+setTimeout(async () => {
+  res.ctxDefault = c1.state; res.ctxNone = c2.state;
+  c2.resume().then(() => res.resumed = 'ok', e => res.resumed = e.name);
+  const a = new Audio('tone880.wav'); a.loop = true;
+  a.play().then(() => res.play = 'ok', e => res.play = e.name);
+  const m = new Audio('tone880.wav'); m.muted = true;
+  m.play().then(() => res.mutedPlay = 'ok', e => res.mutedPlay = e.name);
+  setTimeout(() => { res.ctxNoneLater = c2.state; const c3 = new AudioContext({ sinkId: { type: 'none' } }); setTimeout(() => res.c3 = c3.state, 300); }, 800);
+}, 300);
+</script></body>

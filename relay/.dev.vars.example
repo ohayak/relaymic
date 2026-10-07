@@ -3,10 +3,10 @@
 # dev environment of wrangler.jsonc has no routes, so a request keeps the
 # hostname the client sent). The Worker honours DEV and every DEV_* variable
 # only when the request's hostname is 127.0.0.1, localhost or ends in
-# .localhost, so none of them can take effect on send.remotevisio.com.
-# See bin/e2e-harness/DESIGN-direct-mode.md, section 4.7.
+# .localhost, so none of them can take effect on relay.remotevisio.com.
+# See docs/DESIGN-direct-mode.md, section 4.7.
 DEV=1
-APP_ORIGIN=http://send.localhost:7660
+APP_ORIGIN=http://relay.localhost:7660
 # Pair rooms live 20 s instead of 10 minutes.
 DEV_FAST_EXPIRY=1
 # role=tap sockets get a copy of every frame a room routes (the test suites

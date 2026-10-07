@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import worker from "../index.js";
 
 const SITE = "https://remotevisio.com";
-const APP_ORIGIN = "https://send.remotevisio.com";
+const APP_ORIGIN = "https://relay.remotevisio.com";
 
 const HTML = "text/html; charset=utf-8";
 // What the assets hold, by the path the binding is asked for (html_handling

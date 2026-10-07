@@ -1,8 +1,8 @@
 // The direct-mode relay's front door: /relay/v1/* on the app host
-// (send.remotevisio.com). It checks the Origin and the role, validates the
+// (relay.remotevisio.com). It checks the Origin and the role, validates the
 // room id, applies the rate limits, and hands each WebSocket upgrade to the
 // RelayRoom Durable Object of that room (room.js), which does the rest.
-// The design is bin/e2e-harness/DESIGN-direct-mode.md, sections 4.1 to 4.7.
+// The design is docs/DESIGN-direct-mode.md, sections 4.1 to 4.7.
 //
 // The relay only passes connection setup between a hub (the extension's
 // offscreen document) and a sender app. Everything that matters travels in
@@ -16,7 +16,7 @@
 // Not built yet (phase B of section 17): POST /code (code rooms), POST /turn
 // and /turn/revoke, RL_CODE, RL_TURN and RL_API_IP. Those paths answer 404.
 
-import { RELAY_PATH, V } from "../../browser-extension/direct/protocol.js";
+import { RELAY_PATH, V } from "../../chromium/direct/protocol.js";
 
 // Section 4.3: a mailbox id is mailboxIdOf(hubToken), a QR pair room id is
 // pairIdOf(pairToken) (both 22 characters of b64u), and a code room is c-
@@ -49,7 +49,7 @@ function list(value) {
 }
 
 function isDevAppOrigin(origin) {
-  const m = /^http:\/\/(send\.localhost|127\.0\.0\.1):(\d+)$/.exec(origin);
+  const m = /^http:\/\/(relay\.localhost|127\.0\.0\.1):(\d+)$/.exec(origin);
   return !!m && Number(m[2]) >= DEV_PORTS.min && Number(m[2]) <= DEV_PORTS.max;
 }
 

@@ -1,6 +1,6 @@
 // Tests of the direct-mode relay Worker (src/relay.js, room.js, app.js and
 // index.js), with node:test and Node's global WebSocket: no dependencies but
-// wrangler. The design is bin/e2e-harness/DESIGN-direct-mode.md, sections 4
+// wrangler. The design is docs/DESIGN-direct-mode.md, sections 4
 // and 4.8; this file covers phase A (section 17).
 //
 //   cd relay && npm run build && npm test
@@ -13,7 +13,7 @@
 // dev that is already running there instead, which must have DEV=1,
 // DEV_FAST_EXPIRY=1 and DEV_TAP=1 (as .dev.vars.example sets them).
 //
-// Never run against send.remotevisio.com. Each test gets its own made-up
+// Never run against relay.remotevisio.com. Each test gets its own made-up
 // client IP (CF-Connecting-IP, which wrangler dev keeps when the client
 // sends one), so the per-IP rate limits of one test do not spill into
 // another.
@@ -28,14 +28,14 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { b64u, mailboxIdOf, pairIdOf, randomBytes, ticketHash } from "../../browser-extension/direct/protocol.js";
+import { b64u, mailboxIdOf, pairIdOf, randomBytes, ticketHash } from "../../chromium/direct/protocol.js";
 import { handleRelay, ipPrefix } from "../src/relay.js";
 
 const RELAY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 7660;
 const INSPECTOR_PORT = 7661;
-const APP = `http://send.localhost:${PORT}`;
-const WS_BASE = `ws://send.localhost:${PORT}/relay/v1`;
+const APP = `http://relay.localhost:${PORT}`;
+const WS_BASE = `ws://relay.localhost:${PORT}/relay/v1`;
 // Another hostname the Worker may receive: it serves the same there.
 const OTHER_HOST = `http://127.0.0.1:${PORT}`;
 const EXT = "chrome-extension://jmiffhdbakchdlfbfdiaclkilcdhcgkf";
@@ -252,7 +252,7 @@ async function freshWindow(periodMs = 60_000, needMs = 8_000) {
 // ---- Unit tests of handleRelay ------------------------------------------------
 
 const PROD_ENV = {
-  APP_ORIGIN: "https://send.remotevisio.com",
+  APP_ORIGIN: "https://relay.remotevisio.com",
   EXT_ORIGINS: `${STORE_EXT},${EXT}`,
   RELAY_ENABLED: "1",
 };
@@ -308,7 +308,7 @@ describe("production configuration (unit)", () => {
   test("a Worker of its own: the app host is its only route, the dev environment has none", () => {
     const config = readJsonc(path.join(RELAY, "wrangler.jsonc"));
     assert.equal(config.name, "remotevisio-relay");
-    assert.deepEqual(config.routes, [{ pattern: "send.remotevisio.com", custom_domain: true }]);
+    assert.deepEqual(config.routes, [{ pattern: "relay.remotevisio.com", custom_domain: true }]);
     assert.equal(config.workers_dev, false);
     // The Worker runs before the assets are served: it sets the app's headers.
     assert.equal(config.assets?.run_worker_first, true);
@@ -323,7 +323,7 @@ describe("handleRelay (unit)", () => {
 
   test("the room gets a new request: constant URL, no client X-RV-* header, no id, no IP", async () => {
     const ROOMS = stubRooms();
-    const req = new Request(`https://send.remotevisio.com/relay/v1/mailbox?id=${MAILBOX}&role=hub`, {
+    const req = new Request(`https://relay.remotevisio.com/relay/v1/mailbox?id=${MAILBOX}&role=hub`, {
       headers: {
         Origin: STORE_EXT,
         Upgrade: "websocket",
@@ -351,8 +351,8 @@ describe("handleRelay (unit)", () => {
 
   test("under the dev conditions the room also gets X-RV-Dev", async () => {
     const ROOMS = stubRooms();
-    const req = new Request(`http://send.localhost:7660/relay/v1/pair?id=${MAILBOX}&role=sender`, {
-      headers: { Origin: "http://send.localhost:7660", Upgrade: "websocket" },
+    const req = new Request(`http://relay.localhost:7660/relay/v1/pair?id=${MAILBOX}&role=sender`, {
+      headers: { Origin: "http://relay.localhost:7660", Upgrade: "websocket" },
     });
     await handleRelay(req, { ...PROD_ENV, DEV: "1", ROOMS }, {});
     assert.equal(ROOMS.calls[0].name, `pair:${MAILBOX}`);
@@ -361,13 +361,13 @@ describe("handleRelay (unit)", () => {
 
   test("role=tap with a non-local hostname is refused even with DEV=1 and DEV_TAP=1", async () => {
     const ROOMS = stubRooms();
-    for (const host of ["send.remotevisio.com", "remotevisio.com", "localhost.example.com"]) {
+    for (const host of ["relay.remotevisio.com", "remotevisio.com", "localhost.example.com"]) {
       const req = new Request(`https://${host}/relay/v1/pair?id=${MAILBOX}&role=tap`, { headers: { Upgrade: "websocket" } });
       const res = await handleRelay(req, { ...PROD_ENV, DEV: "1", DEV_TAP: "1", ROOMS }, {});
       assert.equal(res.status, 403, host);
     }
     // Locally, with both variables, the tap is let through.
-    const local = new Request(`http://send.localhost:7660/relay/v1/pair?id=${MAILBOX}&role=tap`, { headers: { Upgrade: "websocket" } });
+    const local = new Request(`http://relay.localhost:7660/relay/v1/pair?id=${MAILBOX}&role=tap`, { headers: { Upgrade: "websocket" } });
     assert.equal((await handleRelay(local, { ...PROD_ENV, DEV: "1", DEV_TAP: "1", ROOMS }, {})).status, 200);
     // Without DEV_TAP, or without DEV, it is not.
     assert.equal((await handleRelay(local.clone(), { ...PROD_ENV, DEV: "1", ROOMS }, {})).status, 403);
@@ -377,33 +377,33 @@ describe("handleRelay (unit)", () => {
 
   test("Origin and role: each origin takes only its own role", async () => {
     const ROOMS = stubRooms();
-    const status = async (origin, role, host = "send.remotevisio.com", env = PROD_ENV) => {
+    const status = async (origin, role, host = "relay.remotevisio.com", env = PROD_ENV) => {
       const headers = { Upgrade: "websocket", ...(origin ? { Origin: origin } : {}) };
       const req = new Request(`https://${host}/relay/v1/mailbox?id=${MAILBOX}&role=${role}`, { headers });
       return (await handleRelay(req, { ...env, ROOMS }, {})).status;
     };
-    assert.equal(await status("https://send.remotevisio.com", "sender"), 200);
+    assert.equal(await status("https://relay.remotevisio.com", "sender"), 200);
     assert.equal(await status(STORE_EXT, "hub"), 200);
     assert.equal(await status(EXT, "hub"), 200);
-    assert.equal(await status("https://send.remotevisio.com", "hub"), 403);
+    assert.equal(await status("https://relay.remotevisio.com", "hub"), 403);
     assert.equal(await status(STORE_EXT, "sender"), 403);
     assert.equal(await status(null, "sender"), 403);
     assert.equal(await status("https://evil.example", "sender"), 403);
     // Dev origins only under the dev conditions.
-    assert.equal(await status("http://send.localhost:7660", "sender"), 403);
+    assert.equal(await status("http://relay.localhost:7660", "sender"), 403);
     assert.equal(await status("chrome-extension://aaaabbbbccccddddeeeeffffgggghhhh", "hub"), 403);
     const dev = { ...PROD_ENV, DEV: "1" };
-    assert.equal(await status("chrome-extension://aaaabbbbccccddddeeeeffffgggghhhh", "hub", "send.localhost", dev), 200);
-    assert.equal(await status("http://127.0.0.1:7679", "sender", "send.localhost", dev), 200);
-    assert.equal(await status("http://send.localhost:7680", "sender", "send.localhost", dev), 403);
+    assert.equal(await status("chrome-extension://aaaabbbbccccddddeeeeffffgggghhhh", "hub", "relay.localhost", dev), 200);
+    assert.equal(await status("http://127.0.0.1:7679", "sender", "relay.localhost", dev), 200);
+    assert.equal(await status("http://relay.localhost:7680", "sender", "relay.localhost", dev), 403);
     // DEV=1 does nothing on a public hostname.
-    assert.equal(await status("http://send.localhost:7660", "sender", "send.remotevisio.com", dev), 403);
+    assert.equal(await status("http://relay.localhost:7660", "sender", "relay.remotevisio.com", dev), 403);
   });
 
   test("ids and roles are validated", async () => {
     const ROOMS = stubRooms();
     const status = async (kind, id, role) => {
-      const req = new Request(`https://send.remotevisio.com/relay/v1/${kind}?id=${id}&role=${role}`, {
+      const req = new Request(`https://relay.remotevisio.com/relay/v1/${kind}?id=${id}&role=${role}`, {
         headers: { Upgrade: "websocket", Origin: STORE_EXT },
       });
       return (await handleRelay(req, { ...PROD_ENV, ROOMS }, {})).status;
@@ -421,13 +421,13 @@ describe("handleRelay (unit)", () => {
   test("RELAY_ENABLED other than 1 turns the relay off", async () => {
     const ROOMS = stubRooms();
     const env = { ...PROD_ENV, RELAY_ENABLED: "0", ROOMS };
-    const ws = new Request(`https://send.remotevisio.com/relay/v1/mailbox?id=${MAILBOX}&role=hub`, {
+    const ws = new Request(`https://relay.remotevisio.com/relay/v1/mailbox?id=${MAILBOX}&role=hub`, {
       headers: { Upgrade: "websocket", Origin: STORE_EXT },
     });
     const res = await handleRelay(ws, env, {});
     assert.equal(res.status, 503);
     assert.deepEqual(await res.json(), { error: "off" });
-    const health = await handleRelay(new Request("https://send.remotevisio.com/relay/v1/health"), env, {});
+    const health = await handleRelay(new Request("https://relay.remotevisio.com/relay/v1/health"), env, {});
     assert.equal(health.status, 503);
     assert.deepEqual(await health.json(), { ok: false, v: 1 });
     assert.equal(ROOMS.calls.length, 0);
@@ -435,14 +435,14 @@ describe("handleRelay (unit)", () => {
 
   test("health answers CORS to the extension only", async () => {
     const res = await handleRelay(
-      new Request("https://send.remotevisio.com/relay/v1/health", { headers: { Origin: STORE_EXT } }),
+      new Request("https://relay.remotevisio.com/relay/v1/health", { headers: { Origin: STORE_EXT } }),
       PROD_ENV,
       {},
     );
     assert.deepEqual(await res.json(), { ok: true, v: 1, turn: false });
     assert.equal(res.headers.get("Access-Control-Allow-Origin"), STORE_EXT);
     const other = await handleRelay(
-      new Request("https://send.remotevisio.com/relay/v1/health", { headers: { Origin: "https://evil.example" } }),
+      new Request("https://relay.remotevisio.com/relay/v1/health", { headers: { Origin: "https://evil.example" } }),
       PROD_ENV,
       {},
     );
@@ -925,7 +925,7 @@ describe("relay against wrangler dev", () => {
     assert.equal((await up("hub", APP)).status, 403);
     assert.equal((await up("sender", EXT)).status, 403);
     assert.equal((await up("sender", undefined)).status, 403);
-    assert.equal((await up("sender", "https://send.remotevisio.com.evil.example")).status, 403);
+    assert.equal((await up("sender", "https://relay.remotevisio.com.evil.example")).status, 403);
     assert.equal(JSON.parse((await up("hub", APP)).body).error, "origin");
     assert.equal((await relayUpgrade("mailbox", "short", "hub", { origin: EXT, ip })).status, 400);
     assert.equal((await relayUpgrade("pair", "c-K7QU", "hub", { origin: EXT, ip })).status, 400);
@@ -1009,7 +1009,7 @@ describe("relay against wrangler dev", () => {
     const page = await request(`${APP}/`);
     const csp = page.headers["content-security-policy"];
     assert.match(csp, /default-src 'none'/);
-    assert.match(csp, /connect-src 'self' ws:\/\/send\.localhost:7660/);
+    assert.match(csp, /connect-src 'self' ws:\/\/relay\.localhost:7660/);
     assert.doesNotMatch(csp, /googletagmanager/);
     assert.match(page.headers["permissions-policy"], /camera=\(self\), microphone=\(self\)/);
     assert.equal(page.headers["referrer-policy"], "no-referrer");

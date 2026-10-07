@@ -35,7 +35,7 @@
 #
 # The extension files come from BrowserExtension/ next to this script (how
 # the app bundle carries them, in Contents/Resources) or, run from the
-# source tree, from browser-extension/ at the top of the repository.
+# source tree, from chromium/ at the top of the repository.
 #
 # Output is key=value lines on stdout, for the app to parse; what a person
 # reads goes to stderr. Exit status: 0 done, 1 failed, 2 usage, 3 the chosen
@@ -88,7 +88,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 if [[ -d "$here/BrowserExtension" ]]; then
     SRC="$here/BrowserExtension"
 else
-    SRC="$here/../browser-extension"
+    SRC="$here/../chromium"
     [[ ! -d "$SRC" ]] || SRC=$(cd "$SRC" && pwd)
 fi
 

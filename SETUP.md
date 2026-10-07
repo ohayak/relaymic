@@ -359,7 +359,7 @@ files up at its next restart.
 
 **From source, without the app**: `macos/browser-extension.sh install` does what the menu item
 does (`--unpacked` for the unpacked way), from the repository; or have the user load
-`browser-extension/` unpacked directly. The receiver serves the camera to it by default
+`chromium/` unpacked directly. The receiver serves the camera to it by default
 (`-browser-camera`, on unless started with `-browser-camera=false`, which is for testing).
 
 **Verify** on the Mac:

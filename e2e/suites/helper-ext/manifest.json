@@ -1,0 +1,7 @@
+{
+  "manifest_version": 3,
+  "name": "WebRTC policy helper (tests only)",
+  "description": "Sets chrome.privacy's WebRTC IP handling policy from its page, as a managed browser's WebRtcIPHandling policy would.",
+  "version": "1",
+  "permissions": ["privacy"]
+}

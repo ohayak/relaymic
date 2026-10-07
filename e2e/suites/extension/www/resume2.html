@@ -1,0 +1,17 @@
+<!doctype html><title>resume2</title><script>
+window.log = [];
+const t0 = performance.now();
+const L = (m) => log.push([Math.round(performance.now() - t0), m]);
+window.cs = {
+  none: new AudioContext({ sinkId: { type: 'none' } }),
+  noneRate: new AudioContext({ sinkId: { type: 'none' }, sampleRate: 48000, latencyHint: 'interactive' }),
+  rate: new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' }),
+  plain: new AudioContext(),
+};
+// A MediaStreamDestination on each, as the extension's mix has.
+for (const c of Object.values(cs)) c.createMediaStreamDestination();
+document.addEventListener('click', () => {
+  L('click');
+  setTimeout(() => { for (const [k, c] of Object.entries(cs)) c.resume().then(() => L(k + ' resumed'), (e) => L(k + ' failed ' + e.name)); }, 300);
+});
+</script><body style="height:100vh">resume</body>

@@ -1,0 +1,14 @@
+<!doctype html><title>resume</title><script>
+window.log = [];
+const t0 = performance.now();
+const L = (m) => log.push([Math.round(performance.now() - t0), m]);
+window.c1 = new AudioContext({ sinkId: { type: 'none' } });
+window.c2 = new AudioContext();
+let n = 0;
+setInterval(() => {
+  for (const [name, c] of [['none', c1], ['dflt', c2]]) if (c.state === 'suspended') { const k = ++n; c.resume().then(() => L(name + ' resumed ' + k), (e) => L(name + ' failed ' + e.name)); }
+}, 500);
+document.addEventListener('click', () => L('click, active=' + navigator.userActivation.hasBeenActive));
+// A context made after the click, from a timer.
+setTimeout(() => { window.c3 = new AudioContext({ sinkId: { type: 'none' } }); L('c3 made ' + c3.state); setTimeout(() => L('c3 after 300 ms ' + c3.state), 300); }, 4000);
+</script><body style="height:100vh">resume</body>

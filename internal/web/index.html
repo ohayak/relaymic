@@ -1128,7 +1128,7 @@ const STRINGS = {
 // page as it is: the receiver transport, which talks to the receiver that served it and to the others that one found.
 // The website serves a copy with data-transport="relay" on <html> (site/scripts/build-sender.mjs): the relay transport
 // (relay.js), which pairs with the Remote Visio extension on a computer and reaches it through the site's relay,
-// encrypted end to end ("direct mode": bin/e2e-harness/DESIGN-direct-mode.md, section 8).
+// encrypted end to end ("direct mode": docs/DESIGN-direct-mode.md, section 8).
 const TRANSPORT = document.documentElement.dataset.transport === 'relay' ? 'relay' : 'receiver';
 
 // A pairing link carries its secret in the address's fragment (#p=1.<room>.<secret>). Relay mode takes it out of the

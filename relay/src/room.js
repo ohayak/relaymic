@@ -4,7 +4,7 @@
 // one sender that pairs). The room checks who may enter, shape-checks every
 // frame, and passes each `d` (a protocol.js frame, as JSON text) between the
 // hub and one sender. It never decrypts anything: it cannot.
-// The design is bin/e2e-harness/DESIGN-direct-mode.md, sections 4.3 to 4.5.
+// The design is docs/DESIGN-direct-mode.md, sections 4.3 to 4.5.
 //
 // The room never learns its own id: relay.js forwards only the kind, the
 // role, the country and the dev flag. It checks a hub by recomputing the id
@@ -28,7 +28,7 @@ import {
   randomBytes,
   ticketHash,
   unb64u,
-} from "../../browser-extension/direct/protocol.js";
+} from "../../chromium/direct/protocol.js";
 
 // The longest relay frame, in characters (section 4.4).
 const MAX_TEXT = 65_536;

@@ -166,7 +166,7 @@ app).
 **Remote Visio Camera** (the name of its Chrome Web Store listing, from when
 it carried only the camera) is a browser extension for Chromium browsers
 (Chrome, Edge, Brave, Arc, Vivaldi, Opera …; source and details in
-`browser-extension/` and its `README.md`). It adds three devices to the
+`chromium/` and its `README.md`). It adds three devices to the
 device lists of web pages (Meet, Teams and Zoom on the web …) and connects
 them to the receiver: **Remote Visio Microphone** (the sending device's
 microphone), **Remote Visio Speaker** (what a page plays into it goes to the
@@ -272,7 +272,7 @@ store has its own for the item). It is not for loading unpacked: without the
 key the browser gives it an ID of its own, which the receiver refuses.
 
 **From Terminal.** The script also runs from the source tree, where it uses
-`browser-extension/` in the repository: `macos/browser-extension.sh detect`
+`chromium/` in the repository: `macos/browser-extension.sh detect`
 prints the default browser and the Chromium browsers installed,
 `install [--browser <bundle id>] [--unpacked]` is the menu item, and `sync`,
 `remove` and `path` do what they say. Its output is `key=value` lines, for
@@ -321,7 +321,7 @@ install scripts) and `browser-extension.sh` (the browser extension's
 installer, shipped inside the app), all here. `make camext` compiles the camera extension
 (`macos/camera/`), which `assemble-app.sh` copies into the app when it can be
 activated. `assemble-app.sh` always copies the browser extension's runtime
-files from `browser-extension/` (not its README) into
+files from `chromium/` (not its README) into
 `Contents/Resources/BrowserExtension/`, and `browser-extension.sh` next to
 them; `make check` also checks the extension's files (JavaScript syntax with
 `node --check` when Node is installed, JSON validity).
@@ -347,7 +347,7 @@ The icons are plain files in the repository, made once: the app icon
 the favicons that the receiver serves and the Windows sender's window icon
 (both in `internal/icons/`), the landing site's (`site/public/assets/`), the
 Windows sender's `.exe` icon (`icons/RemoteVisio.ico`) and the browser
-extension's (`browser-extension/icons/`). The black `icons/icon-16.png` and
+extension's (`chromium/icons/`). The black `icons/icon-16.png` and
 `icon-32.png` double as the menu-bar image, which macOS recolours for light
 and dark menu bars, and as the extension's 16 and 32 px icons; its 48 and
 128 px ones are `icons/icon-black-transparent-128.png` (resized with `sips`

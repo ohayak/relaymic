@@ -1,0 +1,6 @@
+{
+  "manifest_version": 3,
+  "name": "Messaging helper (tests only)",
+  "description": "Tries to message the Remote Visio extension from another extension (check S14: externally_connectable).",
+  "version": "1"
+}

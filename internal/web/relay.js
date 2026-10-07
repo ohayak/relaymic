@@ -1,7 +1,7 @@
 // Remote Visio's sender app in relay mode ("direct mode"): the transport that reaches the selected computer through
 // the site's relay (index.html's "Transports" part says what a transport does). index.html loads this module only
 // when the website serves the page (data-transport="relay"); the receiver serves neither it nor its imports. The
-// design: bin/e2e-harness/DESIGN-direct-mode.md, sections 5.6 to 5.12 and 8.1 to 8.2.
+// design: docs/DESIGN-direct-mode.md, sections 5.6 to 5.12 and 8.1 to 8.2.
 //
 // One connection attempt to the selected computer, from this side:
 //   1. join the computer's mailbox on the relay with this device's ticket, and wait there while the computer is

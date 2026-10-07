@@ -127,7 +127,7 @@ troubleshooting entry.
 Doing it by hand works too — that document reads fine for humans. Roughly: put both machines on
 Tailscale → on the Mac, `xcode-select --install` (Xcode Command Line Tools), Homebrew, Go 1.26+
 and `brew install opus pkg-config` → `make receiver` → run `bin/remotevisio-receiver` → load
-`browser-extension/` unpacked in a Chromium browser on the Mac (or `make install` for the
+`chromium/` unpacked in a Chromium browser on the Mac (or `make install` for the
 menu-bar app and its **Install Browser Extension…**) → open
 `https://<mac's tailnet IP>:7420` in a browser on the other device.
 
@@ -178,9 +178,9 @@ nothing to switch on, and still goes to the camera system extension when that is
 receiver flag `-browser-camera` is on by default, and `-browser-camera=false` leaves the
 extension's camera out, for testing. The store updates its extension by itself; for an unpacked
 copy, the app refreshes the extension's files when it is updated, and the browser picks them up
-at its next restart. With the bare receiver from source, load `browser-extension/` unpacked;
+at its next restart. With the bare receiver from source, load `chromium/` unpacked;
 the camera needs no flag. Details, and troubleshooting, in `SETUP.md` (Step 3) and
-`browser-extension/README.md`.
+`chromium/README.md`.
 
 ### The sender page
 
@@ -261,7 +261,7 @@ cmd/receiver     Mac receiver: takes the stream, passes the microphone and the c
                  speaker's sound back, and serves the web sender
 macos/           menu-bar wrapper app (make install), the camera system extension
                  (macos/camera, make camext) and the installer package (make pkg)
-browser-extension/  the Remote Visio browser extension (Chromium): Remote Visio Microphone,
+chromium/        the Remote Visio browser extension (Chromium): Remote Visio Microphone,
                  Speaker and Camera for web pages
 cmd/sender       command-line sender
 cmd/sender-gui   Windows GUI sender (frozen — the web sender covers it)
@@ -273,7 +273,7 @@ internal/browsercam  the browser devices: forwards the microphone and the camera
 internal/sender  sender engine
 internal/web     web sender (embedded in the binary)
 site/            relaymic.com landing page (Cloudflare Workers)
-relay/           send.remotevisio.com: the direct-mode relay and the sender app it serves
+relay/           relay.remotevisio.com: the direct-mode relay and the sender app it serves
                  (a Cloudflare Worker of its own, beside the site's)
 docs/            design and decision records
 ```
@@ -302,7 +302,7 @@ make help            # every target
 ```
 
 The receiver needs nothing installed on the Mac: the microphone and the speaker are the browser
-extension's (`browser-extension/`, loaded in a Chromium browser), and the camera system
+extension's (`chromium/`, loaded in a Chromium browser), and the camera system
 extension is optional. If the extension's port is taken, startup prints `browser devices
 unavailable: … address already in use`, with the `lsof` command that names the program holding
 it.

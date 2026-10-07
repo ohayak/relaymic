@@ -2,7 +2,7 @@
   "name": "remotevisio-relay",
   "version": "1.0.0",
   "private": true,
-  "description": "send.remotevisio.com: the direct-mode relay of Remote Visio and the sender app it serves, a Cloudflare Worker of its own",
+  "description": "relay.remotevisio.com: the direct-mode relay of Remote Visio and the sender app it serves, a Cloudflare Worker of its own",
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {

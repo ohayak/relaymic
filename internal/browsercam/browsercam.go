@@ -51,7 +51,7 @@ const (
 	// users install; the store gave it (from its own key for the item).
 	StoreExtensionID = "bhijcffjnmjijifjiaeibbogmbohdmon"
 	// ExtensionID is the ID of the extension loaded unpacked from
-	// browser-extension/ (Developer mode). Chromium derives it from the
+	// chromium/ (Developer mode). Chromium derives it from the
 	// public key in the manifest ("key"), so every unpacked copy on every Mac
 	// has this one; the matching private key is not in the source tree and is
 	// only needed to pack the extension.

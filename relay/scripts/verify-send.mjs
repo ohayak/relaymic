@@ -2,12 +2,12 @@
 // every path of send-manifest.json (written by scripts/build-sender.mjs) from
 // the app host and compares its SHA-256 with the manifest's. Anyone can run
 // it; the deploy checklist runs it after every deploy. The design is
-// bin/e2e-harness/DESIGN-direct-mode.md, section 8.4.
+// docs/DESIGN-direct-mode.md, section 8.4.
 //
 //   node scripts/verify-send.mjs [origin]
 //
-// The origin defaults to https://send.remotevisio.com. A local one works too
-// (http://send.localhost:7660 under wrangler dev): like a browser, this sends
+// The origin defaults to https://relay.remotevisio.com. A local one works too
+// (http://relay.localhost:7660 under wrangler dev): like a browser, this sends
 // *.localhost to the loopback address. The exit status is 0 when every file
 // matches, 1 on any difference or failed request, 2 on bad arguments.
 //
@@ -22,7 +22,7 @@ import { lookup } from "node:dns";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-const DEFAULT_ORIGIN = "https://send.remotevisio.com";
+const DEFAULT_ORIGIN = "https://relay.remotevisio.com";
 const TIMEOUT_MS = 15000;
 
 const here = dirname(fileURLToPath(import.meta.url));

@@ -1,0 +1,19 @@
+<!doctype html><title>noact2</title><body><script>
+window.res = {};
+const ctx = new OfflineAudioContext(1, 1, 48000);
+(async () => {
+  // A MediaStream source without activation: a generator track.
+  const g = new MediaStreamTrackGenerator({ kind: 'audio' });
+  const tries = {
+    audioDetachedMS: () => { const a = new Audio(); a.muted = true; a.srcObject = new MediaStream([g]); return a.play(); },
+    audioDetachedMSUnmuted: () => { const a = new Audio(); a.srcObject = new MediaStream([g]); return a.play(); },
+    videoDetachedMS: () => { const a = document.createElement('video'); a.muted = true; a.srcObject = new MediaStream([g]); return a.play(); },
+    audioAttachedURLMuted: () => { const a = new Audio('tone880.wav'); a.muted = true; document.body.append(a); return a.play(); },
+    videoAttachedURLMuted: () => { const a = document.createElement('video'); a.src = 'tone880.wav'; a.muted = true; document.body.append(a); return a.play(); },
+  };
+  for (const [k, f] of Object.entries(tries)) {
+    try { await Promise.race([f(), new Promise((_, j) => setTimeout(() => j(new Error('timeout')), 1500))]); res[k] = 'ok'; } catch (e) { res[k] = e.name + ':' + e.message.slice(0, 60); }
+  }
+  res.done = true;
+})();
+</script></body>

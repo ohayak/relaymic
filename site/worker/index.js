@@ -8,7 +8,7 @@
 //    html_handling would answer those with a 307, which is not permanent.
 // 3. /send and /send/ (the address the docs give, where a typed pairing code
 //    starts) get a 301 to the sender app's origin (APP_ORIGIN:
-//    send.remotevisio.com), which the relay Worker (../../relay) serves with
+//    relay.remotevisio.com), which the relay Worker (../../relay) serves with
 //    the direct-mode relay. Nothing of the app or the relay is here: the
 //    app's files (/send/*) and /relay/* are missing paths like any other.
 // 4. Everything else is served from the static assets (./dist), where
