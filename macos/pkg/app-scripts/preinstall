@@ -1,13 +1,14 @@
 #!/bin/sh
 # Runs as root before Installer replaces /Applications/RemoteVisio.app in place
 # (the component is pinned there and takes any identifier or version, see
-# macos/build-pkg.sh). Quit a running copy first and wait for it: swapping
-# the bundle under a live receiver, or starting a new one while the old is
-# still releasing its audio device, leaves coreaudiod in a state only a
-# restart fixes. Its login item is dropped as well, as the console user
-# (login items are per user); the new app registers itself again when
-# postinstall starts it, unless the person opted out. A previous install
-# under the old RelayMic name is retired the same way and removed.
+# macos/build-pkg.sh). Quit a running copy first and wait for it: the
+# bundle must not be swapped under a live receiver, and an earlier version's
+# receiver holds the Remote Visio audio device until it has stopped, while
+# postinstall removes that device's driver and restarts coreaudiod. Its
+# login item is dropped as well, as the console user (login items are per
+# user); the new app registers itself again when postinstall starts it,
+# unless the person opted out. A previous install under the old RelayMic
+# name is retired the same way and removed.
 # The camera system extension inside the app needs nothing here: the new app
 # version replaces the installed extension itself on its next launch (an
 # activation request with the replace action), and deactivating it would take

@@ -56,7 +56,9 @@ jobs:
 
   # Receiver macOS binary: opus linked statically, so the artifact is a single
   # dependency-free file. When deploying to several Mac minis the target only
-  # needs the Remote Visio driver, not Go or brew opus.
+  # needs the Remote Visio browser extension in its Chromium browser (and, for
+  # native apps' camera, the camera system extension the app installs), not
+  # Go or brew opus.
   mac-receiver:
     runs-on: macos-latest
     steps:

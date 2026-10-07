@@ -183,7 +183,8 @@ profile_hint() {
     echo "  2. Profiles > + > \"Developer ID\" (under Distribution) > Continue > App ID $APP_ID"
     echo "     > pick the Developer ID Application certificate > name it, e.g. \"Remote Visio\" > Generate > Download"
     echo "  3. make signing-install CER=~/Downloads/<name>.provisionprofile"
-    echo "  Until then the build leaves the camera extension out and says so; audio is unaffected."
+    echo "  Until then the build leaves the camera extension out and says so; the browser extension"
+    echo "  (microphone, speaker and camera for web pages) is unaffected."
 }
 
 # profile_install FILE: check the profile and put it where the build looks.

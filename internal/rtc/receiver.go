@@ -1,5 +1,8 @@
-// Package rtc handles the WebRTC side: accept the browser's offer, receive Opus
-// and decode it to PCM, receive H.264 and hand the access units to the camera relay.
+// Package rtc handles the WebRTC side: accept the sender's offer, relay its
+// microphone's Opus packets undecoded to the browser microphone, receive H.264
+// and hand it to the camera relays, and carry the return path (what pages play
+// into the browser speaker) back to the sender. The native sender shares the
+// Opus helpers here (Decode, NewOpusEncoder).
 package rtc
 
 import (
@@ -9,6 +12,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/hraban/opus"
@@ -25,8 +29,8 @@ const (
 	SampleRate = 48000
 	// SDP always declares Opus as opus/48000/2 regardless of whether mono or
 	// stereo is actually sent; the real channel count is encoded inside each Opus
-	// packet. We decode at the negotiated value: for mono packets libopus copies
-	// the signal to both channels, matching the two channels of the Remote Visio device.
+	// packet. Decode works at the negotiated value: for mono packets libopus
+	// copies the signal to both channels.
 	Channels = 2
 	// An Opus frame is at most 120ms; size the decode buffer for the worst case.
 	maxFrameSamples = SampleRate / 1000 * 120
@@ -38,14 +42,12 @@ const (
 // and a reconnect after a drop all take the same path, so no separate
 // reconnect logic is needed.
 type Receiver struct {
-	onPCM   func([]int16)
 	onState func(webrtc.PeerConnectionState)
 	onPath  func(string)
 	onNote  func(string)
 
 	stats RTPStats
 
-	api          *webrtc.API
 	dtx          bool
 	iceServers   []webrtc.ICEServer
 	excludeCGNAT bool
@@ -53,20 +55,26 @@ type Receiver struct {
 
 	mu sync.Mutex
 	pc *webrtc.PeerConnection
+	// retire closes pc without its closing being reported (see Answer).
+	retire func()
 
-	// Return-path track: sends this Mac's system audio back to the sender (see speaker.go).
-	// A fresh one is created per negotiation and replaced along with the connection;
-	// same principle as the sender, tracks are never reused across connections.
-	spkMu    sync.Mutex
-	spkTrack *webrtc.TrackLocalStaticSample
+	// Return-path track: carries what pages play into the browser speaker back
+	// to the sender (see WriteReturn). A fresh one is created per negotiation
+	// and replaced along with the connection; same principle as the sender,
+	// tracks are never reused across connections.
+	retMu    sync.Mutex
+	retTrack *webrtc.TrackLocalStaticRTP
 
-	// Camera path: where the sender's H.264 goes. The sink takes decoded
+	// Where the sender's media goes. The camera: the sink takes decoded
 	// access units (the camera system extension), the forwarder the raw RTP
-	// packets (the browser camera). With neither, the video m-line is refused
-	// so the browser does not send frames nobody uses.
+	// packets (the browser camera); with neither, the video m-line is refused
+	// so the browser does not send frames nobody uses. The microphone: the
+	// audio forwarder takes its RTP packets (the browser microphone); without
+	// one they are read and dropped.
 	sinkMu    sync.Mutex
 	videoSink VideoSink
 	videoFwd  VideoForwarder
+	audioFwd  AudioForwarder
 	video     videoStats
 }
 
@@ -119,6 +127,31 @@ func (r *Receiver) currentVideoForwarder() VideoForwarder {
 	return r.videoFwd
 }
 
+// AudioForwarder takes the microphone track's RTP packets as they arrive, to
+// relay them on without decoding (the browser microphone,
+// internal/browsercam). StartTrack is called when a microphone track starts,
+// with its negotiated codec. It returns the function that takes each of the
+// track's packets and the one to call when the track ends. write must neither
+// keep nor modify the packet.
+type AudioForwarder interface {
+	StartTrack(codec webrtc.RTPCodecParameters) (write func(*rtp.Packet), end func())
+}
+
+// SetAudioForwarder sets where the microphone's RTP packets are relayed; nil
+// turns that off for the connections negotiated from now on (the packets are
+// then still read, for the counters, and dropped).
+func (r *Receiver) SetAudioForwarder(f AudioForwarder) {
+	r.sinkMu.Lock()
+	r.audioFwd = f
+	r.sinkMu.Unlock()
+}
+
+func (r *Receiver) currentAudioForwarder() AudioForwarder {
+	r.sinkMu.Lock()
+	defer r.sinkMu.Unlock()
+	return r.audioFwd
+}
+
 // VideoStats counts what arrived on the camera track.
 type VideoStats struct {
 	Frames  uint64 // access units: reassembled for the sink, or counted by marker bit when only forwarded
@@ -151,10 +184,10 @@ func (r *Receiver) Video() VideoStats {
 	return r.video.VideoStats
 }
 
-// New creates a receiver. onPCM is called repeatedly from the decode goroutine with 48kHz interleaved stereo PCM.
-func New(onPCM func([]int16), onState func(webrtc.PeerConnectionState)) *Receiver {
+// New creates a receiver. onState, when not nil, is told every state change
+// of the connection to the sender.
+func New(onState func(webrtc.PeerConnectionState)) *Receiver {
 	return &Receiver{
-		onPCM:   onPCM,
 		onState: onState,
 		dtx:     true,
 		iceServers: []webrtc.ICEServer{
@@ -185,7 +218,6 @@ func (r *Receiver) ForceRelay(on bool) { r.forceRelay = on }
 // the connection fails outright.
 func (r *Receiver) ExcludeCGNAT(on bool) {
 	r.excludeCGNAT = on
-	r.api = nil // rebuilt with the new setting on the next negotiation
 }
 
 // Overlay network ranges. These look like "local direct" addresses and ICE
@@ -240,13 +272,15 @@ func stripCGNATCandidates(sdp string) (string, int) {
 	return strings.Join(kept, "\r\n"), dropped
 }
 
-// buildAPI assembles a webrtc.API from the current settings. Once a
-// SettingEngine is used, codecs and interceptors must be registered by hand;
-// the defaults are not added automatically.
+// buildAPI assembles a webrtc.API from the current settings, for one
+// connection. Once a SettingEngine is used, codecs and interceptors must be
+// registered by hand; the defaults are not added automatically.
+//
+// Each connection gets its own, for the network layer in it: that keeps the
+// list of the Mac's network interfaces it saw when it was made (see newNet),
+// so a shared one would have every later connection offer the addresses of
+// the first, gone after a network change, and miss the new ones.
 func (r *Receiver) buildAPI() (*webrtc.API, error) {
-	if r.api != nil {
-		return r.api, nil
-	}
 	m := &webrtc.MediaEngine{}
 	if err := registerCodecs(m); err != nil {
 		return nil, fmt.Errorf("register codecs: %w", err)
@@ -266,19 +300,26 @@ func (r *Receiver) buildAPI() (*webrtc.API, error) {
 	// has not replied within 2s is effectively down; do not let it stall the
 	// whole negotiation.
 	se.SetSTUNGatherTimeout(2 * time.Second)
+	// Every UDP write bounded (see udpWriteWait): one held write must not stop
+	// the ICE agent, and with it the answer and every connection after it.
+	n, err := netForPion()
+	if err != nil {
+		return nil, fmt.Errorf("network: %w", err)
+	}
+	se.SetNet(n)
 	if r.excludeCGNAT {
 		se.SetIPFilter(func(ip net.IP) bool { return !isCGNAT(ip) })
 	}
-	r.api = webrtc.NewAPI(
+	return webrtc.NewAPI(
 		webrtc.WithMediaEngine(m),
 		webrtc.WithInterceptorRegistry(ir),
 		webrtc.WithSettingEngine(se),
-	)
-	return r.api, nil
+	), nil
 }
 
-// registerCodecs declares what the receiver decodes: Opus for the
-// microphone, H.264 for the camera, and nothing else.
+// registerCodecs declares what the receiver takes: Opus for the microphone
+// (relayed to the browser microphone as it is, never decoded here), H.264 for
+// the camera, and nothing else.
 //
 // H.264 only, deliberately: the Mac decodes it in hardware through
 // VideoToolbox, while VP8, VP9 and AV1 would run on the CPU of a machine that
@@ -336,11 +377,12 @@ func registerCodecs(m *webrtc.MediaEngine) error {
 //	                next packet. One lost voice packet is one lost word, and a
 //	                retransmit costs an RTT, arriving after its play time.
 //	usedtx=1        Stop sending during silence. Bandwidth is secondary; the
-//	                point is not feeding noise floor into the virtual mic when
-//	                nobody speaks, so the recognizer's silence detection is
-//	                cleaner. Can be turned off: if the encoder mistakes quiet
-//	                speech for silence, word edges get clipped, and comparing
-//	                with -dtx=false is the only reliable way to diagnose it.
+//	                point is not feeding noise floor into the browser
+//	                microphone when nobody speaks, so a recognizer's silence
+//	                detection is cleaner. Can be turned off: if the encoder
+//	                mistakes quiet speech for silence, word edges get clipped,
+//	                and comparing with -dtx=false is the only reliable way to
+//	                diagnose it.
 //
 // This must go in the answer: fmtp means "how the receiver asks the sender to
 // send", and the browser configures its encoder from the answer it receives.
@@ -353,8 +395,9 @@ func registerCodecs(m *webrtc.MediaEngine) error {
 // final SDP.
 func (r *Receiver) opusParams() []string {
 	// maxaveragebitrate: Chrome defaults to ~32kbps for voice, and coding noise
-	// turns straight into recognition errors. This link is a direct connection
-	// with 18ms RTT; 96kbps is no strain, so clarity wins.
+	// turns straight into recognition errors. The packets reach the pages as
+	// the sender encoded them, so this is the quality they get. This link is a
+	// direct connection with 18ms RTT; 96kbps is no strain, so clarity wins.
 	params := []string{"useinbandfec=1", "maxaveragebitrate=96000"}
 	if r.dtx {
 		params = append(params, "usedtx=1")
@@ -362,9 +405,11 @@ func (r *Receiver) opusParams() []string {
 	return params
 }
 
-// withOpusParams appends params to the answer's Opus fmtp line.
-// Parameters already declared are not added again, to avoid contradictory duplicate keys.
-func withOpusParams(sdp string, params []string) string {
+// WithOpusParams appends params to an answer's Opus fmtp line (see
+// opusParams for why only the final SDP can carry them; the browser speaker's
+// answers use it too). Parameters already declared are not added again, to
+// avoid contradictory duplicate keys.
+func WithOpusParams(sdp string, params []string) string {
 	lines := strings.Split(sdp, "\r\n")
 
 	// The Opus payload type is chosen by the sender; 111 cannot be hardcoded.
@@ -398,12 +443,12 @@ func withOpusParams(sdp string, params []string) string {
 	return sdp
 }
 
-// RTPStats is the arrival quality at the RTP layer.
+// RTPStats is the microphone's arrival quality at the RTP layer.
 //
-// How elaborate the jitter buffer needs to be depends on these numbers: with
-// little loss or reordering a simple fixed buffer is enough; heavy reordering
-// calls for resequencing, heavy loss for concealment. Tuning the buffer
-// without this data is guessing.
+// The packets go on to the browser microphone's pages as they arrive, whose
+// own jitter buffers and loss concealment deal with what happened on the way;
+// these numbers tell a bad link from a bad microphone when the pages sound
+// broken.
 type RTPStats struct {
 	mu       sync.Mutex
 	Received int
@@ -468,6 +513,31 @@ func (r *Receiver) note(format string, args ...any) {
 // candidates found so far: the host ones, which are what a LAN or an overlay
 // network needs. A variable, so a test can shorten it.
 var gatherWait = 4 * time.Second
+
+// describeWait bounds reading the local description at the end of Answer;
+// with a working ICE agent it takes microseconds.
+var describeWait = 3 * time.Second
+
+// turnDescribeWait is describeWait with a TURN server configured. The agent's
+// first check over a relay candidate waits, on its task loop, for the TURN
+// server to grant the permission: up to one TURN transaction, about 7.8 s
+// when the server does not answer (7 tries, 200 ms doubling to 1.6 s). Such
+// an agent is slow, not stopped, and its answer should still go out; with
+// gatherWait before it, it does so within the 15 s the sender page waits.
+var turnDescribeWait = 9 * time.Second
+
+// describeWait is how long Answer waits for the local description with the
+// receiver's ICE servers (see describeWait and turnDescribeWait).
+func (r *Receiver) describeWait() time.Duration {
+	for _, s := range r.iceServers {
+		for _, u := range s.URLs {
+			if strings.HasPrefix(u, "turn:") || strings.HasPrefix(u, "turns:") {
+				return turnDescribeWait
+			}
+		}
+	}
+	return describeWait
+}
 
 // describeCandidates counts an SDP's candidates by type, for the log:
 // "9 candidates (host 7, srflx 2)".
@@ -545,7 +615,8 @@ func offerWantsSpeaker(sdp string) bool {
 
 // Answer handles an SDP offer from the sender and returns the answer.
 // When speaker is true and the sender accepts it, the answer carries the
-// return-path track (system audio sent back).
+// return-path track (what pages play into the browser speaker, sent back; see
+// WriteReturn).
 func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrtc.SessionDescription, error) {
 	if r.excludeCGNAT {
 		stripped, n := stripCGNATCandidates(offer.SDP)
@@ -569,10 +640,12 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrt
 
 	// Send and receive share one m-line: with the return path the transceiver is
 	// sendrecv and carries our return-path track; without it, it is the original
-	// receive-only transceiver.
-	var spk *webrtc.TrackLocalStaticSample
+	// receive-only transceiver. The return-path track takes RTP packets that are
+	// already Opus (the browser speaker's pages encode them), so nothing is
+	// encoded here.
+	var ret *webrtc.TrackLocalStaticRTP
 	if speaker && offerWantsSpeaker(offer.SDP) {
-		spk, err = webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{
+		ret, err = webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{
 			MimeType:  webrtc.MimeTypeOpus,
 			ClockRate: SampleRate,
 			Channels:  Channels,
@@ -581,7 +654,7 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrt
 			pc.Close()
 			return nil, fmt.Errorf("create return-path track: %w", err)
 		}
-		tr, err := pc.AddTransceiverFromTrack(spk,
+		tr, err := pc.AddTransceiverFromTrack(ret,
 			webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendrecv})
 		if err != nil {
 			pc.Close()
@@ -594,16 +667,16 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrt
 		return nil, fmt.Errorf("add audio receive transceiver: %w", err)
 	}
 
-	// The camera's destinations are fixed at negotiation time: the answer
-	// either accepts the video m-line for them or refuses it, and the track
-	// that arrives later must go to the same places.
-	sink, fwd := r.currentVideoSink(), r.currentVideoForwarder()
+	// The destinations are fixed at negotiation time: the answer either
+	// accepts the video m-line for the camera's or refuses it, and the tracks
+	// that arrive later must go to the same places.
+	sink, fwd, afwd := r.currentVideoSink(), r.currentVideoForwarder(), r.currentAudioForwarder()
 	wantVideo := sink != nil || fwd != nil
 	pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 		go DrainRTCP(receiver)
 		switch track.Kind() {
 		case webrtc.RTPCodecTypeAudio:
-			r.consume(track)
+			r.consumeAudio(track, afwd)
 		case webrtc.RTPCodecTypeVideo:
 			if wantVideo {
 				r.consumeVideo(pc, track, sink, fwd)
@@ -611,18 +684,30 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrt
 		}
 	})
 
+	// A connection that is replaced, or that never got answered, is retired:
+	// it still cleans up after itself, but no longer reports. Retired
+	// connections close in the background (see below), so their "closed"
+	// would otherwise come after the new connection's "connected" and leave
+	// the status saying closed while the sender is connected.
+	var retired atomic.Bool
+	discard := func() {
+		retired.Store(true)
+		pc.Close()
+	}
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-		if r.onState != nil {
-			r.onState(state)
-		}
-		if state == webrtc.PeerConnectionStateConnected && r.onPath != nil {
-			r.onPath(describePath(pc))
+		if !retired.Load() {
+			if r.onState != nil {
+				r.onState(state)
+			}
+			if state == webrtc.PeerConnectionStateConnected && r.onPath != nil {
+				r.onPath(describePath(pc))
+			}
 		}
 		if state == webrtc.PeerConnectionStateFailed || state == webrtc.PeerConnectionStateClosed {
 			r.mu.Lock()
 			if r.pc == pc {
-				r.pc = nil
-				r.setSpeakerTrack(nil)
+				r.pc, r.retire = nil, nil
+				r.setReturnTrack(nil)
 			}
 			r.mu.Unlock()
 			pc.Close()
@@ -630,7 +715,7 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrt
 	})
 
 	if err := pc.SetRemoteDescription(offer); err != nil {
-		pc.Close()
+		discard()
 		return nil, fmt.Errorf("set remote description: %w", err)
 	}
 
@@ -642,7 +727,7 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrt
 		for _, tr := range pc.GetTransceivers() {
 			if tr.Kind() == webrtc.RTPCodecTypeVideo {
 				if err := tr.Stop(); err != nil {
-					pc.Close()
+					discard()
 					return nil, fmt.Errorf("refuse video: %w", err)
 				}
 			}
@@ -651,7 +736,7 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrt
 
 	answer, err := pc.CreateAnswer(nil)
 	if err != nil {
-		pc.Close()
+		discard()
 		return nil, fmt.Errorf("create answer: %w", err)
 	}
 
@@ -660,7 +745,7 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrt
 	gathered := webrtc.GatheringCompletePromise(pc)
 	started := time.Now()
 	if err := pc.SetLocalDescription(answer); err != nil {
-		pc.Close()
+		discard()
 		return nil, fmt.Errorf("set local description: %w", err)
 	}
 	complete := true
@@ -670,21 +755,40 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrt
 		complete = false
 	}
 
-	// New connection is up; retire the old one. The return-path track follows the new connection (nil if it has none).
+	// The local description lists the candidates, which pion asks its ICE
+	// agent for; an agent that stopped (see udpWriteWait) would hold this
+	// answer, and every later one behind it, for good. It is read before the
+	// switch below, so an answer that fails here leaves the current
+	// connection alone.
+	described := make(chan *webrtc.SessionDescription, 1)
+	go func() { described <- pc.LocalDescription() }()
+	var local *webrtc.SessionDescription
+	select {
+	case local = <-described:
+	case <-time.After(r.describeWait()):
+	}
+	if local == nil {
+		go discard()
+		return nil, errors.New("the connection's ICE agent stopped answering")
+	}
+
+	// New connection is up; retire the old one, in the background: a
+	// connection that is stuck (its agent stopped) must not hold this one.
+	// The return-path track follows the new connection (nil if it has none).
 	r.mu.Lock()
-	old := r.pc
-	r.pc = pc
-	r.setSpeakerTrack(spk)
+	old, oldRetire := r.pc, r.retire
+	r.pc, r.retire = pc, discard
+	r.setReturnTrack(ret)
 	r.mu.Unlock()
 	if old != nil {
-		old.Close()
+		go oldRetire()
 	}
 
 	// Add the Opus switches at hand-off time: pion never regenerates the SDP
 	// after SetLocalDescription, so editing this copy does not affect the
 	// receive state already set up locally.
-	final := *pc.LocalDescription()
-	final.SDP = withOpusParams(final.SDP, r.opusParams())
+	final := *local
+	final.SDP = WithOpusParams(final.SDP, r.opusParams())
 	if complete {
 		r.note("answer: %s, gathered in %d ms", describeCandidates(final.SDP), time.Since(started).Milliseconds())
 	} else {
@@ -695,9 +799,61 @@ func (r *Receiver) Answer(offer webrtc.SessionDescription, speaker bool) (*webrt
 	return &final, nil
 }
 
-// consume decodes the sender's microphone track to PCM until the track ends.
-func (r *Receiver) consume(track *webrtc.TrackRemote) {
-	Decode(track, &r.stats, r.emit)
+// consumeAudio hands the sender's microphone track to the forwarder until
+// the track ends, packet by packet as they arrive: no decoding, no jitter
+// buffer, nothing that would add latency or change the sound. The counters
+// see every packet; without a forwarder that is all that happens to them.
+func (r *Receiver) consumeAudio(track *webrtc.TrackRemote, fwd AudioForwarder) {
+	var forward func(*rtp.Packet)
+	if fwd != nil {
+		var end func()
+		forward, end = fwd.StartTrack(track.Codec())
+		defer end()
+	}
+	var maxSeq uint16
+	first := true
+	for {
+		pkt, _, err := track.ReadRTP()
+		if err != nil {
+			return // track ended; the next offer rebuilds
+		}
+		r.stats.observe(pkt.SequenceNumber, first, maxSeq)
+		if first || int16(pkt.SequenceNumber-maxSeq) > 0 {
+			maxSeq = pkt.SequenceNumber
+		}
+		first = false
+		if forward != nil {
+			forward(pkt)
+		}
+	}
+}
+
+// WriteReturn sends one RTP packet of Opus to the sender on the current
+// connection's return-path track: the browser speaker's pages produce them
+// (internal/browsercam). Without a connection, or with one whose sender did
+// not accept the return path, the packet is dropped. The packet is neither
+// kept nor modified; the track sets its own SSRC and payload type.
+func (r *Receiver) WriteReturn(p *rtp.Packet) {
+	if t := r.returnTrack(); t != nil {
+		// A connection that went away meanwhile makes this fail; nothing to do about it.
+		_ = t.WriteRTP(p)
+	}
+}
+
+// ReturnListening reports whether the current connection carries the return
+// path: the sender offered its audio as sendrecv and the receiver had it on.
+func (r *Receiver) ReturnListening() bool { return r.returnTrack() != nil }
+
+func (r *Receiver) returnTrack() *webrtc.TrackLocalStaticRTP {
+	r.retMu.Lock()
+	defer r.retMu.Unlock()
+	return r.retTrack
+}
+
+func (r *Receiver) setReturnTrack(t *webrtc.TrackLocalStaticRTP) {
+	r.retMu.Lock()
+	r.retTrack = t
+	r.retMu.Unlock()
 }
 
 const (
@@ -845,7 +1001,7 @@ func H264KeyframeStart(payload []byte) bool {
 }
 
 // Decode decodes an Opus track to 48kHz interleaved stereo PCM until the track ends.
-// The receiver's mic path and the sender's return path share this loss handling. stats may be nil.
+// The native sender plays its return path with it (the receiver itself never decodes). stats may be nil.
 func Decode(track *webrtc.TrackRemote, stats *RTPStats, onPCM func([]int16)) {
 	dec, err := opus.NewDecoder(SampleRate, Channels)
 	if err != nil {
@@ -920,18 +1076,12 @@ func Decode(track *webrtc.TrackRemote, stats *RTPStats, onPCM func([]int16)) {
 	}
 }
 
-func (r *Receiver) emit(pcm []int16) {
-	if r.onPCM != nil && len(pcm) > 0 {
-		r.onPCM(pcm)
-	}
-}
-
 // Close tears down the current connection.
 func (r *Receiver) Close() {
 	r.mu.Lock()
 	pc := r.pc
-	r.pc = nil
-	r.setSpeakerTrack(nil)
+	r.pc, r.retire = nil, nil
+	r.setReturnTrack(nil)
 	r.mu.Unlock()
 	if pc != nil {
 		pc.Close()

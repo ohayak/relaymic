@@ -45,39 +45,14 @@
   #state { font-size: 15px; font-weight: 600; }
   #path { color: var(--dim); font-size: 13px; margin: 4px 0 16px; word-break: break-all; }
 
-  .meter {
-    height: 4px;
-    margin-bottom: 16px;
-    background: var(--line);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-  .meter i {
-    display: block;
-    height: 100%;
-    width: 0;
-    background: var(--ok);
-    transition: width .2s linear;
-  }
-
   .stats { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--dim); }
   .stats b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
-  .stats.spk, .stats.cam { margin-top: 14px; }
-  .stats.bcam { margin-top: 4px; }
-  .meter.spk { margin: 6px 0 0; }
-  .meter.spk i { background: var(--warn); }
+  .stats.cam { margin-top: 14px; }
 
-  .segment { padding: 12px 0; border-top: 1px solid var(--line); }
-  .segment:first-child { border-top: 0; padding-top: 0; }
-  .segment .meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; margin-bottom: 8px; }
-  .segment .time { font-weight: 600; font-variant-numeric: tabular-nums; }
-  .segment .peak { color: var(--dim); margin-left: auto; font-variant-numeric: tabular-nums; }
-  .segment audio { width: 100%; display: block; }
-  .lane { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
-  .lane-label { flex: 0 0 104px; font-size: 12px; color: var(--dim); }
-  .lane audio { flex: 1; height: 32px; }
-
-  .empty { color: var(--dim); font-size: 13px; text-align: center; padding: 8px 0; }
+  .device { display: flex; gap: 12px; font-size: 13px; padding: 6px 0; border-top: 1px solid var(--line); }
+  .device:first-of-type { border-top: 0; padding-top: 0; }
+  .device .name { flex: 0 0 96px; color: var(--dim); }
+  .device b { font-weight: 600; overflow-wrap: anywhere; }
 
   .ok { color: var(--ok); } .warn { color: var(--warn); } .err { color: var(--err); }
 </style>
@@ -89,25 +64,18 @@
   <div class="card">
     <div id="state" class="warn">—</div>
     <div id="path">—</div>
-    <div class="meter"><i id="level"></i></div>
     <div class="stats">
-      <span><span data-i18n="buffer">Buffer</span> <b id="buffered">—</b></span>
-      <span><span data-i18n="dropped">Dropped</span> <b id="dropped">—</b></span>
-      <span><span data-i18n="underruns">Underruns</span> <b id="starved">—</b></span>
       <span><span data-i18n="received">Received</span> <b id="received">—</b></span>
       <span><span data-i18n="lost">Lost</span> <b id="lost">—</b></span>
     </div>
-    <div class="stats spk"><span><span data-i18n="return_path">Return path (this Mac's system audio)</span> <b id="speaker">—</b></span></div>
-    <div class="meter spk"><i id="spkLevel"></i></div>
     <div class="stats cam"><span><span data-i18n="camera">Virtual camera</span> <b id="camera">—</b></span></div>
-    <div class="stats bcam"><span><span data-i18n="browser_camera">Browser camera</span> <b id="bcamera">—</b></span></div>
   </div>
 
   <div class="card">
-    <h2 data-i18n="segments">Segment recordings</h2>
-    <div id="segments">
-      <div class="empty" data-i18n="no_segments">No speech segments recorded yet</div>
-    </div>
+    <h2 data-i18n="browser_devices">Browser devices (Remote Visio extension)</h2>
+    <div class="device"><span class="name" data-i18n="browser_mic">Microphone</span> <b id="bmic">—</b></div>
+    <div class="device"><span class="name" data-i18n="browser_speaker">Speaker</span> <b id="bspk">—</b></div>
+    <div class="device"><span class="name" data-i18n="browser_camera">Camera</span> <b id="bcamera">—</b></div>
   </div>
 </main>
 
@@ -117,69 +85,80 @@ const $ = id => document.getElementById(id);
 // UI strings by language; /i18n.js picks the language and fills the [data-i18n] markup from them.
 // Status values come from the API and are shown as-is.
 const STRINGS = {
-  en: { title: 'Receiver Monitor', buffer: 'Buffer', dropped: 'Dropped', underruns: 'Underruns', received: 'Received', lost: 'Lost',
-        return_path: "Return path (this Mac's system audio)", off: 'off',
-        silent: "silent (the Mac isn't playing anything, or System Audio Recording isn't allowed)",
+  en: { title: 'Receiver Monitor', received: 'Received', lost: 'Lost',
         camera: 'Virtual camera', camera_off: 'off', camera_ext_missing: 'camera extension not activated', camera_idle: 'no video arriving',
-        browser_camera: 'Browser camera', bcam_idle: 'on · no video arriving', bcam_watching: 'used by {n}',
-        bcam_unavailable: 'unavailable',
-        segments: 'Segment recordings', no_segments: 'No speech segments recorded yet',
-        lane_pre: 'before ring', lane_post: 'after ring', lane_loop: 'after device', offline: 'Receiver offline' },
-  es: { title: 'Monitor del receptor', buffer: 'Búfer', dropped: 'Descartados', underruns: 'Vacíos', received: 'Recibidos', lost: 'Perdidos',
-        return_path: 'Retorno (audio del sistema de este Mac)', off: 'apagado',
-        silent: 'silencio (el Mac no reproduce nada, o la grabación del audio del sistema no está permitida)',
+        browser_devices: 'Browser devices (Remote Visio extension)',
+        browser_mic: 'Microphone', browser_speaker: 'Speaker', browser_camera: 'Camera',
+        off: 'off', unavailable: 'unavailable', used_by: 'used by {n}',
+        bcam_idle: 'on · no video arriving',
+        mic_receiving: "receiving the sender's microphone", mic_waiting: "on · nothing from the sender's microphone",
+        spk_sending: "sending {page}'s sound to the sender", spk_sending_anon: "sending a page's sound to the sender",
+        spk_idle: 'on · no page is sending', spk_not_listening: 'the sender is not taking the sound (none is started, or it runs on this Mac)',
+        offline: 'Receiver offline' },
+  es: { title: 'Monitor del receptor', received: 'Recibidos', lost: 'Perdidos',
         camera: 'Cámara virtual', camera_off: 'apagada', camera_ext_missing: 'extensión de cámara no activada', camera_idle: 'no llega vídeo',
-        browser_camera: 'Cámara del navegador', bcam_idle: 'activada · no llega vídeo', bcam_watching: 'en uso por {n}',
-        bcam_unavailable: 'no disponible',
-        segments: 'Grabaciones por segmento', no_segments: 'Aún no hay segmentos de voz grabados',
-        lane_pre: 'antes del búfer', lane_post: 'después del búfer', lane_loop: 'después del dispositivo', offline: 'Receptor desconectado' },
-  fr: { title: 'Moniteur du récepteur', buffer: 'Tampon', dropped: 'Rejetés', underruns: 'Sous-alimentations', received: 'Reçus', lost: 'Perdus',
-        return_path: 'Retour (son système de ce Mac)', off: 'désactivé',
-        silent: "silence (le Mac ne joue rien, ou l'enregistrement du son système n'est pas autorisé)",
+        browser_devices: 'Dispositivos del navegador (extensión Remote Visio)',
+        browser_mic: 'Micrófono', browser_speaker: 'Altavoz', browser_camera: 'Cámara',
+        off: 'apagado', unavailable: 'no disponible', used_by: 'en uso por {n}',
+        bcam_idle: 'activada · no llega vídeo',
+        mic_receiving: 'recibiendo el micrófono del emisor', mic_waiting: 'activado · no llega nada del micrófono del emisor',
+        spk_sending: 'enviando el sonido de {page} al emisor', spk_sending_anon: 'enviando el sonido de una página al emisor',
+        spk_idle: 'activado · ninguna página envía sonido', spk_not_listening: 'el emisor no recibe el sonido (ninguno ha empezado, o está en este Mac)',
+        offline: 'Receptor desconectado' },
+  fr: { title: 'Moniteur du récepteur', received: 'Reçus', lost: 'Perdus',
         camera: 'Caméra virtuelle', camera_off: 'désactivée', camera_ext_missing: 'extension caméra non activée', camera_idle: "aucune vidéo n'arrive",
-        browser_camera: 'Caméra du navigateur', bcam_idle: "activée · aucune vidéo n'arrive", bcam_watching: 'utilisée par {n}',
-        bcam_unavailable: 'indisponible',
-        segments: 'Enregistrements par segment', no_segments: 'Aucun segment de parole enregistré pour le moment',
-        lane_pre: 'avant le tampon', lane_post: 'après le tampon', lane_loop: 'après le périphérique', offline: 'Récepteur hors ligne' },
-  zh: { title: '接收监控', buffer: '缓冲', dropped: '丢弃', underruns: '欠载', received: '收包', lost: '丢包',
-        return_path: '回程（这台 Mac 的系统声音）', off: '关',
-        silent: '无声（Mac 没在出声，或「系统声音录制」未授权）',
+        browser_devices: 'Périphériques du navigateur (extension Remote Visio)',
+        browser_mic: 'Micro', browser_speaker: 'Haut-parleur', browser_camera: 'Caméra',
+        off: 'désactivé', unavailable: 'indisponible', used_by: 'utilisé par {n}',
+        bcam_idle: "activée · aucune vidéo n'arrive",
+        mic_receiving: "reçoit le micro de l'émetteur", mic_waiting: "activé · rien n'arrive du micro de l'émetteur",
+        spk_sending: "envoie le son de {page} à l'émetteur", spk_sending_anon: "envoie le son d'une page à l'émetteur",
+        spk_idle: "activé · aucune page n'envoie de son", spk_not_listening: "l'émetteur ne reçoit pas le son (aucun n'a démarré, ou il tourne sur ce Mac)",
+        offline: 'Récepteur hors ligne' },
+  zh: { title: '接收监控', received: '收包', lost: '丢包',
         camera: '虚拟摄像头', camera_off: '关', camera_ext_missing: '摄像头扩展未启用', camera_idle: '没有视频进来',
-        browser_camera: '浏览器摄像头', bcam_idle: '已开 · 没有视频进来', bcam_watching: '{n} 在用',
-        bcam_unavailable: '不可用',
-        segments: '分段录音', no_segments: '还没有录到语音段',
-        lane_pre: 'ring 前', lane_post: 'ring 后', lane_loop: '设备后', offline: '接收端离线' },
-  de: { title: 'Empfänger-Monitor', buffer: 'Puffer', dropped: 'Verworfen', underruns: 'Unterläufe', received: 'Empfangen', lost: 'Verloren',
-        return_path: 'Rückweg (Systemton dieses Macs)', off: 'aus',
-        silent: 'stumm (der Mac gibt nichts wieder, oder die Systemton-Aufnahme ist nicht erlaubt)',
+        browser_devices: '浏览器设备（Remote Visio 扩展）',
+        browser_mic: '麦克风', browser_speaker: '扬声器', browser_camera: '摄像头',
+        off: '关', unavailable: '不可用', used_by: '{n} 在用',
+        bcam_idle: '已开 · 没有视频进来',
+        mic_receiving: '正在接收发送端的麦克风', mic_waiting: '已开 · 发送端的麦克风没有声音进来',
+        spk_sending: '正在把 {page} 的声音送回发送端', spk_sending_anon: '正在把一个网页的声音送回发送端',
+        spk_idle: '已开 · 没有网页在出声', spk_not_listening: '发送端没有接收声音（没有发送端开始，或它在这台 Mac 上）',
+        offline: '接收端离线' },
+  de: { title: 'Empfänger-Monitor', received: 'Empfangen', lost: 'Verloren',
         camera: 'Virtuelle Kamera', camera_off: 'aus', camera_ext_missing: 'Kamera-Erweiterung nicht aktiviert', camera_idle: 'kein Video kommt an',
-        browser_camera: 'Browser-Kamera', bcam_idle: 'an · kein Video kommt an', bcam_watching: 'genutzt von {n}',
-        bcam_unavailable: 'nicht verfügbar',
-        segments: 'Segmentaufnahmen', no_segments: 'Noch keine Sprachsegmente aufgenommen',
-        lane_pre: 'vor dem Puffer', lane_post: 'nach dem Puffer', lane_loop: 'nach dem Gerät', offline: 'Empfänger offline' },
-  it: { title: 'Monitor del ricevitore', buffer: 'Buffer', dropped: 'Scartati', underruns: 'Sottoalimentazioni', received: 'Ricevuti', lost: 'Persi',
-        return_path: 'Ritorno (audio di sistema di questo Mac)', off: 'spento',
-        silent: "silenzio (il Mac non riproduce nulla, o la registrazione dell'audio di sistema non è consentita)",
+        browser_devices: 'Browser-Geräte (Remote-Visio-Erweiterung)',
+        browser_mic: 'Mikrofon', browser_speaker: 'Lautsprecher', browser_camera: 'Kamera',
+        off: 'aus', unavailable: 'nicht verfügbar', used_by: 'genutzt von {n}',
+        bcam_idle: 'an · kein Video kommt an',
+        mic_receiving: 'empfängt das Mikrofon des Senders', mic_waiting: 'an · vom Mikrofon des Senders kommt nichts an',
+        spk_sending: 'sendet den Ton von {page} an den Sender', spk_sending_anon: 'sendet den Ton einer Seite an den Sender',
+        spk_idle: 'an · keine Seite sendet Ton', spk_not_listening: 'der Sender nimmt den Ton nicht an (keiner gestartet, oder er läuft auf diesem Mac)',
+        offline: 'Empfänger offline' },
+  it: { title: 'Monitor del ricevitore', received: 'Ricevuti', lost: 'Persi',
         camera: 'Fotocamera virtuale', camera_off: 'spenta', camera_ext_missing: 'estensione fotocamera non attivata', camera_idle: 'nessun video in arrivo',
-        browser_camera: 'Fotocamera del browser', bcam_idle: 'attiva · nessun video in arrivo', bcam_watching: 'usata da {n}',
-        bcam_unavailable: 'non disponibile',
-        segments: 'Registrazioni per segmento', no_segments: 'Nessun segmento vocale registrato finora',
-        lane_pre: 'prima del buffer', lane_post: 'dopo il buffer', lane_loop: 'dopo il dispositivo', offline: 'Ricevitore offline' },
-  hi: { title: 'रिसीवर मॉनिटर', buffer: 'बफ़र', dropped: 'छोड़े गए', underruns: 'अंडररन', received: 'प्राप्त', lost: 'खोए',
-        return_path: 'रिटर्न पाथ (इस Mac की सिस्टम आवाज़)', off: 'बंद',
-        silent: 'खामोश (Mac कुछ नहीं बजा रहा, या सिस्टम ऑडियो रिकॉर्डिंग की अनुमति नहीं है)',
+        browser_devices: 'Dispositivi del browser (estensione Remote Visio)',
+        browser_mic: 'Microfono', browser_speaker: 'Altoparlante', browser_camera: 'Fotocamera',
+        off: 'spento', unavailable: 'non disponibile', used_by: 'usato da {n}',
+        bcam_idle: 'attiva · nessun video in arrivo',
+        mic_receiving: 'riceve il microfono del mittente', mic_waiting: 'attivo · dal microfono del mittente non arriva nulla',
+        spk_sending: "invia l'audio di {page} al mittente", spk_sending_anon: "invia l'audio di una pagina al mittente",
+        spk_idle: 'attivo · nessuna pagina invia audio', spk_not_listening: "il mittente non riceve l'audio (nessuno è avviato, o è su questo Mac)",
+        offline: 'Ricevitore offline' },
+  hi: { title: 'रिसीवर मॉनिटर', received: 'प्राप्त', lost: 'खोए',
         camera: 'वर्चुअल कैमरा', camera_off: 'बंद', camera_ext_missing: 'कैमरा एक्सटेंशन सक्रिय नहीं है', camera_idle: 'कोई वीडियो नहीं आ रहा',
-        browser_camera: 'ब्राउज़र कैमरा', bcam_idle: 'चालू · कोई वीडियो नहीं आ रहा', bcam_watching: '{n} इस्तेमाल कर रहा है',
-        bcam_unavailable: 'उपलब्ध नहीं',
-        segments: 'सेगमेंट रिकॉर्डिंग', no_segments: 'अभी तक कोई बोलने का सेगमेंट रिकॉर्ड नहीं हुआ',
-        lane_pre: 'बफ़र से पहले', lane_post: 'बफ़र के बाद', lane_loop: 'डिवाइस के बाद', offline: 'रिसीवर ऑफ़लाइन' },
+        browser_devices: 'ब्राउज़र डिवाइस (Remote Visio एक्सटेंशन)',
+        browser_mic: 'माइक्रोफ़ोन', browser_speaker: 'स्पीकर', browser_camera: 'कैमरा',
+        off: 'बंद', unavailable: 'उपलब्ध नहीं', used_by: '{n} इस्तेमाल कर रहा है',
+        bcam_idle: 'चालू · कोई वीडियो नहीं आ रहा',
+        mic_receiving: 'भेजने वाले का माइक्रोफ़ोन आ रहा है', mic_waiting: 'चालू · भेजने वाले के माइक्रोफ़ोन से कुछ नहीं आ रहा',
+        spk_sending: '{page} की आवाज़ भेजने वाले को जा रही है', spk_sending_anon: 'एक पेज की आवाज़ भेजने वाले को जा रही है',
+        spk_idle: 'चालू · कोई पेज आवाज़ नहीं भेज रहा', spk_not_listening: 'भेजने वाला आवाज़ नहीं ले रहा (कोई शुरू नहीं हुआ, या वह इसी Mac पर है)',
+        offline: 'रिसीवर ऑफ़लाइन' },
 };
 </script>
 <script src="/i18n.js"></script>
 <script>
-// meterWidth maps dBFS to a bar width: -60 and below is silence, 0 is clipping, linear in between.
-const meterWidth = db => Math.max(0, Math.min(100, (db + 60) / 60 * 100)) + '%';
-
 // Most receiver failures (process not running, LAN down) make fetch throw rather than return a non-200,
 // so both cases collapse into "offline"; the user doesn't need to tell them apart.
 async function pollStatus() {
@@ -198,29 +177,9 @@ function renderStatus(s) {
   $('state').className = connected ? 'ok' : 'warn';
   $('path').textContent = s.path || '—';
 
-  const db = typeof s.levelDb === 'number' ? s.levelDb : -60;
-  $('level').style.width = meterWidth(db);
-
-  $('buffered').textContent = s.bufferedMs != null ? s.bufferedMs + ' ms' : '—';
-  $('dropped').textContent = s.dropped ?? '—';
-  $('starved').textContent = s.starved ?? '—';
+  // The sender's microphone at the RTP layer: what arrived and what the network lost on the way.
   $('received').textContent = s.received ?? '—';
   $('lost').textContent = s.lost ?? '—';
-
-  // Return-path level. Without tap permission it is stuck at -120, indistinguishable from "the Mac just isn't
-  // playing anything", so spell out both possibilities rather than leave the user guessing at a silent bar.
-  const spk = s.speaker || {};
-  if (!spk.on) {
-    $('speaker').textContent = t('off');
-    $('spkLevel').style.width = '0';
-  } else {
-    const sdb = typeof spk.levelDb === 'number' ? spk.levelDb : -120;
-    const where = spk.output ? spk.output + ' · ' : '';
-    $('speaker').textContent = where + (sdb <= -119
-      ? t('silent')
-      : Math.round(sdb) + ' dBFS');
-    $('spkLevel').style.width = meterWidth(sdb);
-  }
 
   // Virtual camera: "off" is the relay switched off; "extension not activated" is the relay on but macOS refusing the
   // device (the camera extension needs a one-time approval in System Settings); "no video arriving" is the device open
@@ -231,91 +190,53 @@ function renderStatus(s) {
     : !cam.fps ? t('camera_idle')
     : `${cam.width}×${cam.height} · ${cam.fps} fps${cam.hardware ? '' : ' · software'}`;
 
-  // Browser camera: the same camera, relayed to the Remote Visio Camera browser extension; the pages using it are listed.
-  const b = cam.browser || {};
-  const pages = (b.pages || []).map(p => p.replace(/^https?:\/\//, '')).join(', ');
-  $('bcamera').textContent = b.unavailable ? `${t('bcam_unavailable')}: ${b.unavailable}` : !b.on ? t('camera_off')
-    : (!b.video ? t('bcam_idle') : `${b.fps} fps`) + (b.viewers ? ' · ' + t('bcam_watching', { n: pages || b.viewers }) : '');
+  renderBrowser(s.browser || {});
+}
+
+// site drops the scheme from a page's origin, for display.
+const site = origin => origin.replace(/^https?:\/\//, '');
+
+// usedBy is " · used by …" for the pages connected to a device, or nothing. Other machines get no origins
+// (the receiver keeps them to itself), so the count stands in for them there.
+function usedBy(pages, count) {
+  const names = (pages || []).map(site).join(', ');
+  return count ? ' · ' + t('used_by', { n: names || count }) : '';
+}
+
+// The browser extension's three devices, as the receiver serves them to the Mac's Chromium pages. One listener
+// serves all three, so "unavailable" (it could not start) applies to each.
+function renderBrowser(b) {
+  const un = b.unavailable ? `${t('unavailable')}: ${b.unavailable}` : '';
+
+  // Microphone: the sender's microphone, relayed to the pages listening.
+  const m = b.microphone || {};
+  $('bmic').textContent = un || (!m.on ? t('off')
+    : (m.audio ? t('mic_receiving') : t('mic_waiting')) + usedBy(m.pages, m.listeners));
+
+  // Speaker: what one page plays into it goes back to the sender, if the sender takes it.
+  // (sources counts the pages connected to it; an older receiver has only their origins.)
+  const sp = b.speaker || {};
+  const spkPages = sp.pages || [];
+  const spkCount = typeof sp.sources === 'number' ? sp.sources : spkPages.length;
+  $('bspk').textContent = un || (!sp.on ? t('off')
+    : !sp.listening ? t('spk_not_listening') + usedBy(spkPages, spkCount)
+    : sp.sending ? (sp.page ? t('spk_sending', { page: site(sp.page) }) : t('spk_sending_anon'))
+    : t('spk_idle') + usedBy(spkPages, spkCount));
+
+  // Camera: the same camera as the virtual one, relayed to the pages watching.
+  $('bcamera').textContent = un || (!b.on ? t('camera_off')
+    : (!b.video ? t('bcam_idle') : `${b.fps} fps`) + usedBy(b.pages, b.viewers));
 }
 
 function renderOffline() {
   $('state').textContent = t('offline');
   $('state').className = 'err';
   $('path').textContent = '—';
-  $('level').style.width = '0';
-  $('spkLevel').style.width = '0';
-  $('buffered').textContent = $('dropped').textContent = $('starved').textContent =
-    $('received').textContent = $('lost').textContent = $('speaker').textContent = $('camera').textContent = $('bcamera').textContent = '—';
+  for (const id of ['received', 'lost', 'camera', 'bmic', 'bspk', 'bcamera']) $(id).textContent = '—';
 }
 
 pollStatus();
 setInterval(pollStatus, 1000);
-
-// The segments API already returns newest first; this only renders.
-// On failure keep what we have: the status at the top already says offline, no need to report it twice.
-async function pollSegments() {
-  try {
-    const res = await fetch('/api/segments');
-    if (!res.ok) throw new Error(String(res.status));
-    renderSegments(await res.json());
-  } catch { /* keep the previous list */ }
-}
-
-// Each lane segments on silence independently; the same utterance starts in every lane within about the buffer depth.
-// LANES lists the tap points along the pipeline, in the order the audio flows through them.
-const LANES = [
-  { key: 'pre',  label: 'lane_pre',  prefix: '/api/segments/' },
-  { key: 'post', label: 'lane_post', prefix: '/api/segments/post/' },
-  { key: 'loop', label: 'lane_loop', prefix: '/api/segments/loop/' },
-];
-
-function renderSegments(data) {
-  const box = $('segments');
-  if (LANES.every(l => !(data[l.key] || []).length)) {
-    box.innerHTML = `<div class="empty">${t('no_segments')}</div>`;
-    return;
-  }
-
-  // Pair by time: drop every lane's segments into a row list; those within 2 s count as the same utterance.
-  const rows = [];
-  for (const lane of LANES) {
-    for (const seg of data[lane.key] || []) {
-      const t = new Date(seg.time);
-      let row = rows.find(r => Math.abs(t - r.t) < 2000 && !r[lane.key]);
-      if (!row) { row = { t }; rows.push(row); }
-      row[lane.key] = seg;
-    }
-  }
-  rows.sort((a, b) => b.t - a.t);
-
-  const player = (seg, lane) => seg ? `
-      <div class="lane"><span class="lane-label">${t(lane.label)}</span>
-      <audio controls preload="none" src="${lane.prefix}${encodeURIComponent(seg.name)}"></audio></div>`
-    : `<div class="lane"><span class="lane-label">${t(lane.label)}</span><span class="empty">—</span></div>`;
-
-  box.innerHTML = rows.map(row => {
-    const m = LANES.map(l => row[l.key]).find(Boolean);
-    return `
-    <div class="segment">
-      <div class="meta">
-        <span class="time">${formatTime(m.time)}</span>
-        <span>${(m.durMs / 1000).toFixed(1)}s</span>
-        <span class="peak">${m.peakDb.toFixed(1)} dB</span>
-      </div>
-      ${LANES.map(l => player(row[l.key], l)).join('')}
-    </div>`;
-  }).join('');
-}
-
-function formatTime(iso) {
-  const d = new Date(iso);
-  if (isNaN(d)) return '—';
-  const p = n => String(n).padStart(2, '0');
-  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-}
-
-pollSegments();
-setInterval(pollSegments, 3000);
 </script>
 </body>
 </html>

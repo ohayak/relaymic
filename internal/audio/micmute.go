@@ -1,15 +1,22 @@
 package audio
 
 // Muting this Mac's own microphones while Remote Visio runs (-mic-mute), so
-// a meeting or dictation on the Mac hears only the remote voice, never the
-// room the Mac stands in nor its own speakers.
+// the room the Mac stands in, and its own speakers, stay out of any app or
+// page that uses them. (The remote voice itself reaches only Chromium pages,
+// through the browser extension's Remote Visio Microphone; an app that uses
+// the Mac's own microphones hears silence while this is on.)
 //
-// Unlike the speakers' mute, which belongs to the system tap and ends with
-// the process, a microphone's mute switch or input volume is the device's
-// own setting, and Core Audio keeps it after this process is gone. So each
-// value is written down before it is changed, and put back when the receiver
-// stops; after a crash or a kill, when it next starts (with -mic-mute or
-// without); and by -mic-restore, which the uninstaller runs.
+// The same goes for the Mac's own speakers (-speaker-mute): the sound pages
+// send to Remote Visio Speaker never plays here anyway, and this keeps
+// everything else (other tabs, other apps, alerts) quiet too, for a Mac that
+// stands in an empty office. What pages send to the sending device is taken
+// before any output device, so it is not affected.
+//
+// A device's mute switch or volume is its own setting, and Core Audio keeps
+// it after this process is gone. So each value is written down before it is
+// changed, and put back when the receiver stops; after a crash or a kill,
+// when it next starts (with -mic-mute/-speaker-mute or without); and by
+// -restore-mutes, which the uninstaller runs.
 
 import (
 	"encoding/json"
@@ -31,8 +38,8 @@ type micVolume struct {
 }
 
 // mic is one of this Mac's microphones as the backend reports it: an input
-// device that is neither virtual (Remote Visio's own, BlackHole) nor an
-// aggregate (the return path's tap, or one the user made).
+// device that is neither virtual (BlackHole, or the audio device older Remote
+// Visio versions installed) nor an aggregate (one the user made, say).
 type mic struct {
 	UID, Name string
 	HasMute   bool        // it has a settable input mute switch
@@ -61,9 +68,19 @@ type micSaved struct {
 // connected is put back when it is.
 var micPoll = 2 * time.Second
 
-// MicMuter keeps this Mac's microphones muted until Close puts them back
-// (MuteMics), or puts back the ones an earlier run left muted (RestoreMics).
+// deviceKind names what a MicMuter mutes, in its log lines.
+type deviceKind struct{ one, many string }
+
+var (
+	microphones = deviceKind{"microphone", "microphones"}
+	speakers    = deviceKind{"speaker", "speakers"}
+)
+
+// MicMuter keeps this Mac's microphones (or speakers) muted until Close puts
+// them back (MuteMics, MuteSpeakers), or puts back the ones an earlier run
+// left muted (RestoreMics, RestoreSpeakers).
 type MicMuter struct {
+	kind   deviceKind
 	path   string
 	b      micBackend
 	muting bool
@@ -94,9 +111,27 @@ func RestoreMics(state string, logf func(string, ...any)) (*MicMuter, error) {
 	return startMics(state, micDevices, false, logf)
 }
 
+// MuteSpeakers mutes every output device of this Mac (built-in speakers,
+// headphones, USB, Bluetooth, displays), and each one plugged in later,
+// until Close puts them back. state is the file their previous settings are
+// kept in (not the microphones' file).
+func MuteSpeakers(state string, logf func(string, ...any)) (*MicMuter, error) {
+	return startDevices(speakers, state, speakerDevices, true, logf)
+}
+
+// RestoreSpeakers is RestoreMics for the speakers an earlier -speaker-mute
+// run left muted.
+func RestoreSpeakers(state string, logf func(string, ...any)) (*MicMuter, error) {
+	return startDevices(speakers, state, speakerDevices, false, logf)
+}
+
 func startMics(path string, b micBackend, muting bool, logf func(string, ...any)) (*MicMuter, error) {
+	return startDevices(microphones, path, b, muting, logf)
+}
+
+func startDevices(kind deviceKind, path string, b micBackend, muting bool, logf func(string, ...any)) (*MicMuter, error) {
 	m := &MicMuter{
-		path: path, b: b, muting: muting, poll: micPoll, logf: logf,
+		kind: kind, path: path, b: b, muting: muting, poll: micPoll, logf: logf,
 		saved: map[string]micSaved{}, handled: map[string]bool{},
 		stop: make(chan struct{}), done: make(chan struct{}),
 	}
@@ -122,7 +157,7 @@ func startMics(path string, b micBackend, muting bool, logf func(string, ...any)
 		m.muteNew(devs, true)
 	} else {
 		if names := m.restorePresent(devs); len(names) > 0 {
-			m.logf("put back this Mac's microphones that an earlier run left muted: %s", strings.Join(names, ", "))
+			m.logf("put back this Mac's %s that an earlier run left muted: %s", m.kind.many, strings.Join(names, ", "))
 		}
 	}
 	idle := !muting && len(m.saved) == 0
@@ -191,12 +226,12 @@ func (m *MicMuter) muteNew(devs []mic, first bool) {
 	}
 	switch {
 	case first && len(muted) > 0:
-		m.logf("this Mac's microphones muted: %s", strings.Join(muted, ", "))
+		m.logf("this Mac's %s muted: %s", m.kind.many, strings.Join(muted, ", "))
 	case first && len(devs) == 0:
-		m.logf("this Mac has no microphone to mute")
+		m.logf("this Mac has no %s to mute", m.kind.one)
 	case !first:
 		for _, name := range muted {
-			m.logf("this Mac's microphone %s muted (plugged in)", name)
+			m.logf("this Mac's %s %s muted (plugged in)", m.kind.one, name)
 		}
 	}
 }
@@ -211,7 +246,7 @@ func (m *MicMuter) muteOne(d mic) error {
 		case len(d.Volumes) > 0:
 			s.Volumes = append([]micVolume(nil), d.Volumes...)
 		default:
-			return errors.New("it has neither a mute switch nor an input volume")
+			return errors.New("it has neither a mute switch nor a volume")
 		}
 		// Written down before anything changes: a crash right after must
 		// still find what to put back.
@@ -283,11 +318,11 @@ func (m *MicMuter) Close() {
 		}
 		devs, err := m.b.list()
 		if err != nil {
-			m.logf("could not put back this Mac's microphones: %v (the next start does)", err)
+			m.logf("could not put back this Mac's %s: %v (the next start does)", m.kind.many, err)
 			return
 		}
 		if names := m.restorePresent(devs); len(names) > 0 {
-			m.logf("this Mac's microphones restored: %s", strings.Join(names, ", "))
+			m.logf("this Mac's %s restored: %s", m.kind.many, strings.Join(names, ", "))
 		}
 		for _, s := range m.saved {
 			m.logf("%s is not connected: it is put back at a later start, once it is", s.Name)
@@ -305,7 +340,7 @@ func (m *MicMuter) load() error {
 	}
 	var list []micSaved
 	if err := json.Unmarshal(raw, &list); err != nil {
-		return fmt.Errorf("%s is not readable (%v): the microphones' earlier settings in it cannot be put back", m.path, err)
+		return fmt.Errorf("%s is not readable (%v): the %s' earlier settings in it cannot be put back", m.path, err, m.kind.many)
 	}
 	for _, s := range list {
 		if s.UID != "" && (s.Muted != nil || len(s.Volumes) > 0) {

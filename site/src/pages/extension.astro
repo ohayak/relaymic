@@ -1,0 +1,190 @@
+---
+import Layout from "../Layout.astro";
+import { seo, links, product } from "@utils/config";
+import { alts } from "@utils/media";
+import { browserExtension, breadcrumbs, webPage } from "@utils/jsonld";
+import Breadcrumbs from "@components/Breadcrumbs.astro";
+import Icon from "@components/Icon.astro";
+import ThemedShot from "@components/ThemedShot.astro";
+import CtaBand from "@components/CtaBand.astro";
+
+const jsonLd = [
+  webPage("/extension", "The Remote Visio browser extension", seo.extension.description),
+  browserExtension(),
+  breadcrumbs([
+    { name: "Home", path: "/" },
+    { name: "Browser extension", path: "/extension" },
+  ]),
+];
+
+const permissions = [
+  {
+    name: "Storage",
+    code: "storage",
+    why: "Saves your two settings and the list of sites you allowed or blocked, on this computer only. Nothing is synced.",
+  },
+  {
+    name: "Access to 127.0.0.1",
+    code: "http://127.0.0.1/*",
+    why: "Talks to the Remote Visio app running on this same Mac, at 127.0.0.1:7421. It is the only address the extension contacts, and nothing on that connection leaves the computer.",
+  },
+  {
+    name: "Runs on https:// pages",
+    code: "https://*/*",
+    why: "Meetings run on many sites (Google Meet, Teams, Zoom, Jitsi, Whereby…), so its script must be present on any https page to add the three devices to that page's device list. It reads no page content, and no site gets the devices before you allow it.",
+  },
+  {
+    name: "Runs on localhost",
+    code: "http://localhost/*, http://127.0.0.1/*",
+    why: "For meeting servers running on the Mac itself, such as a developer's local test server.",
+  },
+];
+---
+
+<Layout title={seo.extension.title} description={seo.extension.description} jsonLd={jsonLd}>
+  <div class="mx-auto max-w-screen-lg px-4 pb-6 pt-10 md:pt-16">
+    <Breadcrumbs items={[{ title: "Home", href: "/" }, { title: "Browser extension" }]} />
+    <div class="mt-6 grid items-center gap-10 md:grid-cols-[1.4fr_1fr]">
+      <div>
+        <h1 class="text-4xl font-extrabold leading-[1.05] tracking-tight md:text-6xl">The Remote Visio browser extension</h1>
+        <p class="lede mt-5">
+          It gives web meetings on your Mac three more devices: <strong>Remote Visio Microphone</strong>, <strong>Remote Visio Speaker</strong> and
+          <strong>Remote Visio Camera</strong>, fed by the device in front of you through the Remote Visio app.
+        </p>
+        <div class="mt-8 flex flex-col gap-3 2xs:flex-row 2xs:flex-wrap">
+          <a href={links.chromeWebStoreUrl} rel="noopener" class="btn btn-primary btn-lg rounded-full">
+            <Icon name="puzzle" class="h-5 w-5" />Add to Chrome<span class="sr-only">(opens the Chrome Web Store)</span>
+          </a>
+          <a href="/download" class="btn btn-outline btn-lg rounded-full"><Icon name="download" class="h-5 w-5" />Get the Mac app first</a>
+        </div>
+        <p class="mt-4 text-sm text-base-content/80">
+          Listed in the Chrome Web Store as "{product.extensionName}": the name dates from when it carried only the camera. It needs the Remote Visio
+          app on the same Mac.
+        </p>
+      </div>
+      <div class="mx-auto w-full max-w-[300px]">
+        <ThemedShot base="extension-popup" alt={alts["extension-popup"]} priority class="h-auto w-full rounded-box border border-base-300 shadow-xl" />
+      </div>
+    </div>
+  </div>
+
+  <section class="section" aria-labelledby="works-title">
+    <h2 id="works-title" class="section-title">Where it works</h2>
+    <div class="mt-8 grid gap-4 md:grid-cols-3">
+      <div class="card-surface p-6">
+        <h3 class="font-bold">Chromium browsers</h3>
+        <p class="mt-2 text-base-content/85">
+          Chrome, Edge, Brave, Arc, Vivaldi, Opera and other Chromium browsers, version {product.chromiumMin} or later. Not Safari or Firefox.
+        </p>
+      </div>
+      <div class="card-surface p-6">
+        <h3 class="font-bold">Web pages</h3>
+        <p class="mt-2 text-base-content/85">
+          Google Meet, Teams and Zoom on the web, and any page that lets you choose a device. Native apps (Zoom, Teams, FaceTime) do not see it.
+        </p>
+      </div>
+      <div class="card-surface p-6">
+        <h3 class="font-bold">One browser profile</h3>
+        <p class="mt-2 text-base-content/85">
+          It works in the profile you add it to. Private windows get it only when you turn on <em>Allow in Incognito</em> in its details.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="bg-base-200" aria-labelledby="install-title">
+    <div class="section grid items-center gap-10 md:grid-cols-[1.3fr_1fr]">
+      <div>
+        <h2 id="install-title" class="section-title">Install it</h2>
+        <ol class="mt-6 list-decimal space-y-3 pl-8 text-lg text-base-content/85 marker:font-mono">
+          <li>Install the <a class="link" href="/download">Remote Visio app</a> on the Mac.</li>
+          <li>In its menu-bar menu, choose <strong>Install Browser Extension…</strong>, or open the <a class="link" href={links.chromeWebStoreUrl} rel="noopener">store page</a> directly.</li>
+          <li>Click <strong>Add to Chrome</strong>. In Edge, click <strong>Get</strong> (Edge may first ask to allow extensions from other stores).</li>
+          <li>Pin it: the Extensions button (the puzzle piece), then the pin next to Remote Visio Camera.</li>
+          <li>Reload meeting pages that were already open, then pick Remote Visio's devices in the meeting's settings.</li>
+        </ol>
+      </div>
+      <figure>
+        <ThemedShot base="extension-consent" alt={alts["extension-consent"]} class="h-auto w-full rounded-box border border-base-300 shadow-xl" />
+        <figcaption class="mt-3 text-sm text-base-content/75">The first time a site asks for a microphone or camera, the extension asks you.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="perm-title">
+    <h2 id="perm-title" class="section-title">Every permission, explained</h2>
+    <p class="lede mt-4 max-w-2xl">
+      No access to your tabs, history, cookies or downloads. No remote code. No analytics. Here is what it does ask for, and why.
+    </p>
+    <ul class="mt-8 divide-y divide-base-300 rounded-box border border-base-300">
+      {
+        permissions.map((p) => (
+          <li class="grid gap-2 p-5 md:grid-cols-[14rem_1fr] md:gap-6">
+            <div>
+              <h3 class="font-bold">{p.name}</h3>
+              <code class="mt-1 flex flex-wrap gap-x-2 font-mono text-xs text-base-content/75">{p.code.split(", ").map((c, i, all) => <span class="whitespace-nowrap">{c}{i < all.length - 1 ? "," : ""}</span>)}</code>
+            </div>
+            <p class="text-base-content/85">{p.why}</p>
+          </li>
+        ))
+      }
+    </ul>
+    <div class="mt-8 grid gap-4 md:grid-cols-2">
+      <div class="card-surface p-6">
+        <h3 class="font-bold">What it does on a page</h3>
+        <p class="mt-2 text-base-content/85">
+          It adds three entries to the page's device list and answers the page's request when you pick one. For the speaker, it takes only the sound
+          a page you allowed plays into Remote Visio Speaker. It does not read page text, forms, cookies or history, and sends nothing anywhere except
+          to the Remote Visio app on the same Mac.
+        </p>
+      </div>
+      <div class="card-surface p-6">
+        <h3 class="font-bold">What it stores</h3>
+        <p class="mt-2 text-base-content/85">
+          On this computer only: your two switches, the sites you allowed or blocked, and short-lived notes about open consent windows that the
+          browser clears when it quits. Removing the extension deletes them. Details in the <a class="link" href="/privacy">privacy policy</a>.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="bg-base-200" aria-labelledby="switch-title">
+    <div class="section">
+      <h2 id="switch-title" class="section-title">Two switches, and your sites</h2>
+      <div class="mt-8 grid gap-4 md:grid-cols-3">
+        <div class="card-surface p-6">
+          <h3 class="font-bold">Offer Remote Visio's devices to websites</h3>
+          <p class="mt-2 text-base-content/85">On by default. Off, no page gets them, and pages using them are disconnected at once.</p>
+        </div>
+        <div class="card-surface p-6">
+          <h3 class="font-bold">Use Remote Visio by default</h3>
+          <p class="mt-2 text-base-content/85">
+            On by default. A site you allowed that asks for any microphone or camera gets Remote Visio's, and what it plays goes to your sending
+            device while that device listens.
+          </p>
+        </div>
+        <div class="card-surface p-6">
+          <h3 class="font-bold">Sites</h3>
+          <p class="mt-2 text-base-content/85">
+            Every site you answered, allowed or blocked. Remove one and it asks again; a site in use is disconnected at once.
+          </p>
+        </div>
+      </div>
+      <p class="mt-8 text-base-content/85">
+        <strong>To remove it</strong>, use Remove on its card in the browser's extensions page (Remove from Chrome). The Mac app's uninstaller does
+        not remove it from the browser.
+      </p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="help-title">
+    <h2 id="help-title" class="text-2xl font-extrabold tracking-tight md:text-3xl">Something missing?</h2>
+    <p class="mt-3 max-w-2xl text-base-content/85">
+      If Remote Visio's devices do not appear in a meeting, reload the page, check that the meeting runs in the browser profile with the
+      extension, and that the extension's button says Remote Visio is running. The <a class="link" href="/support">support page</a> goes through the
+      rest, and the <a class="link" href="/guides/virtual-camera-chrome-extension-mac">camera guide</a> covers company-managed Macs.
+    </p>
+  </section>
+
+  <CtaBand />
+</Layout>

@@ -2,7 +2,6 @@ package rtc
 
 import (
 	"bytes"
-	"math"
 	"net"
 	"strings"
 	"sync"
@@ -74,11 +73,11 @@ func TestStripCGNATCandidates(t *testing.T) {
 // count; the offer built below deliberately omits usedtx, and the answer must
 // still contain it.
 func TestAnswerRequestsFECAndDTX(t *testing.T) {
-	r := New(nil, nil)
+	r := New(nil)
 	r.SetICEServers(nil) // no STUN, host candidates only: the test must not depend on the internet
 	defer r.Close()
 
-	pc := senderPeer(t, webrtc.RTPTransceiverDirectionSendonly)
+	pc, _ := senderPeer(t, webrtc.RTPTransceiverDirectionSendonly)
 	defer pc.Close()
 	answer, err := r.Answer(*pc.LocalDescription(), false)
 	if err != nil {
@@ -95,11 +94,11 @@ func TestAnswerRequestsFECAndDTX(t *testing.T) {
 // (sendonly), so even with the return path enabled on the receiver the answer
 // must be a clean recvonly and negotiation must not fail.
 func TestSendonlyOfferGetsNoSpeaker(t *testing.T) {
-	r := New(nil, nil)
+	r := New(nil)
 	r.SetICEServers(nil)
 	defer r.Close()
 
-	pc := senderPeer(t, webrtc.RTPTransceiverDirectionSendonly)
+	pc, _ := senderPeer(t, webrtc.RTPTransceiverDirectionSendonly)
 	defer pc.Close()
 	answer, err := r.Answer(*pc.LocalDescription(), true)
 	if err != nil {
@@ -108,31 +107,31 @@ func TestSendonlyOfferGetsNoSpeaker(t *testing.T) {
 	if !strings.Contains(answer.SDP, "a=recvonly") || strings.Contains(answer.SDP, "a=sendrecv") {
 		t.Errorf("answer to a sendonly offer should be recvonly\n%s", answer.SDP)
 	}
-	if r.speakerTrack() != nil {
+	if r.ReturnListening() {
 		t.Error("sender does not accept the return path; no return-path track should be attached")
 	}
 }
 
-// TestSpeakerReachesSender exercises the full return path: the sender's offer
-// is sendrecv, the answer carries the return-path track, and audio fed into
-// Speaker really comes out of the sender's OnTrack. Both ends live in this
-// process and use host candidates over loopback only.
-func TestSpeakerReachesSender(t *testing.T) {
-	r := New(nil, nil)
+// TestReturnReachesSender exercises the full return path: the sender's offer
+// is sendrecv, the answer carries the return-path track, and RTP packets
+// handed to WriteReturn come out of the sender's OnTrack with their payload
+// untouched and the payload type the sender negotiated. Both ends live in
+// this process and use host candidates over loopback only.
+func TestReturnReachesSender(t *testing.T) {
+	r := New(nil)
 	r.SetICEServers(nil)
 	defer r.Close()
-	spk, err := r.NewSpeaker(64000)
-	if err != nil {
-		t.Fatal(err)
+	if r.ReturnListening() {
+		t.Error("a receiver without a connection says the return path is listening")
 	}
-	defer spk.Close()
+	r.WriteReturn(&rtp.Packet{Header: rtp.Header{Version: 2}, Payload: []byte{1}}) // no connection: dropped
 
-	pc := senderPeer(t, webrtc.RTPTransceiverDirectionSendrecv)
+	pc, _ := senderPeer(t, webrtc.RTPTransceiverDirectionSendrecv)
 	defer pc.Close()
-	got := make(chan struct{})
+	got := make(chan *rtp.Packet, 1)
 	pc.OnTrack(func(track *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
-		if _, _, err := track.ReadRTP(); err == nil {
-			close(got)
+		if p, _, err := track.ReadRTP(); err == nil {
+			got <- p
 		}
 	})
 
@@ -146,34 +145,172 @@ func TestSpeakerReachesSender(t *testing.T) {
 	if err := pc.SetRemoteDescription(*answer); err != nil {
 		t.Fatalf("sender set remote description: %v", err)
 	}
-	if r.speakerTrack() == nil {
+	if !r.ReturnListening() {
 		t.Fatal("no return-path track attached after negotiation")
 	}
 
-	// Keep feeding a sine tone until the sender receives its first RTP packet.
-	tone := make([]int16, FrameSize*Channels)
-	for i := 0; i < FrameSize; i++ {
-		v := int16(8000 * math.Sin(2*math.Pi*440*float64(i)/SampleRate))
-		tone[i*Channels], tone[i*Channels+1] = v, v
+	// Keep writing packets, as a speaker page's would arrive, until the sender
+	// receives its first one. The payload is not real Opus: nothing decodes it.
+	payload := []byte{0xfc, 0xff, 0xfe, 0x01, 0x02}
+	tick := time.NewTicker(FrameMS * time.Millisecond)
+	defer tick.Stop()
+	deadline := time.After(15 * time.Second)
+	for seq := uint16(0); ; seq++ {
+		select {
+		case p := <-got:
+			if !bytes.Equal(p.Payload, payload) {
+				t.Errorf("the sender got payload % x, want % x", p.Payload, payload)
+			}
+			if p.PayloadType == 99 {
+				t.Error("the return path kept the source's payload type instead of the one negotiated with the sender")
+			}
+			return
+		case <-deadline:
+			t.Fatalf("sender received no return-path packet within 15s (connection state %s)", pc.ConnectionState())
+		case <-tick.C:
+			r.WriteReturn(&rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 99, SequenceNumber: seq,
+				Timestamp: uint32(seq) * FrameSize, SSRC: 0x1234}, Payload: payload})
+		}
 	}
+}
+
+// fakeAudioForwarder records what reaches the browser microphone's forwarder.
+type fakeAudioForwarder struct {
+	mu      sync.Mutex
+	codec   webrtc.RTPCodecParameters
+	packets int
+	first   []byte
+	ended   int
+	got     chan struct{}
+}
+
+func (f *fakeAudioForwarder) StartTrack(codec webrtc.RTPCodecParameters) (func(*rtp.Packet), func()) {
+	f.mu.Lock()
+	f.codec = codec
+	f.mu.Unlock()
+	return func(p *rtp.Packet) {
+			f.mu.Lock()
+			f.packets++
+			n := f.packets
+			if n == 1 {
+				f.first = append([]byte(nil), p.Payload...)
+			}
+			f.mu.Unlock()
+			if n == 10 {
+				close(f.got)
+			}
+		}, func() {
+			f.mu.Lock()
+			f.ended++
+			f.mu.Unlock()
+		}
+}
+
+// TestMicrophoneReachesForwarder pins the microphone path: the sender's Opus
+// packets reach the audio forwarder as they are, nothing decodes them, the
+// counters see them, and the forwarder is told when the track ends.
+func TestMicrophoneReachesForwarder(t *testing.T) {
+	r := New(nil)
+	r.SetICEServers(nil)
+	fwd := &fakeAudioForwarder{got: make(chan struct{})}
+	r.SetAudioForwarder(fwd)
+	defer r.Close()
+
+	pc, mic := senderPeer(t, webrtc.RTPTransceiverDirectionSendonly)
+	defer pc.Close()
+	answer, err := r.Answer(*pc.LocalDescription(), false)
+	if err != nil {
+		t.Fatalf("negotiation failed: %v", err)
+	}
+	if err := pc.SetRemoteDescription(*answer); err != nil {
+		t.Fatal(err)
+	}
+	// Not real Opus either: a decoder would refuse it, the forwarder must not care.
+	payload := []byte{0x78, 0x01, 0x02, 0x03}
+	writeUntil(t, mic, payload, fwd.got, "packets to reach the forwarder", pc)
+
+	fwd.mu.Lock()
+	codec, first := fwd.codec, fwd.first
+	fwd.mu.Unlock()
+	if !strings.EqualFold(codec.MimeType, webrtc.MimeTypeOpus) || codec.ClockRate != SampleRate {
+		t.Errorf("forwarder got codec %+v", codec)
+	}
+	if !bytes.Equal(first, payload) {
+		t.Errorf("the forwarder got payload % x, want % x", first, payload)
+	}
+	if received, _, _, _ := r.Stats().Snapshot(); received < 10 {
+		t.Errorf("the counters saw %d packets, want at least 10", received)
+	}
+	pc.Close()
+	r.Close()
+	deadline := time.After(10 * time.Second)
+	for {
+		fwd.mu.Lock()
+		ended := fwd.ended
+		fwd.mu.Unlock()
+		if ended == 1 {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("the forwarder was told %d times that the track ended, want 1", ended)
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+}
+
+// TestMicrophoneWithoutForwarderIsCounted pins the receiver without a browser
+// microphone: the audio is still negotiated, read and counted, then dropped.
+func TestMicrophoneWithoutForwarderIsCounted(t *testing.T) {
+	r := New(nil)
+	r.SetICEServers(nil)
+	defer r.Close()
+
+	pc, mic := senderPeer(t, webrtc.RTPTransceiverDirectionSendonly)
+	defer pc.Close()
+	answer, err := r.Answer(*pc.LocalDescription(), false)
+	if err != nil {
+		t.Fatalf("negotiation failed: %v", err)
+	}
+	if err := pc.SetRemoteDescription(*answer); err != nil {
+		t.Fatal(err)
+	}
+	counted := make(chan struct{})
+	go func() {
+		for {
+			if received, _, _, _ := r.Stats().Snapshot(); received >= 10 {
+				close(counted)
+				return
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}()
+	writeUntil(t, mic, []byte{0x78, 0x01}, counted, "the counters to see the packets", pc)
+}
+
+// writeUntil writes one audio frame every 20 ms into the sender's microphone
+// until done is closed, or fails the test after 15 s.
+func writeUntil(t *testing.T, mic *webrtc.TrackLocalStaticSample, payload []byte, done <-chan struct{}, what string, pc *webrtc.PeerConnection) {
+	t.Helper()
 	tick := time.NewTicker(FrameMS * time.Millisecond)
 	defer tick.Stop()
 	deadline := time.After(15 * time.Second)
 	for {
 		select {
-		case <-got:
+		case <-done:
 			return
 		case <-deadline:
-			t.Fatalf("sender received no return-path packet within 15s (connection state %s)", pc.ConnectionState())
+			t.Fatalf("timed out waiting for %s (connection state %s)", what, pc.ConnectionState())
 		case <-tick.C:
-			spk.Feed(tone)
+			_ = mic.WriteSample(media.Sample{Data: payload, Duration: FrameMS * time.Millisecond})
 		}
 	}
 }
 
 // senderPeer builds an audio-pushing sender that mimics the browser side; direction decides whether it accepts the return path.
 // The returned PeerConnection has its local description set and candidates gathered; the caller must Close it.
-func senderPeer(t *testing.T, direction webrtc.RTPTransceiverDirection) *webrtc.PeerConnection {
+// The microphone track is returned for tests that write into it.
+func senderPeer(t *testing.T, direction webrtc.RTPTransceiverDirection) (*webrtc.PeerConnection, *webrtc.TrackLocalStaticSample) {
 	t.Helper()
 
 	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{})
@@ -202,7 +339,7 @@ func senderPeer(t *testing.T, direction webrtc.RTPTransceiverDirection) *webrtc.
 	}
 	<-webrtc.GatheringCompletePromise(pc)
 
-	return pc
+	return pc, track
 }
 
 // fakeSink records what reaches the camera sink. Its first Decode asks for a
@@ -236,7 +373,7 @@ func mediaSections(sdp string) []string {
 // TestAnswerOffersH264Only pins the codec policy: the answer's video m-line
 // carries H.264 with retransmission and nothing the Mac cannot decode in hardware.
 func TestAnswerOffersH264Only(t *testing.T) {
-	r := New(nil, nil)
+	r := New(nil)
 	r.SetICEServers(nil)
 	r.SetVideoSink(newFakeSink())
 	defer r.Close()
@@ -280,7 +417,7 @@ func TestAnswerOffersH264Only(t *testing.T) {
 // the sender's H.264 track is packetized, carried over loopback, reassembled
 // and the access unit lands in the sink as Annex-B.
 func TestVideoReachesSink(t *testing.T) {
-	r := New(nil, nil)
+	r := New(nil)
 	r.SetICEServers(nil)
 	sink := newFakeSink()
 	r.SetVideoSink(sink)
@@ -337,7 +474,7 @@ func TestVideoReachesSink(t *testing.T) {
 // keyframe spread over far more packets than a jitter window holds (as a 720p
 // IDR is) must come out whole, not lose its first packets one by one.
 func TestLargeKeyframeReachesSink(t *testing.T) {
-	r := New(nil, nil)
+	r := New(nil)
 	r.SetICEServers(nil)
 	sink := newFakeSink()
 	r.SetVideoSink(sink)
@@ -388,7 +525,7 @@ func TestLargeKeyframeReachesSink(t *testing.T) {
 // video m-line is answered inactive (or rejected) so the browser sends no
 // frames, while the audio m-line is negotiated as usual.
 func TestNoSinkRefusesVideo(t *testing.T) {
-	r := New(nil, nil)
+	r := New(nil)
 	r.SetICEServers(nil)
 	defer r.Close()
 
@@ -425,7 +562,7 @@ func TestNoSinkRefusesVideo(t *testing.T) {
 // to an offer that also carries a camera: the video m-line's direction must
 // not be mistaken for the audio one's.
 func TestSendonlyOfferWithVideoGetsNoSpeaker(t *testing.T) {
-	r := New(nil, nil)
+	r := New(nil)
 	r.SetICEServers(nil)
 	r.SetVideoSink(newFakeSink())
 	defer r.Close()
@@ -439,7 +576,7 @@ func TestSendonlyOfferWithVideoGetsNoSpeaker(t *testing.T) {
 	if strings.Contains(answer.SDP, "a=sendrecv") {
 		t.Errorf("answer to a sendonly offer must not be sendrecv anywhere\n%s", answer.SDP)
 	}
-	if r.speakerTrack() != nil {
+	if r.ReturnListening() {
 		t.Error("sender does not accept the return path; no return-path track should be attached")
 	}
 }
@@ -535,7 +672,7 @@ func (f *fakeForwarder) StartTrack(codec webrtc.RTPCodecParameters, requestKeyfr
 // negotiation: with no camera extension but a forwarder, the camera m-line
 // is accepted, and the RTP packets reach the forwarder with the codec.
 func TestForwarderAloneTakesVideo(t *testing.T) {
-	r := New(nil, nil)
+	r := New(nil)
 	r.SetICEServers(nil)
 	fwd := &fakeForwarder{got: make(chan struct{})}
 	r.SetVideoForwarder(fwd)
@@ -622,7 +759,7 @@ func (s *needyKeySink) Decode([]byte, uint32) bool {
 // unit here is one), so a burst of undecodable frames costs the sender one
 // keyframe, not two.
 func TestDeferredKeyframeRequestDroppedWhenAnswered(t *testing.T) {
-	r := New(nil, nil)
+	r := New(nil)
 	r.SetICEServers(nil)
 	sink := &needyKeySink{}
 	r.SetVideoSink(sink)
@@ -703,7 +840,7 @@ func TestAnswerDoesNotWaitForStuckGathering(t *testing.T) {
 
 	connected := make(chan struct{})
 	var once sync.Once
-	r := New(nil, func(s webrtc.PeerConnectionState) {
+	r := New(func(s webrtc.PeerConnectionState) {
 		if s == webrtc.PeerConnectionStateConnected {
 			once.Do(func() { close(connected) })
 		}
@@ -718,7 +855,7 @@ func TestAnswerDoesNotWaitForStuckGathering(t *testing.T) {
 	r.OnNote(func(s string) { notesMu.Lock(); notes = append(notes, s); notesMu.Unlock() })
 	defer r.Close()
 
-	pc := senderPeer(t, webrtc.RTPTransceiverDirectionSendrecv)
+	pc, _ := senderPeer(t, webrtc.RTPTransceiverDirectionSendrecv)
 	defer pc.Close()
 	start := time.Now()
 	answer, err := r.Answer(*pc.LocalDescription(), false)

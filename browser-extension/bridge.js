@@ -1,8 +1,11 @@
-// Remote Visio Camera, the bridge. A content script in the extension's
+// Remote Visio's devices, the bridge. A content script in the extension's
 // isolated world, in every frame next to camera.js (which runs in the page's
 // own world and cannot reach the extension): it relays camera.js's requests
 // to the service worker and answers with the user's settings, the slate's
-// localized lines, the user's consent and the receiver's WebRTC answer.
+// localized lines, the user's decision about the site, the user's consent
+// and the WebRTC answers (for the camera, the microphone and the speaker) of
+// the backend: the Remote Visio app's receiver, or direct mode's hub in the
+// extension (the service worker routes them).
 //
 // The channel is CustomEvents on the document with JSON strings as the
 // detail, which the page's own scripts can also send. Nothing here trusts
@@ -20,6 +23,12 @@
   const TO_PAGE = 'remotevisio-camera:to-page';
   const CONSENT_WAIT_MS = 2 * 60 * 1000; // from the moment the window is up
   const HIDDEN_RECHECK_MS = 1000;
+  // What this bridge speaks with camera.js: 2 knows the microphone and the
+  // speaker, 3 also answers "listening" (an older copy of the extension in
+  // the same profile answers without a protocol, and its camera.js offers
+  // only the camera).
+  const PROTOCOL = 3;
+  const KINDS = ['camera', 'microphone', 'speaker'];
 
   // This copy of the extension, for the pages to tell its answers from
   // another copy's (the store's and an unpacked one in one profile): every
@@ -52,13 +61,16 @@
     return e;
   }
 
-  // cameraAllowed says whether this frame may have a camera at all: not
-  // with an opaque origin (a sandboxed frame, a document served with a CSP
-  // sandbox, a data: frame), which Chrome gives no camera either; otherwise
-  // the frame's permissions policy decides: a cross-origin iframe gets one
-  // only when its embedder delegates it (allow="camera"), for the Remote
-  // Visio Camera as for real ones.
-  function cameraAllowed() {
+  // kindAllowed says whether this frame may have a device of a kind at
+  // all: not with an opaque origin (a sandboxed frame, a document served
+  // with a CSP sandbox, a data: frame), which Chrome gives no camera or
+  // microphone either; otherwise the frame's permissions policy decides: a
+  // cross-origin iframe gets one only when its embedder delegates it
+  // (allow="camera", allow="microphone"), for Remote Visio's devices as for
+  // real ones. The speaker follows "speaker-selection" where the browser
+  // knows that feature, and the microphone's otherwise (as Chrome's own
+  // choice of an output does).
+  function kindAllowed(kind) {
     try {
       if (self.origin === 'null') return false;
     } catch {
@@ -66,10 +78,28 @@
     }
     try {
       const policy = document.featurePolicy;
-      return !policy || typeof policy.allowsFeature !== 'function' || policy.allowsFeature('camera');
+      if (!policy || typeof policy.allowsFeature !== 'function') return true;
+      if (kind === 'camera') return policy.allowsFeature('camera');
+      if (kind === 'speaker' && typeof policy.features === 'function' && policy.features().includes('speaker-selection')) {
+        return policy.allowsFeature('speaker-selection');
+      }
+      return policy.allowsFeature('microphone');
     } catch {
       return true;
     }
+  }
+
+  function allowedKinds() {
+    const out = {};
+    for (const kind of KINDS) out[kind] = kindAllowed(kind);
+    return out;
+  }
+
+  // kindsOf reads the kinds of device a request is for (the camera when it
+  // names none: an older camera.js).
+  function kindsOf(payload) {
+    const asked = payload && Array.isArray(payload.kinds) ? payload.kinds.filter((k) => KINDS.includes(k)) : [];
+    return asked.length ? asked : ['camera'];
   }
 
   function visible() {
@@ -125,19 +155,32 @@
     return shown;
   }
 
+  // The sender app of direct mode (its own pages), as the service worker
+  // tells it at hello: it gets none of Remote Visio's devices, which then
+  // read as switched off here. Its return path would otherwise send what
+  // the meeting plays back into the meeting.
+  let appFrame = false;
+
+  // The popup's two switches; "use Remote Visio by default" is on unless
+  // the user switched it off.
   async function readSettings() {
     const v = await chrome.storage.local.get(['enabled', 'prefer']);
-    return { enabled: v.enabled !== false, prefer: v.prefer === true };
+    if (appFrame) return { enabled: false, prefer: false };
+    return { enabled: v.enabled !== false, prefer: v.prefer !== false };
   }
 
-  function slateStrings() {
+  // slateStrings are the lines camera.js draws on its slate. In direct mode,
+  // those that name the app on this Mac are direct mode's own: no device
+  // paired yet, or how to start sending.
+  function slateStrings(backend) {
     const m = (key) => chrome.i18n.getMessage(key);
+    const direct = backend === 'direct';
     return {
       connecting: m('slate_connecting'),
       waiting: m('slate_waiting'),
-      waitingHint: m('slate_waiting_hint'),
-      down: m('slate_down'),
-      downHint: m('slate_down_hint'),
+      waitingHint: m(direct ? 'slate_waiting_hint_direct' : 'slate_waiting_hint'),
+      down: m(direct ? 'slate_down_direct' : 'slate_down'),
+      downHint: m(direct ? 'slate_down_direct_hint' : 'slate_down_hint'),
       refused: m('slate_refused'),
       refusedHint: m('slate_refused_hint'),
       off: m('slate_off'),
@@ -156,9 +199,47 @@
   }
 
   // site is the name the service worker gave this frame's site (the one in
-  // the address bar) in its last answer about consent; the pushes about the
+  // the address bar) in its last answer about it; the pushes about the
   // user's decisions are about it.
   let site = null;
+
+  function stateOf(decision) {
+    return decision === 'allow' || decision === 'block' ? decision : 'ask';
+  }
+
+  // siteInfo asks the service worker for the user's decision about this
+  // frame's site ("allow", "block" or "ask"), and learns the site's name.
+  // The same answer names the backend the pages use now ("app": the Remote
+  // Visio app on this Mac; "direct": the extension's own hub and a paired
+  // device), and says whether this frame is the sender app. A document the
+  // tab does not show yet (a prerendered one) asks nothing: it asks once
+  // shown, and tells camera.js.
+  async function siteInfo() {
+    const unknown = { state: 'ask', backend: 'app', app: false };
+    if (!connected() || prerendering()) return unknown;
+    try {
+      const reply = await send({ type: 'site', backend: true });
+      if (reply && typeof reply.origin === 'string') site = reply.origin;
+      return {
+        state: stateOf(reply && reply.state),
+        backend: reply && reply.backend === 'direct' ? 'direct' : 'app',
+        app: !!(reply && reply.app === true),
+      };
+    } catch {
+      return unknown;
+    }
+  }
+
+  if (prerendering()) {
+    activated().then(siteInfo).then((info) => {
+      // The sender app, prerendered: its devices go now.
+      if (info.app && !appFrame) {
+        appFrame = true;
+        readSettings().then((settings) => post({ type: 'settings', result: settings }), () => {});
+      }
+      if (site !== null) post({ type: 'site', result: { state: info.state } });
+    }, () => {});
+  }
   // Consent requests of this document still waiting for the user.
   let waitingForUser = 0;
   // The requests waiting on a consent window wake up to ask again when the
@@ -190,7 +271,9 @@
     try { chrome.runtime.sendMessage({ type: 'withdraw' }).catch(() => {}); } catch { /* cut off */ }
   }
 
-  // consent resolves to {state: "allow" | "block"} for this frame's site:
+  // consent resolves to {state: "allow" | "block"} for this frame's site
+  // (partial: allowed the kinds asked for only, by an older version's
+  // camera-only consent; the site as a whole is still to be asked):
   // the stored decision, or the user's answer in the consent window the
   // service worker shows (a new one, or the one already open for the site).
   // The question waits until the page is in front of the user (a prerendered
@@ -199,8 +282,8 @@
   // or leaves alone for two minutes, refuses this one request and decides
   // nothing; a request that gives up withdraws, so that a window nobody
   // waits on goes.
-  async function consent() {
-    if (!cameraAllowed()) return { state: 'block' };
+  async function consent(payload) {
+    if (!kindsOf(payload).every(kindAllowed)) return { state: 'block' };
     if (!connected()) throw failure('unavailable');
     await activated();
     let origin = null;   // the site, once the service worker named it
@@ -225,7 +308,7 @@
     waitingForUser++;
     try {
       for (;;) {
-        const reply = await send({ type: 'consent', visible: visible(), activation: userActivation(), token: TOKEN });
+        const reply = await send({ type: 'consent', kinds: kindsOf(payload), visible: visible(), activation: userActivation(), token: TOKEN });
         if (reply && typeof reply.origin === 'string') site = origin = reply.origin;
         if (reply && reply.state === 'hidden' && origin !== null) {
           // Undecided, and not in front of the user: ask again once it is
@@ -237,7 +320,8 @@
           continue;
         }
         if (!reply || reply.state !== 'pending' || origin === null || typeof reply.window !== 'number') {
-          return { state: reply && reply.state === 'allow' ? 'allow' : 'block' };
+          const state = reply && reply.state === 'allow' ? 'allow' : 'block';
+          return state === 'allow' && reply.partial === true ? { state, partial: true } : { state };
         }
         windowId = reply.window;
         // The user's two minutes start now, with the window in front of them.
@@ -267,23 +351,37 @@
   const handlers = {
     ping() {},
     // camera.js repeats hello every 100 ms until it hears back; the repeats
-    // that arrive while the storage read is under way share it.
+    // that arrive while the reads are under way share them. (allowed is the
+    // camera's, for a camera.js of protocol 1.)
     hello() {
       if (!connected()) return Promise.reject(failure('unavailable'));
       if (!helloReply) {
-        helloReply = readSettings().then(
-          (settings) => { helloReply = null; return { settings, strings: slateStrings(), allowed: cameraAllowed() }; },
-          (e) => { helloReply = null; throw e; },
-        );
+        helloReply = (async () => {
+          const [info, stored] = await Promise.all([siteInfo(), readSettings()]);
+          appFrame = info.app;
+          const settings = appFrame ? { enabled: false, prefer: false } : stored;
+          const kinds = allowedKinds();
+          return { protocol: PROTOCOL, settings, strings: slateStrings(info.backend), allowed: kinds.camera, kinds, site: info.state };
+        })().finally(() => { helloReply = null; });
       }
       return helloReply;
     },
     consent,
-    async offer(payload) {
-      if (!cameraAllowed()) throw failure('consent');
-      if (!payload || payload.type !== 'offer' || typeof payload.sdp !== 'string') throw failure('bad-request');
+    // Whether the sending device takes the return path now: the speaker
+    // sends a page's default output only then.
+    async listening() {
+      if (!kindAllowed('speaker') || !connected()) return { listening: false };
       await activated();
-      const reply = await send({ type: 'offer', offer: { type: 'offer', sdp: payload.sdp } });
+      const reply = await send({ type: 'listening' });
+      return { listening: reply.listening === true };
+    },
+    async offer(payload) {
+      if (!payload || payload.type !== 'offer' || typeof payload.sdp !== 'string') throw failure('bad-request');
+      const kind = payload.kind === undefined ? 'camera' : payload.kind;
+      if (!KINDS.includes(kind)) throw failure('bad-request');
+      if (!kindAllowed(kind)) throw failure('consent');
+      await activated();
+      const reply = await send({ type: 'offer', kind, offer: { type: 'offer', sdp: payload.sdp } });
       if (reply.ok && reply.answer) return reply.answer;
       throw failure(reply.code || 'failed', reply.message);
     },
@@ -335,13 +433,15 @@
       if (changes.enabled || changes.prefer) {
         readSettings().then((s) => post({ type: 'settings', result: s }), () => {});
       }
-      // The user took this site's permission back (removed it in the
-      // popup): the tracks in use end, as for an unplugged camera. (The
-      // service worker also has the receiver close the connections, which
-      // does not depend on this page's cooperation.)
+      // The user's decision about this site changed. Taken back (removed in
+      // the popup): the tracks in use end, as for an unplugged device, and
+      // the page's sound plays on this Mac again. (The service worker also
+      // has the receiver close the connections, which does not depend on
+      // this page's cooperation.) Given (in this frame or another): the
+      // speaker may take the page's sound by default.
       if (changes.sites && site !== null) {
-        const was = (changes.sites.oldValue || {})[site], now = (changes.sites.newValue || {})[site];
-        if (was === 'allow' && now !== 'allow') post({ type: 'site', result: { state: now === 'block' ? 'block' : 'ask' } });
+        const was = stateOf((changes.sites.oldValue || {})[site]), now = stateOf((changes.sites.newValue || {})[site]);
+        if (was !== now) post({ type: 'site', result: { state: now } });
       }
     });
   } catch {

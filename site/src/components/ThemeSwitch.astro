@@ -1,0 +1,9 @@
+---
+import Icon from "./Icon.astro";
+---
+
+<label class="flex min-h-11 min-w-11 cursor-pointer items-center justify-center gap-1.5 rounded-full px-2 hover:bg-base-200" title="Dark mode">
+  <Icon name="sun" class="h-4 w-4" />
+  <input type="checkbox" class="toggle toggle-sm" aria-label="Dark mode" data-theme-toggle autocomplete="off" />
+  <Icon name="moon" class="h-4 w-4" />
+</label>

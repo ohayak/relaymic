@@ -20,9 +20,11 @@
 # Otherwise the app is built as it always was, without a camera, and one
 # line says why.
 #
-# The browser camera goes into every build: the Remote Visio Camera browser
-# extension (browser-extension/, the files a browser loads, not its README)
-# in Contents/Resources/BrowserExtension/, and its installer,
+# The browser extension goes into every build: the one that gives web pages
+# the Remote Visio microphone, speaker and camera (browser-extension/, the
+# files a browser loads, direct/ and vendor/ included, not its README; its
+# name in the browser and the store is still "Remote Visio Camera") in
+# Contents/Resources/BrowserExtension/, and its installer,
 # macos/browser-extension.sh, next to it. Nothing there is code macOS runs
 # on its own, so it needs no signature of its own; the app's seals it.
 set -euo pipefail
@@ -43,10 +45,10 @@ for f in bin/remotevisio-receiver bin/remotevisio-menubar macos/favicon.icns "$O
 done
 BROWSER_EXT=browser-extension
 for f in "$BROWSER_EXT/manifest.json" macos/browser-extension.sh; do
-    [[ -f "$f" ]] || { echo "!!  $f is missing: the browser camera cannot go into the app (it is part of the repository)" >&2; exit 1; }
+    [[ -f "$f" ]] || { echo "!!  $f is missing: the browser extension cannot go into the app (it is part of the repository)" >&2; exit 1; }
 done
 for d in "$BROWSER_EXT/_locales" "$BROWSER_EXT/icons"; do
-    [[ -d "$d" ]] || { echo "!!  $d/ is missing: the browser camera cannot go into the app (it is part of the repository)" >&2; exit 1; }
+    [[ -d "$d" ]] || { echo "!!  $d/ is missing: the browser extension cannot go into the app (it is part of the repository)" >&2; exit 1; }
 done
 
 camera=0
@@ -85,19 +87,29 @@ cp "$OPUS_COPYING" "$APP/Contents/Resources/LICENSE-opus.txt"
 cp macos/pkg/uninstall.sh "$APP/Contents/Resources/uninstall.sh"
 chmod +x "$APP/Contents/Resources/uninstall.sh"
 
-# The browser camera: what a browser loads (the manifest, scripts, pages,
-# styles, _locales/ and icons/) and the script that puts it where the user
-# loads it from. No extended attributes (codesign rejects Finder
-# information and resource forks) and no hidden files (a .DS_Store is of no
-# use to the browser).
+# The browser extension: what a browser loads, as the Chrome Web Store zip
+# has it (the Makefile's EXT_FILES, which make check-extension checks): every
+# file of browser-extension/ but its README.md and hidden files, so the
+# manifest, the scripts, pages and styles, direct/ (direct mode's hub, which
+# offscreen.html loads), vendor/ (the QR code generator, with the README that
+# carries its source and licence), _locales/ and icons/; and the script that
+# puts it where the user loads it from. No extended attributes (codesign
+# rejects Finder information and resource forks) and no hidden files (a
+# .DS_Store is of no use to the browser).
 bext="$APP/Contents/Resources/BrowserExtension"
 mkdir -p "$bext"
-cp -X "$BROWSER_EXT/manifest.json" "$bext/"
-for f in "$BROWSER_EXT"/*.js "$BROWSER_EXT"/*.html "$BROWSER_EXT"/*.css; do
-    [[ ! -f "$f" ]] || cp -X "$f" "$bext/"
+(cd "$BROWSER_EXT" && find . -type f ! -path '*/.*' ! -path ./README.md) | while IFS= read -r f; do
+    mkdir -p "$bext/$(dirname "$f")"
+    cp -X "$BROWSER_EXT/$f" "$bext/$f"
 done
-cp -RX "$BROWSER_EXT/_locales" "$BROWSER_EXT/icons" "$bext/"
-find "$bext" -mindepth 1 -name '.*' -prune -exec rm -rf {} +
+# Every file a page of the copy loads (script src, link href, img src) must be
+# in it: offscreen.html's direct/hub.js, the popup's scripts and styles.
+for page in "$bext"/*.html; do
+    for ref in $(grep -oE '(src|href)="[^"#?:]+"' "$page" | sed -E 's/^(src|href)="//; s/"$//'); do
+        [[ -f "$bext/$ref" ]] \
+            || { echo "!!  $(basename "$page") loads $ref, which is not in the app's copy of the browser extension" >&2; exit 1; }
+    done
+done
 # The version the browser sees is the app's: version and build number (2.0
 # and 5 make 2.0.5). A browser keeps running the extension's old background
 # worker until the manifest's version changes, so an app update that brings
@@ -112,11 +124,16 @@ sed -E -i '' "s/(\"version\"[[:space:]]*:[[:space:]]*\")[^\"]*\"/\1$ext_version\
     || { echo "!!  could not set the browser extension's version to $ext_version" >&2; exit 1; }
 cp -X macos/browser-extension.sh "$APP/Contents/Resources/browser-extension.sh"
 chmod +x "$APP/Contents/Resources/browser-extension.sh"
-echo "    browser camera bundled: $(find "$bext" -type f | wc -l | tr -d ' ') extension files, version $(plutil -extract version raw -o - "$bext/manifest.json" 2>/dev/null || echo '?')"
+echo "    browser extension bundled: $(find "$bext" -type f | wc -l | tr -d ' ') extension files, version $(plutil -extract version raw -o - "$bext/manifest.json" 2>/dev/null || echo '?')"
 
 # The nested pieces are signed first, each on its own, then the bundle,
 # whose signature seals them. No --deep: each piece gets its own
-# entitlements.
+# entitlements, if any. The receiver needs none: it records no audio (the
+# browser extension's microphone and speaker travel as RTP that it only
+# forwards), "Mute This Mac's Microphone" only sets the microphones' mute
+# and volume properties, and feeding the camera extension's sink stream is
+# not camera access in TCC's sense. Nor does the app, unless it carries that
+# extension.
 describe_signing
 if [[ $camera -eq 1 ]]; then
     ext="$APP/Contents/Library/SystemExtensions/$CAMEXT_ID.systemextension"
@@ -128,11 +145,11 @@ if [[ $camera -eq 1 ]]; then
     sed "s/@TEAM@/$REMOTEVISIO_TEAM_ID/g" macos/app-camera.entitlements > "$ent"
     plutil -lint "$ent" >/dev/null
     sign_code "$ext" macos/camera.entitlements
-    sign_code "$APP/Contents/MacOS/remotevisio-receiver" macos/receiver.entitlements
+    sign_code "$APP/Contents/MacOS/remotevisio-receiver"
     sign_code "$APP" "$ent"
 else
-    sign_code "$APP/Contents/MacOS/remotevisio-receiver" macos/receiver.entitlements
-    sign_code "$APP" macos/app.entitlements
+    sign_code "$APP/Contents/MacOS/remotevisio-receiver"
+    sign_code "$APP"
 fi
 codesign --verify --deep --strict "$APP" || { echo "!!  RemoteVisio.app signature does not verify" >&2; exit 1; }
 if [[ $camera -eq 1 ]]; then

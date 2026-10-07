@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/gen2brain/malgo"
@@ -18,15 +17,13 @@ import (
 type Player struct {
 	device *malgo.Device
 	ring   *ring
-	calls  atomic.Uint64 // cumulative sound-card callbacks, lets the watchdog tell whether the device is still alive
 }
 
 // OpenTimeout bounds how long opening an audio device may take.
 //
 // CoreAudio device init can hang forever, e.g. when a process holding the
-// device was killed and the driver kept an unreleased instance. This machine
-// is remote with nobody there to click anything, so exiting and letting
-// launchd restart us beats hanging silently.
+// device was killed and the driver kept an unreleased instance. An error the
+// caller can report beats hanging silently.
 const OpenTimeout = 10 * time.Second
 
 // NewPlayer opens a playback stream on dev.
@@ -55,7 +52,6 @@ func (c *Context) NewPlayer(dev Device, sampleRate, channels, targetMS int) (*Pl
 	go func() {
 		device, err := malgo.InitDevice(c.ctx.Context, cfg, malgo.DeviceCallbacks{
 			Data: func(out, _ []byte, frameCount uint32) {
-				p.calls.Add(1)
 				p.ring.readInto(out, int(frameCount)*channels)
 			},
 		})
@@ -85,31 +81,9 @@ func (p *Player) Write(pcm []int16) {
 	p.ring.write(pcm)
 }
 
-// Callbacks returns the cumulative sound-card callback count. It grows every
-// few milliseconds while the device is alive; after coreaudiod restarts the
-// old device is dead and the number stops moving.
-func (p *Player) Callbacks() uint64 { return p.calls.Load() }
-
 // Stats returns the current buffer depth (samples) and cumulative drops, for watching connection quality.
 func (p *Player) Stats() (buffered, dropped, starved int) {
 	return p.ring.stats()
-}
-
-// SetTap registers an output tap callback. fn runs inside the sound card's
-// real-time callback: copy the data and return immediately, never block.
-// The slice is only valid for the duration of the call.
-func (p *Player) SetTap(fn func([]int16)) {
-	p.ring.mu.Lock()
-	defer p.ring.mu.Unlock()
-	p.ring.tapFn = fn
-}
-
-// LastStarve returns the state at the most recent underrun: how much was left
-// when the buffer hit bottom and how much the sound card asked for.
-func (p *Player) LastStarve() (size, want int) {
-	p.ring.mu.Lock()
-	defer p.ring.mu.Unlock()
-	return p.ring.starveSize, p.ring.starveWant
 }
 
 func (p *Player) Close() {
@@ -145,20 +119,8 @@ type ring struct {
 
 	stretchCnt int // frame counter for stretch mode
 
-	// Output tap: hands out a copy of exactly what readInto gave the sound
-	// card, for recording the "after ring" audio. Underrun gaps, stretching
-	// and fades all show up in it; compared against the "before ring" copy,
-	// the buffer's effect on quality is obvious by ear.
-	tapFn  func([]int16)
-	tapBuf []int16
-
 	dropped int
 	starved int
-	// State at the most recent underrun. The 10-second stats only show that
-	// an underrun happened, not how much was left at that moment, and "the
-	// buffer was deep enough yet hit bottom" can only be explained by those numbers.
-	starveSize int // samples left in the buffer when it hit bottom
-	starveWant int // how many the sound card asked for
 }
 
 // Fade length in frames. At 48kHz, 96 frames = 2ms: enough to kill the
@@ -241,7 +203,7 @@ func (r *ring) readInto(out []byte, samples int) {
 
 	// Still accumulating, or just drained: emit silence until the buffer is
 	// padded again. Playing partial data sounds like broken words; silence is
-	// easier for the recognizer to ignore.
+	// easier on the ear.
 	if r.filling {
 		r.fadeOut(out, samples)
 		return
@@ -262,8 +224,6 @@ func (r *ring) readInto(out []byte, samples int) {
 		// for a dropped connection: once, not endlessly for the whole outage.
 		if r.fed {
 			r.starved++
-			r.starveSize = r.size
-			r.starveWant = samples
 		}
 		r.fed = false
 		r.filling = true // re-accumulate prefill before playing again
@@ -310,23 +270,6 @@ func (r *ring) readInto(out []byte, samples int) {
 			r.size -= r.channels
 		}
 	}
-	r.tap(out, samples)
-}
-
-// tap converts the bytes just handed to the sound card back into samples for
-// the tap. The buffer is reused so the real-time callback does not allocate repeatedly.
-func (r *ring) tap(out []byte, samples int) {
-	if r.tapFn == nil {
-		return
-	}
-	if cap(r.tapBuf) < samples {
-		r.tapBuf = make([]int16, samples)
-	}
-	r.tapBuf = r.tapBuf[:samples]
-	for i := 0; i < samples; i++ {
-		r.tapBuf[i] = int16(binary.LittleEndian.Uint16(out[i*2:]))
-	}
-	r.tapFn(r.tapBuf)
 }
 
 // fadeOut decays exponentially from the last sample sent to zero, reaching
@@ -339,7 +282,6 @@ func (r *ring) fadeOut(out []byte, samples int) {
 		r.tail[ch] *= 0.9
 		binary.LittleEndian.PutUint16(out[i*2:], uint16(int16(r.tail[ch])))
 	}
-	r.tap(out, samples)
 }
 
 func (r *ring) stats() (int, int, int) {

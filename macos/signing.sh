@@ -1,7 +1,7 @@
-# Signing configuration shared by the Makefile (driver, app and package
-# recipes), macos/build-pkg.sh (notarization) and macos/setup-signing.sh
-# (which uses the identity lookup helpers). Source it from the repository
-# root.
+# Signing configuration shared by the Makefile (its identity lookup),
+# macos/assemble-app.sh (signing the app), macos/build-pkg.sh (the package and
+# notarization) and macos/setup-signing.sh (which uses the identity lookup
+# helpers). Source it from the repository root.
 #
 # With a "Developer ID Application" certificate for the team below in the
 # keychain, code is signed with it and the hardened runtime. Release builds
@@ -178,13 +178,12 @@ sign_code() {
         # Ad-hoc, with the designated requirement pinned to the identifier
         # instead of the default code hash: TCC remembers the requirement with
         # each permission grant, and a hash-only one would make every rebuild
-        # silently drop the System Audio Recording and microphone grants (the
-        # app's, the receiver's when a LaunchAgent runs it outside the bundle,
-        # the driver's). The identifier is the bundle's, or a bare binary's
-        # file name; it is set explicitly (-i) because codesign's own choice
-        # for a bare binary can carry a hash suffix, which would not satisfy
-        # the requirement. (A Developer ID signature gets a stable requirement
-        # from the team ID on its own.)
+        # silently drop them (the app's, the receiver's when a LaunchAgent
+        # runs it outside the bundle). The identifier is the bundle's, or a
+        # bare binary's file name; it is set explicitly (-i) because
+        # codesign's own choice for a bare binary can carry a hash suffix,
+        # which would not satisfy the requirement. (A Developer ID signature
+        # gets a stable requirement from the team ID on its own.)
         id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$path/Contents/Info.plist" 2>/dev/null) \
             || id=$(basename "$path")
         codesign --force --sign - -i "$id" -r "=designated => identifier \"$id\"" "$path"

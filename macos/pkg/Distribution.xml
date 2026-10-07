@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Installer script for the Remote Visio package. @VERSION@, @ARCH@ and
-     @MINOS@ are filled in by macos/build-pkg.sh. -->
+     @MINOS@ are filled in by macos/build-pkg.sh. One component, the app; the
+     audio device driver earlier versions installed (com.remotevisio.driver)
+     is gone, and the app's postinstall removes it from Macs that have it. -->
 <installer-gui-script minSpecVersion="2">
     <title>Remote Visio @VERSION@</title>
     <organization>com.remotevisio</organization>
@@ -17,17 +19,12 @@
     </volume-check>
     <choices-outline>
         <line choice="default">
-            <line choice="driver"/>
             <line choice="app"/>
         </line>
     </choices-outline>
     <choice id="default"/>
-    <choice id="driver" visible="false">
-        <pkg-ref id="com.remotevisio.driver"/>
-    </choice>
     <choice id="app" visible="false">
         <pkg-ref id="com.remotevisio.app"/>
     </choice>
-    <pkg-ref id="com.remotevisio.driver" version="@VERSION@" onConclusion="none">RemoteVisio-driver.pkg</pkg-ref>
     <pkg-ref id="com.remotevisio.app" version="@VERSION@" onConclusion="none">RemoteVisio-app.pkg</pkg-ref>
 </installer-gui-script>

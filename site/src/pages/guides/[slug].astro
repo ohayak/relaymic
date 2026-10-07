@@ -1,0 +1,161 @@
+---
+import Layout from "../../Layout.astro";
+import { site, publisher } from "@utils/config";
+import { guides, relatedGuides, type Guide } from "@utils/guides";
+import { renderMarkdown } from "@utils/markdown";
+import { breadcrumbs } from "@utils/jsonld";
+import Breadcrumbs from "@components/Breadcrumbs.astro";
+import CtaButtons from "@components/CtaButtons.astro";
+import Icon from "@components/Icon.astro";
+import GuideFigure from "@components/GuideFigure.astro";
+
+
+export function getStaticPaths() {
+  return guides.map((guide) => ({ params: { slug: guide.slug }, props: { guide } }));
+}
+
+const { guide } = Astro.props as { guide: Guide & { readingMinutes: number } };
+const { html, headings } = await renderMarkdown(guide.markdown);
+const toc = headings.filter((h) => h.depth === 2);
+
+// Split the article before each h2, so the guide's figures can sit between
+// its sections. A figure whose `before` matches no h2 fails the build.
+const figures = guide.figures ?? [];
+const ids = new Set(toc.map((h) => h.slug));
+for (const f of figures) {
+  if (!ids.has(f.before)) throw new Error(`guides.json ${guide.slug}: no h2 with id "${f.before}" for figure ${f.name}`);
+}
+const segments = html.split(/(?=<h2 id=")/).map((chunk) => {
+  const id = chunk.match(/^<h2 id="([^"]+)"/)?.[1];
+  return { html: chunk, figures: id ? figures.filter((f) => f.before === id) : [] };
+});
+// The first screenshot of the guide is its article image; the generic
+// OG image is the fallback (wireframes are SVG, which search engines and
+// social cards do not take as article images).
+const firstShot = figures.find((f) => f.kind !== "wireframe");
+const shotUrl = firstShot
+  ? `${site.url}/media/${firstShot.kind === "themed" ? `${firstShot.name}-light` : firstShot.name}.webp`
+  : undefined;
+
+const related = relatedGuides(guide.slug, 3);
+const path = `/guides/${guide.slug}`;
+const url = `${site.url}${path}`;
+const title = guide.seoTitle ?? (guide.title.length <= 45 ? `${guide.title} | Remote Visio` : guide.title);
+const updatedLabel = new Date(`${guide.updated}T00:00:00Z`).toLocaleDateString("en-GB", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+const jsonLd = [
+  {
+    "@type": "TechArticle",
+    "@id": `${url}#article`,
+    headline: guide.title,
+    description: guide.metaDescription,
+    url,
+    mainEntityOfPage: url,
+    inLanguage: "en",
+    datePublished: guide.published,
+    dateModified: guide.updated,
+    keywords: guide.keywords.join(", "),
+    image: shotUrl ? [shotUrl, `${site.url}/og-image.png`] : `${site.url}/og-image.png`,
+    author: { "@type": "Organization", name: publisher.name, url: site.url },
+    publisher: { "@id": `${site.url}/#organization` },
+    about: { "@id": `${site.url}/#app` },
+    isPartOf: { "@id": `${site.url}/#website` },
+  },
+  breadcrumbs([
+    { name: "Home", path: "/" },
+    { name: "Guides", path: "/guides" },
+    { name: guide.shortTitle, path },
+  ]),
+];
+---
+
+<Layout
+  title={title}
+  description={guide.metaDescription}
+  ogType="article"
+  jsonLd={jsonLd}
+  published={guide.published}
+  modified={guide.updated}
+>
+  <div class="mx-auto max-w-screen-lg px-4 pb-8 pt-10 md:pt-16">
+    <Breadcrumbs items={[{ title: "Home", href: "/" }, { title: "Guides", href: "/guides" }, { title: guide.shortTitle }]} />
+    <h1 class="mt-6 max-w-3xl text-4xl font-extrabold leading-[1.08] tracking-tight md:text-5xl">{guide.title}</h1>
+    <p class="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-base-content/80">
+      <span>By {publisher.name}</span>
+      <span aria-hidden="true">·</span>
+      <span>Updated <time datetime={guide.updated}>{updatedLabel}</time></span>
+      <span aria-hidden="true">·</span>
+      <span>{guide.readingMinutes} min read</span>
+    </p>
+  </div>
+
+  <div class="mx-auto grid max-w-screen-lg gap-10 px-4 lg:grid-cols-[1fr_15rem]">
+    <article class="prose-rv min-w-0">
+      {
+        segments.map((seg) => (
+          <>
+            {seg.figures.map((f) => <GuideFigure figure={f} />)}
+            <Fragment set:html={seg.html} />
+          </>
+        ))
+      }
+    </article>
+    <aside class="hidden lg:block">
+      <div class="sticky top-28 space-y-6">
+        {
+          toc.length > 2 && (
+            <nav aria-label="In this guide">
+              <p class="eyebrow">In this guide</p>
+              <ul class="mt-3 space-y-2 border-l border-base-300 text-sm">
+                {toc.map((h) => (
+                  <li>
+                    <a class="-ml-px block border-l border-transparent pl-3 text-base-content/80 hover:border-base-content hover:text-base-content" href={`#${h.slug}`}>
+                      {h.text}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          )
+        }
+        <div class="rounded-box border border-base-300 bg-base-200 p-4 text-sm">
+          <p class="font-bold">Remote Visio is free</p>
+          <p class="mt-1 text-base-content/85">For macOS 14.2+ on Apple Silicon, with a Chromium browser.</p>
+          <a href="/download" class="btn btn-primary btn-sm mt-3 w-full"><Icon name="download" class="h-4 w-4" />Download for Mac</a>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <section class="mx-auto mt-16 max-w-screen-lg px-4" aria-labelledby="try-title">
+    <div class="rounded-box border border-base-300 bg-base-200 p-6 md:p-10">
+      <h2 id="try-title" class="text-2xl font-extrabold tracking-tight md:text-3xl">Try it on your remote Mac</h2>
+      <p class="mt-2 max-w-xl text-base-content/85">
+        Install the app on the Mac, add the extension to its browser, and open one address on the device in front of you. Free, open source, no
+        account.
+      </p>
+      <div class="mt-6"><CtaButtons /></div>
+    </div>
+  </section>
+
+  <section class="mx-auto mt-16 max-w-screen-lg px-4" aria-labelledby="more-title">
+    <h2 id="more-title" class="text-2xl font-extrabold tracking-tight">Keep reading</h2>
+    <ul class="mt-6 grid gap-4 md:grid-cols-3">
+      {
+        related.map((g) => (
+          <li>
+            <a href={`/guides/${g.slug}`} class="group flex h-full flex-col rounded-box border border-base-300 p-5 hover:bg-base-200">
+              <h3 class="font-bold leading-snug group-hover:underline">{g.title}</h3>
+              <span class="mt-3 text-sm text-base-content/75">{g.readingMinutes} min read</span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</Layout>

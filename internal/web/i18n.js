@@ -15,9 +15,16 @@ function pickLang() {
 const LANG = pickLang();
 document.documentElement.lang = LANG;
 
+// The sender page as the website serves it (data-transport="relay" on <html>: direct mode) sends to a computer of any
+// kind, where the receiver's own page sends to a Mac. There, a key that has an `_r` variant in the English table gets
+// that variant instead: it says "the remote computer" where the other says "the Mac". Pages without the attribute (the
+// receiver's sender page, the monitor page) never see a variant.
+const VARIANT = document.documentElement.dataset.transport === 'relay' ? '_r' : '';
+
 // t looks up a string in the current language, falling back to English. {name} placeholders are filled from vars.
 function t(key, vars) {
-  let s = (STRINGS[LANG] && STRINGS[LANG][key]) || STRINGS.en[key] || key;
+  const name = VARIANT && STRINGS.en[key + VARIANT] !== undefined ? key + VARIANT : key;
+  let s = (STRINGS[LANG] && STRINGS[LANG][name]) || STRINGS.en[name] || name;
   if (vars) for (const [k, v] of Object.entries(vars)) s = s.split('{' + k + '}').join(v);
   return s;
 }

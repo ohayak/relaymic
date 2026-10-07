@@ -11,6 +11,9 @@
   --warn: #e0a034;
   --err: #e05a4f;
   --knob: #e8eaed;
+  /* The header's icon is black line art on transparency, which the dark
+     background would hide, so it is drawn inverted (white) there. */
+  --icon-filter: invert(1);
 }
 @media (prefers-color-scheme: light) {
   :root {
@@ -23,6 +26,7 @@
     --warn: #b7791f;
     --err: #c9372c;
     --knob: #ffffff;
+    --icon-filter: none;
   }
 }
 
@@ -32,7 +36,7 @@ body { font: 13px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; }
 button { font: inherit; color: inherit; }
 
 .brand { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
-.brand img { width: 20px; height: 20px; }
+.brand img { width: 20px; height: 20px; filter: var(--icon-filter); }
 .brand h1, .brand span { font-size: 14px; font-weight: 600; margin: 0; }
 
 .card { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
@@ -44,8 +48,17 @@ button { font: inherit; color: inherit; }
 body.popup { width: 340px; padding: 14px; }
 
 #state { font-weight: 600; }
+#state:empty { display: none; }
 .detail { color: var(--dim); font-size: 12px; margin-top: 2px; word-break: break-word; }
 .detail:empty { display: none; }
+
+/* The three devices, each with its state, a hint and the sites using it. */
+#devices { list-style: none; margin: 0; padding: 0; }
+#devices[hidden] { display: none; }
+#devices li + li { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; }
+#devices .name { display: block; color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+#devices .state { display: block; font-weight: 600; overflow-wrap: anywhere; }
+#devices .state b { font-weight: 700; }
 
 .switch-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; cursor: pointer; }
 .switch-row + .switch-row { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; }
@@ -90,6 +103,58 @@ input.switch:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; 
 }
 #questionList .show:hover, #questionList .show:focus-visible { background: var(--line); }
 
+/* The connection choice (on a Mac). */
+#connectionCard[hidden], #directCard[hidden] { display: none; }
+.select-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.select-row select, .field input {
+  font: inherit; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px;
+}
+.select-row select { max-width: 200px; }
+
+/* Direct mode: the state line, pairing, the paired devices, the name. */
+#directCard [hidden] { display: none; }
+#directCard .line { font-weight: 600; overflow-wrap: anywhere; }
+#directCard .line b { font-weight: 700; }
+#directCard h3 { font-size: 12px; font-weight: 600; color: var(--dim); margin: 12px 0 4px; }
+#directHint:empty { display: none; }
+button.action, .row-buttons button {
+  padding: 4px 12px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line); background: transparent;
+}
+button.action { margin-top: 8px; }
+button.action:hover, .row-buttons button:hover, button.action:focus-visible, .row-buttons button:focus-visible { background: var(--line); }
+button.action:disabled { opacity: .5; cursor: default; }
+.row-buttons { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+#pairPanel { margin-top: 10px; }
+#pairPanel p { margin: 8px 0 4px; }
+/* The QR code stays black on white in the dark theme too, which is what
+   cameras read; the white quiet zone is part of the drawing. */
+.qr { display: flex; justify-content: center; }
+.qr svg { display: block; width: 200px; height: 200px; }
+#pairLink {
+  display: block; font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--dim);
+  word-break: break-all; user-select: all;
+}
+#pairStatus { margin-top: 6px; font-weight: 600; overflow-wrap: anywhere; }
+#pairStatus:empty { display: none; }
+#pairCountdown { margin-left: auto; }
+#directDevices { list-style: none; margin: 0; padding: 0; }
+#directDevices li { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+#directDevices li:first-child { border-top: 0; padding-top: 0; }
+#directDevices .device { flex: 1; min-width: 0; }
+#directDevices .name { font-weight: 600; overflow-wrap: anywhere; }
+#directDevices .platform { color: var(--dim); font-size: 12px; margin-left: 6px; }
+#directDevices .detail.ok { color: var(--ok); }
+#directDevices .remove {
+  flex: 0 0 auto; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px;
+  background: transparent; color: var(--dim); font-size: 16px; line-height: 22px; cursor: pointer;
+}
+#directDevices .remove:hover, #directDevices .remove:focus-visible { background: var(--line); color: var(--fg); }
+.field { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; }
+.field > span { font-size: 12px; font-weight: 600; color: var(--dim); }
+.field small { color: var(--dim); font-size: 12px; }
+
 .empty { color: var(--dim); font-size: 12px; }
 .empty[hidden] { display: none; }
 
@@ -109,3 +174,21 @@ body.consent p { margin: 0 0 6px; }
 .buttons button.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); font-weight: 600; }
 .buttons button:focus-visible { outline: 2px solid var(--ok); outline-offset: 2px; }
 .buttons button:disabled { opacity: .5; cursor: default; }
+
+/* ---- Approval window (pair.html) ---- */
+body.pair section[hidden], body.pair #over[hidden], body.pair #mismatch[hidden] { display: none; }
+body.pair #device { overflow-wrap: anywhere; }
+body.pair .number { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+body.pair .number input {
+  font: 600 22px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .15em;
+  color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  padding: 6px 10px; width: 10em;
+}
+body.pair .number input:focus-visible { outline: 2px solid var(--ok); outline-offset: 1px; }
+body.pair #mismatch { margin-top: 6px; }
+body.pair .qr.big svg { width: 320px; height: 320px; }
+body.pair #showLink {
+  display: block; font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--dim);
+  word-break: break-all; user-select: all;
+}
+body.pair #over { font-weight: 600; }

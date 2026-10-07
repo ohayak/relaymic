@@ -13,9 +13,15 @@
     --fg: #e8eaed;
     --dim: #8a8f98;
     --line: #262a33;
+    --line2: #3c4043;
+    --tile: #202124;
     --ok: #35c46b;
     --warn: #e0a034;
     --err: #e05a4f;
+    --off: #5f6368;
+    --red: #ea4335;
+    --blue: #8ab4f8;
+    --join: #1a73e8;
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
@@ -23,116 +29,281 @@
     margin: 0;
     min-height: 100vh;
     display: flex;
-    align-items: center;
     justify-content: center;
     background: var(--bg);
     color: var(--fg);
-    font: 15px/1.6 -apple-system, "Segoe UI", system-ui, sans-serif;
-    padding: 24px;
+    font: 15px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif;
+    padding: 24px 16px;
   }
-  main { width: 100%; max-width: 380px; }
-  h1 { font-size: 17px; font-weight: 600; margin: 0 0 4px; }
-  .target { color: var(--dim); font-size: 13px; margin-bottom: 28px; }
-
-  button {
-    width: 100%;
-    padding: 16px;
-    font-size: 16px;
-    font-weight: 600;
-    font-family: inherit;
-    color: var(--bg);
-    background: var(--fg);
-    border: 0;
-    border-radius: 10px;
-    cursor: pointer;
-  }
+  main { width: 100%; max-width: 640px; min-width: 0; }
+  h1 { font-size: 17px; font-weight: 600; margin: 0 0 2px; }
+  h2 { font-size: 13px; font-weight: 600; color: var(--dim); margin: 0 0 8px; }
+  .target { color: var(--dim); font-size: 13px; margin-bottom: 16px; overflow-wrap: anywhere; }
+  button { font: inherit; cursor: pointer; }
   button:disabled { opacity: .4; cursor: default; }
-  button.live { background: var(--err); color: #fff; }
+  .sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+  svg.ic { width: 20px; height: 20px; flex: none; fill: currentColor; }
 
-  .meter {
-    height: 4px;
-    margin: 20px 0;
-    background: var(--line);
-    border-radius: 2px;
+  /* The tile: this device's camera as the Mac will get it (mirrored, as a mirror is what people expect to see of
+     themselves), or a placeholder saying why there is none. The quick toggles sit over its bottom edge, like Meet's. */
+  .tile {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: var(--tile);
+    border-radius: 12px;
     overflow: hidden;
   }
-  .meter i {
-    display: block;
+  .tile video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
     height: 100%;
-    width: 0;
-    background: var(--ok);
-    transition: width .08s linear;
-  }
-
-  .profiles {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 12px;
-  }
-  .profiles button {
-    flex: 1;
-    padding: 8px 4px;
-    font-size: 13px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: none;
-    color: var(--dim);
-    cursor: pointer;
-  }
-  .profiles button.on {
-    color: inherit;
-    border-color: currentColor;
-    font-weight: 600;
-  }
-
-  .hear {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    color: var(--dim);
-    margin-bottom: 12px;
-    cursor: pointer;
-  }
-  .hear input { margin: 0; }
-
-  /* Camera picker, indented under its checkbox; shown only once labels are known and there is a choice to make. */
-  .camsel {
-    display: block;
-    width: calc(100% - 22px);
-    margin: -4px 0 12px 22px;
-    padding: 6px 8px;
-    font: inherit;
-    font-size: 13px;
-    color: var(--fg);
-    background: var(--bg);
-    border: 1px solid var(--line);
-    border-radius: 8px;
-  }
-  .campreview {
-    display: block;
-    max-width: 160px;
-    margin: 0 0 12px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
+    object-fit: cover;
+    transform: scaleX(-1);
     background: #000;
   }
+  .camoff {
+    position: absolute;
+    inset: 0 16px 72px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--dim);
+    font-size: 14px;
+    text-align: center;
+  }
+  .camoff svg { width: 40px; height: 40px; fill: currentColor; opacity: .8; }
+  .tilebar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 14px;
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+  }
+  .round {
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, .55);
+    background: rgba(32, 33, 36, .62);
+    color: #fff;
+    --lvl: 0;
+    box-shadow: 0 0 0 calc(var(--lvl) * 6px) rgba(138, 180, 248, .55);
+    transition: background-color .15s, box-shadow .08s linear;
+  }
+  .round svg { width: 24px; height: 24px; fill: currentColor; }
+  .round:hover { background: rgba(60, 64, 67, .8); }
+  .round.off { background: var(--red); border-color: var(--red); box-shadow: none; }
+  .round.off:hover { background: #d93025; }
+  /* A device that is wanted but does not work (its status is red: no permission, no camera...): the slashed icon on
+     Meet's grey, and a red warning badge, so it never reads as "on" while nothing is sent. Not red: red means "off". */
+  .round { position: relative; }
+  .round.problem { background: #3c4043; border-color: var(--err); }
+  .round.problem::after {
+    content: "!";
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--err);
+    color: #fff;
+    font: 700 12px/18px -apple-system, "Segoe UI", system-ui, sans-serif;
+    text-align: center;
+  }
+  .round:focus-visible, .join:focus-visible, .profiles button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  /* A rule of its own: a browser without :has() drops the whole rule it is in. */
+  .pill:has(select:focus-visible) { outline: 2px solid var(--blue); outline-offset: 2px; }
+  /* For screen readers only: the status changes are announced from here. */
+  .sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-  .micstate { font-size: 13px; color: var(--dim); min-height: 18px; margin-bottom: 8px; }
-  .camstate:empty { display: none; }
+  /* Meet's speaking indicator: three bars in a blue disc, at the tile's top left, while the microphone is on. */
+  .bars {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--join);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    --lvl: 0;
+  }
+  .bars i {
+    width: 4px;
+    height: 12px;
+    border-radius: 2px;
+    background: #fff;
+    transform: scaleY(calc(.33 + var(--lvl) * .67));
+    transition: transform .08s linear;
+  }
+  .bars i:nth-child(2) { transform: scaleY(calc(.33 + var(--lvl) * 1.3)); max-height: 14px; }
+  .bars svg { display: none; width: 16px; height: 16px; fill: #fff; }
+  /* Muted: Meet's crossed-out microphone in a grey disc instead of the bars; grey shows on the empty tile as on video. */
+  .bars.muted { background: rgba(95, 99, 104, .9); }
+  .bars.muted i { display: none; }
+  .bars.muted svg { display: block; }
+
+  /* Device pills: a native select dressed as Meet's pill, so it stays accessible and opens the phone's own list. */
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 16px; }
+  .pill {
+    position: relative;
+    flex: 1 1 180px;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    padding: 0 10px 0 12px;
+    border: 1px solid var(--line2);
+    border-radius: 18px;
+    color: var(--fg);
+  }
+  .pill:focus-within { border-color: var(--blue); }
+  .pill .ic { width: 18px; height: 18px; color: var(--dim); }
+  .pill select {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    padding: 0 20px 0 0;
+    font: inherit;
+    font-size: 14px;
+    color: inherit;
+    background: transparent;
+    border: 0;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+  }
+  .pill select option { background: var(--tile); color: var(--fg); }
+  .pill .chev { position: absolute; right: 10px; width: 18px; height: 18px; fill: var(--dim); pointer-events: none; }
+  /* A pill that only says what it is for (no permission yet, or no such device) has nothing to choose: no chevron. */
+  .pill:has(select[data-placeholder="1"]) .chev { display: none; }
+  .pill select[data-placeholder="1"] { cursor: default; }
+  @media (pointer: coarse) { .pill select { font-size: 16px; } } /* below 16 px, iOS zooms the page on focus */
+
+  .join {
+    display: block;
+    width: 100%;
+    padding: 13px 16px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--join);
+    border: 0;
+    border-radius: 24px;
+  }
+  .join:hover { background: #1765cc; }
+  .join.live { background: var(--red); }
+  .join.live:hover { background: #d93025; }
+
+  /* Device panel: per device its state, and for the microphone and the speaker the level and the volume. */
+  .devices { margin-top: 16px; border-top: 1px solid var(--line); }
+  .dev { padding: 12px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+  .devhead { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; }
+  .devhead .ic { color: var(--dim); margin-top: 1px; }
+  .devname { font-weight: 600; white-space: nowrap; }
+  .status {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    justify-content: flex-end;
+    text-align: right;
+    color: var(--dim);
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+  .status .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--off); transform: translateY(-1px); }
+  .status[data-state=ok] .dot { background: var(--ok); }
+  .status[data-state=wait] .dot { background: var(--warn); }
+  .status[data-state=bad] .dot { background: var(--err); }
+  .status[data-state=ok] .st-text { color: var(--fg); }
+  .status[data-state=bad] .st-text { color: var(--err); }
+  /* On a phone the status takes its own line under the device's name, where a long one reads better. */
+  @media (max-width: 520px) {
+    .devhead { flex-wrap: wrap; row-gap: 2px; }
+    .status { flex-basis: 100%; justify-content: flex-start; text-align: left; margin-left: 28px; }
+  }
+  .st-detail { margin: 4px 0 0 28px; font-size: 12px; color: var(--dim); overflow-wrap: anywhere; }
+  .levelrow { display: flex; align-items: center; gap: 12px; margin: 10px 0 0 28px; }
+  .lvl {
+    flex: 1 1 auto;
+    min-width: 60px;
+    height: 6px;
+    background: var(--line);
+    border-radius: 3px;
+    overflow: hidden;
+    --lvl: 0;
+  }
+  .lvl i {
+    display: block;
+    height: 100%;
+    background: var(--ok);
+    transform-origin: left;
+    transform: scaleX(var(--lvl));
+    transition: transform .08s linear;
+  }
+  .lvl.muted i { background: var(--off); }
+  .vol { display: flex; align-items: center; gap: 6px; flex: 0 1 46%; min-width: 0; color: var(--dim); }
+  .vol svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
+  .vol input { flex: 1; min-width: 0; margin: 0; accent-color: var(--blue); }
+  .vol output { flex: none; width: 3.6em; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+
+  .profiles {
+    display: inline-flex;
+    max-width: calc(100% - 28px);
+    margin: 10px 0 0 28px;
+    border: 1px solid var(--line2);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .profiles button {
+    min-width: 0;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: var(--dim);
+    background: none;
+    border: 0;
+    border-left: 1px solid var(--line2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .profiles button:first-child { border-left: 0; }
+  .profiles button.on { color: var(--bg); background: var(--blue); font-weight: 600; }
+
+  .connsec { margin-top: 16px; }
   .conns {
     font-size: 13px;
-    border-top: 1px solid var(--line);
-    padding-top: 12px;
     display: flex;
     flex-direction: column;
     gap: 8px;
   }
-  .conn { display: flex; align-items: baseline; gap: 10px; }
-  .conn .host { font-variant-numeric: tabular-nums; }
-  .conn .st { flex: 1; text-align: right; }
-  .conn .rtt { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 52px; text-align: right; }
+  /* A connection: the receiver and the round trip on one line, its state (and the camera's picture) on the next, so a
+     long receiver name or a long state never squeezes the other into a narrow column. */
+  .connhead { display: flex; align-items: baseline; gap: 10px; }
+  .conn .host { flex: 1 1 auto; min-width: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .conn .rtt { flex: none; color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .conn .connst { overflow-wrap: anywhere; }
   .conn .vid { color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .conn .vid.note { white-space: normal; }
   .empty { color: var(--dim); }
   .ok { color: var(--ok); } .warn { color: var(--warn); } .err { color: var(--err); }
   .src {
@@ -142,6 +313,74 @@
     opacity: .45;
   }
   .src a { color: inherit; }
+
+  /* Levels without the motion: no easing, no speaking disc (the meters still say whether there is sound); the muted
+     badge, which does not move, stays. */
+  @media (prefers-reduced-motion: reduce) {
+    .round, .lvl i, .bars i { transition: none; }
+    .bars:not(.muted) { display: none; }
+  }
+
+  /* Relay mode only (the page as the website serves it): the line under Start that says why it cannot start, a
+     connection's buttons (Take over, Forget it), the pairing card and the list of paired computers. */
+  .starthint { margin: 8px 0 0; font-size: 13px; color: var(--warn); text-align: center; overflow-wrap: anywhere; }
+  .connact { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .btn {
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fg);
+    background: none;
+    border: 1px solid var(--line2);
+    border-radius: 16px;
+  }
+  .btn:hover { background: rgba(255, 255, 255, .06); }
+  .btn.primary { color: #fff; background: var(--join); border-color: var(--join); }
+  .btn.primary:hover { background: #1765cc; }
+  .btn.danger { color: #fff; background: var(--red); border-color: var(--red); }
+  .btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .pairing {
+    margin: 0 0 16px;
+    padding: 14px 16px;
+    background: var(--tile);
+    border: 1px solid var(--line2);
+    border-radius: 12px;
+    overflow-wrap: anywhere;
+  }
+  .pairing[data-state=confirm-cross] { border-color: var(--warn); }
+  .pairing[data-state=result][data-result]:not([data-result=done]):not([data-result=kept]) { border-color: var(--err); }
+  .pairing h2 { color: var(--fg); font-size: 15px; margin: 0 0 8px; }
+  .pairing p { margin: 0 0 12px; }
+  .pairing .dim { color: var(--dim); font-size: 13px; }
+  .pairing .warn { color: var(--warn); }
+  .pairing .number { margin: 4px 0 12px; font-size: 40px; font-weight: 700; letter-spacing: .06em; text-align: center; font-variant-numeric: tabular-nums; }
+  .pairing .btnrow { display: flex; flex-wrap: wrap; gap: 8px; }
+  .computers { margin-top: 16px; }
+  .complist { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+  .comp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; min-width: 0; }
+  .comp input[type=radio] { flex: none; margin: 0; accent-color: var(--blue); width: 18px; height: 18px; }
+  .comp label { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; cursor: pointer; overflow-wrap: anywhere; }
+  .comp .compname { font-weight: 600; }
+  .comp .compmeta { color: var(--dim); font-size: 12px; }
+  .comp .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--off); }
+  .comp .dot[data-online=true] { background: var(--ok); }
+  .comp .btnrow { flex: none; display: flex; gap: 6px; }
+  .comp .ask { flex-basis: 100%; }
+  .devname-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 13px; color: var(--dim); }
+  .devname-row input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 6px 10px;
+    font: inherit;
+    font-size: 14px;
+    color: var(--fg);
+    background: transparent;
+    border: 1px solid var(--line2);
+    border-radius: 8px;
+  }
+  .devname-row input:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+  .pairhow { margin: 10px 0 0; font-size: 13px; color: var(--dim); }
+  @media (pointer: coarse) { .devname-row input { font-size: 16px; } } /* below 16 px, iOS zooms the page on focus */
 
   /* Debug log (?debug=1, or the link at the bottom): wider, so a candidate pair fits on a line. */
   main.debugging { max-width: 720px; }
@@ -174,22 +413,92 @@
 </style>
 </head>
 <body>
+<!-- Icons (Material's), drawn once and used by reference. -->
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></symbol>
+  <symbol id="i-mic-off" viewBox="0 0 24 24"><path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/></symbol>
+  <symbol id="i-cam" viewBox="0 0 24 24"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></symbol>
+  <symbol id="i-cam-off" viewBox="0 0 24 24"><path d="M21 6.5l-4 4V7c0-.55-.45-1-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2z"/></symbol>
+  <symbol id="i-spk" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></symbol>
+  <symbol id="i-spk-off" viewBox="0 0 24 24"><path d="M16.5 12A4.5 4.5 0 0 0 14 7.97v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.8 8.8 0 0 0 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a9 9 0 0 0 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></symbol>
+  <symbol id="i-vol-low" viewBox="0 0 24 24"><path d="M7 9v6h4l5 5V4l-5 5H7z"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></symbol>
+</svg>
 <main>
   <h1 data-i18n="title">Remote Visio</h1>
   <div class="target" id="target">—</div>
 
-  <div class="profiles" id="profiles"></div>
-  <label class="hear"><input type="checkbox" id="hear"> <span data-i18n="hear">Hear the remote Mac (meeting audio, alerts)</span></label>
-  <label class="hear"><input type="checkbox" id="cam"> <span data-i18n="cam">Send this device's camera</span></label>
-  <select id="camsel" class="camsel" hidden></select>
+  <!-- Relay mode only (pair-ui.js fills it): a pairing link's confirmation, the number to type on the computer, the
+       final choice, and how a pairing ended. -->
+  <section id="pairing" class="pairing" hidden aria-live="polite"></section>
 
-  <button id="toggle" data-i18n="start">Start talking</button>
-  <div class="meter"><i id="level"></i></div>
-  <video id="campreview" class="campreview" muted playsinline autoplay hidden></video>
+  <div class="tile" id="tile">
+    <video id="campreview" muted playsinline autoplay hidden></video>
+    <div class="camoff" id="camoff"><svg aria-hidden="true"><use href="#i-cam-off"/></svg><span id="camoff-text"></span></div>
+    <div class="bars" id="mic-bars" aria-hidden="true" hidden><i></i><i></i><i></i><svg><use href="#i-mic-off"/></svg></div>
+    <div class="tilebar">
+      <button type="button" class="round" id="mic-toggle" aria-pressed="true" aria-describedby="mic-status mic-detail"><svg aria-hidden="true"><use href="#i-mic"/></svg></button>
+      <button type="button" class="round" id="cam-toggle" aria-pressed="true" aria-describedby="cam-status cam-detail"><svg aria-hidden="true"><use href="#i-cam"/></svg></button>
+      <button type="button" class="round" id="spk-toggle" aria-pressed="true" aria-describedby="spk-status spk-detail"><svg aria-hidden="true"><use href="#i-spk"/></svg></button>
+    </div>
+  </div>
 
-  <div id="micstate" class="micstate"></div>
-  <div id="camstate" class="micstate camstate"></div>
-  <div id="conns" class="conns"><div class="empty" data-i18n="not_connected">Not connected</div></div>
+  <div class="pills">
+    <div class="pill" id="mic-pill"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg><select id="micsel"></select><svg class="chev" aria-hidden="true"><use href="#i-chev"/></svg></div>
+    <div class="pill" id="spk-pill"><svg class="ic" aria-hidden="true"><use href="#i-spk"/></svg><select id="spksel"></select><svg class="chev" aria-hidden="true"><use href="#i-chev"/></svg></div>
+    <div class="pill" id="cam-pill"><svg class="ic" aria-hidden="true"><use href="#i-cam"/></svg><select id="camsel"></select><svg class="chev" aria-hidden="true"><use href="#i-chev"/></svg></div>
+  </div>
+
+  <button type="button" id="toggle" class="join" data-i18n="start">Start</button>
+  <p class="starthint" id="starthint" hidden aria-live="polite"></p>
+
+  <section class="devices">
+    <div class="dev" id="dev-mic">
+      <div class="devhead">
+        <svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg><span class="devname" data-i18n="mic">Microphone</span>
+        <div class="status" id="mic-status" data-status="mic" data-state="off"><i class="dot"></i><span class="st-text"></span></div>
+      </div>
+      <div class="st-detail" id="mic-detail" hidden></div>
+      <div class="levelrow">
+        <div class="lvl" id="mic-level" data-level="0" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+        <label class="vol"><svg aria-hidden="true"><use href="#i-mic"/></svg><input type="range" id="mic-gain" min="0" max="200" step="5"><output id="mic-gain-out" for="mic-gain" aria-hidden="true"></output></label>
+      </div>
+      <div class="profiles" id="profiles" role="group"></div>
+    </div>
+    <div class="dev" id="dev-spk">
+      <div class="devhead">
+        <svg class="ic" aria-hidden="true"><use href="#i-spk"/></svg><span class="devname" data-i18n="speaker">Speaker</span>
+        <div class="status" id="spk-status" data-status="spk" data-state="off"><i class="dot"></i><span class="st-text"></span></div>
+      </div>
+      <div class="st-detail" id="spk-detail" hidden></div>
+      <div class="levelrow">
+        <div class="lvl" id="spk-level" data-level="0" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+        <label class="vol" id="spk-vol-box"><svg aria-hidden="true"><use href="#i-vol-low"/></svg><input type="range" id="spk-vol" min="0" max="100" step="5"><output id="spk-vol-out" for="spk-vol" aria-hidden="true"></output></label>
+      </div>
+    </div>
+    <div class="dev" id="dev-cam">
+      <div class="devhead">
+        <svg class="ic" aria-hidden="true"><use href="#i-cam"/></svg><span class="devname" data-i18n="camera">Camera</span>
+        <div class="status" id="cam-status" data-status="cam" data-state="off"><i class="dot"></i><span class="st-text"></span></div>
+      </div>
+      <div class="st-detail" id="cam-detail" hidden></div>
+    </div>
+    <div class="sr" id="announce" aria-live="polite"></div>
+  </section>
+
+  <section class="connsec">
+    <h2 data-i18n="connection">Connection</h2>
+    <div id="conns" class="conns"><div class="empty" data-i18n="not_connected">Not connected</div></div>
+  </section>
+
+  <!-- Relay mode only (pair-ui.js fills it): the paired computers, the one this page sends to, and this device's name
+       as the computers see it. -->
+  <section id="computers" class="computers" hidden>
+    <h2 data-i18n="computers">Computers</h2>
+    <div id="complist" class="complist"></div>
+    <p class="pairhow" id="pairhow" data-i18n="pair_how"></p>
+    <label class="devname-row"><span data-i18n="device_name">This device's name</span><input type="text" id="devicename" maxlength="60" autocomplete="off" spellcheck="false"></label>
+  </section>
 
   <section id="debug" class="debug" hidden>
     <div class="debughead">
@@ -204,7 +513,7 @@
        the matching source. The sender is this page, so the link lives here; it is not optional decoration.
        If you modify this code and serve it to others, point this link at your own copy. -->
   <footer class="src">
-    Remote Visio · <a href="https://github.com/hueshu/relaymic" target="_blank" rel="noopener" data-i18n="source">Source (AGPL-3.0)</a>
+    Remote Visio · <a href="https://github.com/ohayak/relaymic" target="_blank" rel="noopener" data-i18n="source">Source (AGPL-3.0)</a>
     · <a href="#" id="debuglink" data-i18n="debug">Debug log</a>
   </footer>
 </main>
@@ -213,15 +522,97 @@
 const $ = id => document.getElementById(id);
 
 // UI strings by language; /i18n.js picks the language and fills the [data-i18n] markup from them.
+// Counts come in pairs: key_one for exactly one, key_other for any other number ({n}); key_by names the pages instead
+// ({pages}), when the receiver says which (it does only to a page on the Mac itself).
+// A key_r is the relay mode's variant of key (the page as the website serves it, which sends to a computer of any
+// kind): i18n.js uses it there in place of key.
+
+// Relay mode's own strings: pairing (pair-ui.js), the paired computers, and the connection to the selected one
+// (relay.js). They are in English in every language until they are translated; every table lists them, so that all
+// languages have the same keys. {name} is always a name the other device chose, and every one of these strings is
+// shown as text, never as HTML.
+const RELAY_EN = {
+  pair_title: 'Pair with a computer',
+  pair_confirm: 'Pair this device with a computer? Only continue if you just clicked "Pair a device" in the Remote Visio extension on that computer.',
+  pair_confirm_cross: 'This pairing link was opened from another website. Someone could be trying to receive your microphone and camera. Only continue if you created this link yourself, on your own computer, a few minutes ago.',
+  pair_go: 'Pair', pair_go_anyway: 'Pair anyway', pair_cancel: 'Cancel', pair_close: 'Close',
+  pair_working: 'Connecting to the computer...',
+  pair_type_on_computer: 'On the remote computer, type this number:',
+  pair_then_allow: 'then click Allow there.',
+  pair_paired_with: 'Paired with {name}',
+  pair_send_here: 'Send to this computer', pair_keep: 'Keep for later',
+  pair_same_identity: 'You already paired a computer with this identity ({name}, paired {date}). Replace it?',
+  pair_replace: 'Replace',
+  pair_same_name: 'You already have a computer named {name}, paired {date}. Both will be kept; this one was paired {now}.',
+  pair_denied: 'The computer declined the pairing.',
+  pair_expired: 'This pairing expired. On the computer, click "Pair a device" again.',
+  pair_used: 'This link was already used.',
+  pair_gone: 'This pairing link no longer works: it was already used, or it expired. On the computer, click "Pair a device" again.',
+  pair_bad: 'This code or link is not right, or it expired.',
+  pair_mismatch: 'The number typed on the computer did not match.',
+  pair_timeout: 'Nobody approved the pairing on the computer in time.',
+  pair_cancelled: 'Pairing cancelled.',
+  pair_failed: 'The pairing did not complete: {why}',
+  pair_rate: 'Too many pairing attempts from this network: wait a minute, then open the link again.',
+  pair_done: 'Paired with {name}. Remote Visio sends to it when you press Start.',
+  pair_done_kept: 'Paired with {name}. To send to it, select it under Computers.',
+  pair_how: 'To pair a computer: on it, click the Remote Visio icon in the browser\'s toolbar, then "Pair a device", and open the link it shows on this device.',
+  computers: 'Computers',
+  computer_send_to: 'Send to {name}',
+  computer_paired_on: 'paired {date}',
+  computer_online: 'online', computer_offline: 'offline',
+  computer_forget: 'Forget', computer_forget_confirm: 'Forget {name}? Remote Visio will no longer send to it, until you pair it again.',
+  computer_takeover: 'Take over',
+  computer_busy: 'In use by another device',
+  computer_removed: '{name} removed this device. To send to it again, pair it again.',
+  computer_version: 'The Remote Visio extension on this computer does not work with this page: update it',
+  computer_waiting: 'Waiting for the computer: its browser, with Remote Visio, must be running',
+  sending_to: 'Sending to: {name}', target_none: 'No computer selected',
+  replaced_by: 'In use by {name}',
+  removed_by_hub: 'This computer may have removed this device: forget it, or pair it again',
+  connect_waiting: 'Waiting for approval on the remote computer',
+  connect_denied: 'The remote computer declined the connection. To ask again, press Stop, then Start.',
+  relay_unreachable: "Can't reach remotevisio.com",
+  device_name: "This device's name",
+  another_tab: 'Remote Visio is already running in another tab',
+  no_computers: 'Pair a computer first',
+  select_computer: 'Select a computer under Computers',
+  relay_failed: 'This page did not load completely ({why}): reload it',
+};
+
 const STRINGS = {
   en: {
     title: 'Remote Visio',
     target: 'Auto-discovering receivers (entered via {host})',
-    profile_denoise: 'Denoise', profile_clean: 'Clean', profile_raw: 'Raw',
-    hear: 'Hear the remote Mac (meeting audio, alerts)',
-    start: 'Start talking', stop: 'Stop',
+    profile_denoise: 'Denoise', profile_clean: 'Clean', profile_raw: 'Raw', mic_processing: 'Sound processing',
+    mic: 'Microphone', speaker: 'Speaker', camera: 'Camera', dev_default: 'System default',
+    mic_volume: 'Microphone volume', spk_volume: 'Speaker volume',
+    btn_mic_off: 'Turn off the microphone', btn_mic_on: 'Turn on the microphone',
+    btn_cam_off: 'Turn off the camera', btn_cam_on: 'Turn on the camera',
+    btn_spk_off: 'Turn off the speaker (stop hearing the Mac)', btn_spk_on: 'Turn on the speaker (hear the Mac)',
+    cam_is_off: 'Camera is off', tile_ready: 'Your camera shows here once you start',
+    start: 'Start', stop: 'Stop',
+    connection: 'Connection',
     not_connected: 'Not connected',
     source: 'Source (AGPL-3.0)',
+    st_off: 'Off', st_ready: 'Ready', st_starting: 'Starting...', st_waiting_perm: 'Waiting for permission',
+    st_no_permission: 'No permission', st_busy: 'In use by another app', st_error: 'Error', st_stopped: 'Stopped',
+    mic_none: 'No microphone', mic_sending: 'Sending',
+    mic_used_one: 'Sending · used by 1 page on the Mac', mic_used_other: 'Sending · used by {n} pages on the Mac',
+    mic_used_by: 'Sending · used by {pages}',
+    mic_unused: 'Sending · no meeting uses Remote Visio Microphone yet',
+    mic_nosound: 'Connected · no sound leaving yet',
+    spk_playing: "Playing the meeting's sound",
+    spk_silent: 'Connected · nothing is playing into Remote Visio Speaker',
+    spk_unused: 'Connected · no meeting uses Remote Visio Speaker yet',
+    spk_declined: 'Not connected · the Mac sends its sound to other devices only',
+    cam_sending: 'Sending {video}',
+    cam_shown_one: 'Sending {video} · shown in 1 page', cam_shown_other: 'Sending {video} · shown in {n} pages',
+    cam_shown_by: 'Sending {video} · shown in {pages}',
+    cam_unused: 'Sending · no meeting uses Remote Visio Camera yet',
+    cam_nopicture: 'Connected · waiting for the picture',
+    cam_noh264_short: 'Not relayed: this browser cannot send H.264',
+    cam_ended: 'The camera stopped: pick another one, or turn it off and on again',
     mic_waiting: 'Waiting for microphone permission: check the prompt at the left of the address bar',
     connecting: 'Connecting...', establishing: 'Establishing connection...', negotiating: 'Negotiating...',
     connected: 'Connected', hiccup: 'Network hiccup, waiting to recover...',
@@ -234,7 +625,7 @@ const STRINGS = {
     mic_busy: 'Microphone is in use by another program: close meeting/recording apps and other tabs',
     mic_constraints: 'Microphone does not support the required settings',
     mic_other: 'Could not get the microphone: {reason}', unknown: 'unknown reason',
-    cam: "Send this device's camera",
+    mic_ended: 'The microphone stopped: pick another one, or press Stop and start again',
     cam_none: 'No camera found',
     cam_waiting: 'Waiting for camera permission: check the prompt at the left of the address bar',
     cam_denied: 'Camera denied: click the icon at the left of the address bar and allow it',
@@ -244,18 +635,61 @@ const STRINGS = {
     cam_other: 'Camera error: {err}',
     cam_noh264: 'This browser cannot send H.264 video; the camera will not be relayed',
     sending_video: 'Sending the camera',
-    cam_declined: 'camera not relayed: no virtual camera on the Mac',
+    cam_declined: 'Not relayed: no camera on the Mac',
     debug: 'Debug log', debug_copy: 'Copy', debug_clear: 'Clear', debug_copied: 'Copied',
     no_answer: 'The receiver did not answer within {s}s',
+    mic_level: 'Microphone level', spk_level: 'Speaker level', announce: '{device}: {status}',
+    last_try: 'Last attempt: {why}. Trying again automatically.',
+    mic_none_hint: 'Plug in a microphone, or turn the microphone off',
+    cam_none_hint: 'Plug in a camera, or turn the camera off',
+    mic_noaudio: 'This browser cannot process sound (no Web Audio): the microphone cannot be sent',
+    mic_paused: 'Paused by the browser', tap_resume: 'Tap the page or press a key to resume',
+    spk_blocked: 'Sound arriving, not playing', tap_play: 'The browser held the playback back: tap the page or press a key to play it',
+    mic_notarriving: 'Sending · not arriving on the Mac',
+    mic_unavailable: 'Sending · Remote Visio Microphone is not available on the Mac',
+    vol_zero: 'The volume is at 0 %',
+    ...RELAY_EN,
+    btn_spk_off_r: 'Turn off the speaker (stop hearing the remote computer)', btn_spk_on_r: 'Turn on the speaker (hear the remote computer)',
+    mic_used_one_r: 'Sending · used by 1 page on the remote computer', mic_used_other_r: 'Sending · used by {n} pages on the remote computer',
+    spk_declined_r: 'Not connected · the remote computer sends its sound to other devices only',
+    playing_r: 'Playing audio from the remote computer',
+    cam_declined_r: 'Not relayed: no camera on the remote computer',
+    mic_notarriving_r: 'Sending · not arriving on the remote computer',
+    mic_unavailable_r: 'Sending · Remote Visio Microphone is not available on the remote computer',
+    no_answer_r: 'The computer did not answer within {s}s',
   },
   es: {
     title: 'Remote Visio',
     target: 'Buscando receptores automáticamente (entrada por {host})',
-    profile_denoise: 'Reducir ruido', profile_clean: 'Limpio', profile_raw: 'Original',
-    hear: 'Escuchar el Mac remoto (audio de reuniones, avisos)',
-    start: 'Empezar a hablar', stop: 'Detener',
+    profile_denoise: 'Reducir ruido', profile_clean: 'Limpio', profile_raw: 'Original', mic_processing: 'Procesado del sonido',
+    mic: 'Micrófono', speaker: 'Altavoz', camera: 'Cámara', dev_default: 'Predeterminado del sistema',
+    mic_volume: 'Volumen del micrófono', spk_volume: 'Volumen del altavoz',
+    btn_mic_off: 'Desactivar el micrófono', btn_mic_on: 'Activar el micrófono',
+    btn_cam_off: 'Desactivar la cámara', btn_cam_on: 'Activar la cámara',
+    btn_spk_off: 'Desactivar el altavoz (dejar de oír el Mac)', btn_spk_on: 'Activar el altavoz (oír el Mac)',
+    cam_is_off: 'La cámara está desactivada', tile_ready: 'Tu cámara aparecerá aquí al empezar',
+    start: 'Empezar', stop: 'Detener',
+    connection: 'Conexión',
     not_connected: 'Sin conexión',
     source: 'Código fuente (AGPL-3.0)',
+    st_off: 'Desactivado', st_ready: 'Listo', st_starting: 'Iniciando...', st_waiting_perm: 'Esperando el permiso',
+    st_no_permission: 'Sin permiso', st_busy: 'En uso por otra app', st_error: 'Error', st_stopped: 'Detenido',
+    mic_none: 'No hay micrófono', mic_sending: 'Enviando',
+    mic_used_one: 'Enviando · lo usa 1 página en el Mac', mic_used_other: 'Enviando · lo usan {n} páginas en el Mac',
+    mic_used_by: 'Enviando · lo usa {pages}',
+    mic_unused: 'Enviando · ninguna reunión usa aún Remote Visio Microphone',
+    mic_nosound: 'Conectado · aún no sale sonido',
+    spk_playing: 'Reproduciendo el sonido de la reunión',
+    spk_silent: 'Conectado · no suena nada en Remote Visio Speaker',
+    spk_unused: 'Conectado · ninguna reunión usa aún Remote Visio Speaker',
+    spk_declined: 'Sin conexión · el Mac solo envía su sonido a otros dispositivos',
+    cam_sending: 'Enviando {video}',
+    cam_shown_one: 'Enviando {video} · se ve en 1 página', cam_shown_other: 'Enviando {video} · se ve en {n} páginas',
+    cam_shown_by: 'Enviando {video} · se ve en {pages}',
+    cam_unused: 'Enviando · ninguna reunión usa aún Remote Visio Camera',
+    cam_nopicture: 'Conectado · esperando la imagen',
+    cam_noh264_short: 'No retransmitida: este navegador no puede enviar H.264',
+    cam_ended: 'La cámara se ha detenido: elige otra, o desactívala y vuelve a activarla',
     mic_waiting: 'Esperando el permiso del micrófono: mira el aviso a la izquierda de la barra de direcciones',
     connecting: 'Conectando...', establishing: 'Estableciendo la conexión...', negotiating: 'Negociando...',
     connected: 'Conectado', hiccup: 'Fallo de red, esperando a que se recupere...',
@@ -268,7 +702,7 @@ const STRINGS = {
     mic_busy: 'Otro programa está usando el micrófono: cierra las apps de reuniones o grabación y las otras pestañas',
     mic_constraints: 'El micrófono no admite la configuración necesaria',
     mic_other: 'No se pudo acceder al micrófono: {reason}', unknown: 'motivo desconocido',
-    cam: 'Enviar la cámara de este dispositivo',
+    mic_ended: 'El micrófono se ha detenido: elige otro, o pulsa Detener y vuelve a empezar',
     cam_none: 'No se encontró ninguna cámara',
     cam_waiting: 'Esperando el permiso de la cámara: mira el aviso a la izquierda de la barra de direcciones',
     cam_denied: 'Cámara denegada: haz clic en el icono a la izquierda de la barra de direcciones y permítela',
@@ -278,18 +712,61 @@ const STRINGS = {
     cam_other: 'Error de cámara: {err}',
     cam_noh264: 'Este navegador no puede enviar vídeo H.264; la cámara no se retransmitirá',
     sending_video: 'Enviando la cámara',
-    cam_declined: 'cámara no retransmitida: el Mac no tiene cámara virtual',
+    cam_declined: 'No retransmitida: el Mac no tiene cámara',
     debug: 'Registro de depuración', debug_copy: 'Copiar', debug_clear: 'Borrar', debug_copied: 'Copiado',
     no_answer: 'El receptor no respondió en {s} s',
+    mic_level: 'Nivel del micrófono', spk_level: 'Nivel del altavoz', announce: '{device}: {status}',
+    last_try: 'Último intento: {why}. Se reintenta automáticamente.',
+    mic_none_hint: 'Conecta un micrófono, o desactiva el micrófono',
+    cam_none_hint: 'Conecta una cámara, o desactiva la cámara',
+    mic_noaudio: 'Este navegador no puede procesar sonido (no tiene Web Audio): el micrófono no se puede enviar',
+    mic_paused: 'En pausa por el navegador', tap_resume: 'Toca la página o pulsa una tecla para reanudar',
+    spk_blocked: 'Llega sonido, pero no se reproduce', tap_play: 'El navegador retuvo la reproducción: toca la página o pulsa una tecla para oírlo',
+    mic_notarriving: 'Enviando · no llega al Mac',
+    mic_unavailable: 'Enviando · Remote Visio Microphone no está disponible en el Mac',
+    vol_zero: 'El volumen está al 0 %',
+    ...RELAY_EN,
+    btn_spk_off_r: 'Desactivar el altavoz (dejar de oír el ordenador remoto)', btn_spk_on_r: 'Activar el altavoz (oír el ordenador remoto)',
+    mic_used_one_r: 'Enviando · lo usa 1 página en el ordenador remoto', mic_used_other_r: 'Enviando · lo usan {n} páginas en el ordenador remoto',
+    spk_declined_r: 'Sin conexión · el ordenador remoto solo envía su sonido a otros dispositivos',
+    playing_r: 'Reproduciendo el audio del ordenador remoto',
+    cam_declined_r: 'No retransmitida: el ordenador remoto no tiene cámara',
+    mic_notarriving_r: 'Enviando · no llega al ordenador remoto',
+    mic_unavailable_r: 'Enviando · Remote Visio Microphone no está disponible en el ordenador remoto',
+    no_answer_r: 'El ordenador no respondió en {s} s',
   },
   fr: {
     title: 'Remote Visio',
     target: 'Recherche automatique des récepteurs (entrée via {host})',
-    profile_denoise: 'Réduction du bruit', profile_clean: 'Propre', profile_raw: 'Brut',
-    hear: 'Entendre le Mac distant (son des réunions, alertes)',
-    start: 'Commencer à parler', stop: 'Arrêter',
+    profile_denoise: 'Réduction du bruit', profile_clean: 'Propre', profile_raw: 'Brut', mic_processing: 'Traitement du son',
+    mic: 'Micro', speaker: 'Haut-parleur', camera: 'Caméra', dev_default: 'Par défaut du système',
+    mic_volume: 'Volume du micro', spk_volume: 'Volume du haut-parleur',
+    btn_mic_off: 'Couper le micro', btn_mic_on: 'Activer le micro',
+    btn_cam_off: 'Couper la caméra', btn_cam_on: 'Activer la caméra',
+    btn_spk_off: 'Couper le haut-parleur (ne plus entendre le Mac)', btn_spk_on: 'Activer le haut-parleur (entendre le Mac)',
+    cam_is_off: 'La caméra est coupée', tile_ready: 'Votre caméra apparaîtra ici au démarrage',
+    start: 'Démarrer', stop: 'Arrêter',
+    connection: 'Connexion',
     not_connected: 'Non connecté',
     source: 'Code source (AGPL-3.0)',
+    st_off: 'Coupé', st_ready: 'Prêt', st_starting: 'Démarrage...', st_waiting_perm: "En attente de l'autorisation",
+    st_no_permission: "Pas d'autorisation", st_busy: 'Utilisé par une autre app', st_error: 'Erreur', st_stopped: 'Arrêté',
+    mic_none: 'Aucun micro', mic_sending: 'Envoi',
+    mic_used_one: 'Envoi · utilisé par 1 page sur le Mac', mic_used_other: 'Envoi · utilisé par {n} pages sur le Mac',
+    mic_used_by: 'Envoi · utilisé par {pages}',
+    mic_unused: "Envoi · aucune réunion n'utilise encore Remote Visio Microphone",
+    mic_nosound: 'Connecté · aucun son ne part encore',
+    spk_playing: 'Lecture du son de la réunion',
+    spk_silent: 'Connecté · rien ne joue dans Remote Visio Speaker',
+    spk_unused: "Connecté · aucune réunion n'utilise encore Remote Visio Speaker",
+    spk_declined: "Non connecté · le Mac n'envoie son son qu'aux autres appareils",
+    cam_sending: 'Envoi {video}',
+    cam_shown_one: 'Envoi {video} · affichée dans 1 page', cam_shown_other: 'Envoi {video} · affichée dans {n} pages',
+    cam_shown_by: 'Envoi {video} · affichée dans {pages}',
+    cam_unused: "Envoi · aucune réunion n'utilise encore Remote Visio Camera",
+    cam_nopicture: "Connecté · en attente de l'image",
+    cam_noh264_short: 'Non relayée : ce navigateur ne peut pas envoyer de H.264',
+    cam_ended: "La caméra s'est arrêtée : choisissez-en une autre, ou coupez-la puis réactivez-la",
     mic_waiting: "En attente de l'autorisation du micro : regardez l'invite à gauche de la barre d'adresse",
     connecting: 'Connexion...', establishing: 'Établissement de la connexion...', negotiating: 'Négociation...',
     connected: 'Connecté', hiccup: 'Perturbation réseau, en attente de reprise...',
@@ -302,7 +779,7 @@ const STRINGS = {
     mic_busy: "Le micro est utilisé par un autre programme : fermez les apps de réunion ou d'enregistrement et les autres onglets",
     mic_constraints: 'Le micro ne prend pas en charge les réglages requis',
     mic_other: "Impossible d'accéder au micro : {reason}", unknown: 'raison inconnue',
-    cam: 'Envoyer la caméra de cet appareil',
+    mic_ended: "Le micro s'est arrêté : choisissez-en un autre, ou appuyez sur Arrêter puis recommencez",
     cam_none: 'Aucune caméra trouvée',
     cam_waiting: "En attente de l'autorisation de la caméra : regardez l'invite à gauche de la barre d'adresse",
     cam_denied: "Caméra refusée : cliquez sur l'icône à gauche de la barre d'adresse et autorisez-la",
@@ -312,18 +789,61 @@ const STRINGS = {
     cam_other: 'Erreur de caméra : {err}',
     cam_noh264: 'Ce navigateur ne peut pas envoyer de vidéo H.264 ; la caméra ne sera pas relayée',
     sending_video: 'Envoi de la caméra',
-    cam_declined: 'caméra non relayée : pas de caméra virtuelle sur le Mac',
+    cam_declined: 'Non relayée : pas de caméra sur le Mac',
     debug: 'Journal de débogage', debug_copy: 'Copier', debug_clear: 'Effacer', debug_copied: 'Copié',
     no_answer: 'Le récepteur n\'a pas répondu en {s} s',
+    mic_level: 'Niveau du micro', spk_level: 'Niveau du haut-parleur', announce: '{device} : {status}',
+    last_try: 'Dernière tentative : {why}. Nouvel essai automatique.',
+    mic_none_hint: 'Branchez un micro, ou coupez le micro',
+    cam_none_hint: 'Branchez une caméra, ou coupez la caméra',
+    mic_noaudio: "Ce navigateur ne sait pas traiter le son (pas de Web Audio) : le micro ne peut pas être envoyé",
+    mic_paused: 'Mis en pause par le navigateur', tap_resume: 'Touchez la page ou appuyez sur une touche pour reprendre',
+    spk_blocked: 'Le son arrive, sans être joué', tap_play: 'Le navigateur a retenu la lecture : touchez la page ou appuyez sur une touche pour l\'entendre',
+    mic_notarriving: "Envoi · n'arrive pas sur le Mac",
+    mic_unavailable: "Envoi · Remote Visio Microphone n'est pas disponible sur le Mac",
+    vol_zero: 'Le volume est à 0 %',
+    ...RELAY_EN,
+    btn_spk_off_r: "Couper le haut-parleur (ne plus entendre l'ordinateur distant)", btn_spk_on_r: "Activer le haut-parleur (entendre l'ordinateur distant)",
+    mic_used_one_r: "Envoi · utilisé par 1 page sur l'ordinateur distant", mic_used_other_r: "Envoi · utilisé par {n} pages sur l'ordinateur distant",
+    spk_declined_r: "Non connecté · l'ordinateur distant n'envoie son son qu'aux autres appareils",
+    playing_r: "Lecture du son de l'ordinateur distant",
+    cam_declined_r: "Non relayée : pas de caméra sur l'ordinateur distant",
+    mic_notarriving_r: "Envoi · n'arrive pas sur l'ordinateur distant",
+    mic_unavailable_r: "Envoi · Remote Visio Microphone n'est pas disponible sur l'ordinateur distant",
+    no_answer_r: "L'ordinateur n'a pas répondu en {s} s",
   },
   zh: {
     title: 'Remote Visio',
     target: '自动发现接收端（从 {host} 进入）',
-    profile_denoise: '降噪', profile_clean: '纯净', profile_raw: '原始',
-    hear: '听远程 Mac 的声音（会议、提示音）',
-    start: '开始说话', stop: '停止',
+    profile_denoise: '降噪', profile_clean: '纯净', profile_raw: '原始', mic_processing: '声音处理',
+    mic: '麦克风', speaker: '扬声器', camera: '摄像头', dev_default: '系统默认',
+    mic_volume: '麦克风音量', spk_volume: '扬声器音量',
+    btn_mic_off: '关闭麦克风', btn_mic_on: '打开麦克风',
+    btn_cam_off: '关闭摄像头', btn_cam_on: '打开摄像头',
+    btn_spk_off: '关闭扬声器（不再听 Mac 的声音）', btn_spk_on: '打开扬声器（听 Mac 的声音）',
+    cam_is_off: '摄像头已关闭', tile_ready: '开始后这里会显示你的摄像头画面',
+    start: '开始', stop: '停止',
+    connection: '连接',
     not_connected: '未连接',
     source: '源码 (AGPL-3.0)',
+    st_off: '已关闭', st_ready: '就绪', st_starting: '启动中…', st_waiting_perm: '等待授权',
+    st_no_permission: '没有权限', st_busy: '被别的程序占用', st_error: '出错', st_stopped: '已停止',
+    mic_none: '没有麦克风', mic_sending: '正在发送',
+    mic_used_one: '正在发送 · Mac 上有 1 个网页在用', mic_used_other: '正在发送 · Mac 上有 {n} 个网页在用',
+    mic_used_by: '正在发送 · {pages} 在用',
+    mic_unused: '正在发送 · 还没有会议在用 Remote Visio Microphone',
+    mic_nosound: '已连接 · 还没有声音发出',
+    spk_playing: '正在播放会议的声音',
+    spk_silent: '已连接 · Remote Visio Speaker 里没有在播放的声音',
+    spk_unused: '已连接 · 还没有会议在用 Remote Visio Speaker',
+    spk_declined: '未连接 · Mac 只把声音发给别的设备',
+    cam_sending: '正在发送 {video}',
+    cam_shown_one: '正在发送 {video} · 1 个网页在显示', cam_shown_other: '正在发送 {video} · {n} 个网页在显示',
+    cam_shown_by: '正在发送 {video} · {pages} 在显示',
+    cam_unused: '正在发送 · 还没有会议在用 Remote Visio Camera',
+    cam_nopicture: '已连接 · 等待画面',
+    cam_noh264_short: '未转发：这个浏览器发不了 H.264',
+    cam_ended: '摄像头停了：换一个，或者关掉再打开',
     mic_waiting: '等待麦克风授权：看一下地址栏左侧的权限提示',
     connecting: '连接中…', establishing: '建立连接…', negotiating: '协商中…',
     connected: '已连接', hiccup: '网络波动，等待恢复…',
@@ -336,7 +856,7 @@ const STRINGS = {
     mic_busy: '麦克风被别的程序占着：关掉会议/录音软件和其他标签页',
     mic_constraints: '麦克风不支持所需参数',
     mic_other: '拿不到麦克风：{reason}', unknown: '未知原因',
-    cam: '发送这台设备的摄像头',
+    mic_ended: '麦克风停了：换一个，或者点“停止”再重新开始',
     cam_none: '没找到摄像头',
     cam_waiting: '等待摄像头授权：看一下地址栏左侧的权限提示',
     cam_denied: '摄像头被拒绝：点地址栏左侧图标改成允许',
@@ -346,18 +866,61 @@ const STRINGS = {
     cam_other: '摄像头出错：{err}',
     cam_noh264: '这个浏览器发不了 H.264 视频，摄像头画面不会被转发',
     sending_video: '正在发送摄像头画面',
-    cam_declined: '摄像头未转发：Mac 上没有虚拟摄像头',
+    cam_declined: '未转发：Mac 上没有摄像头',
     debug: '调试日志', debug_copy: '复制', debug_clear: '清除', debug_copied: '已复制',
     no_answer: '接收端 {s}s 内没有应答',
+    mic_level: '麦克风电平', spk_level: '扬声器电平', announce: '{device}：{status}',
+    last_try: '上次尝试：{why}。会自动重试。',
+    mic_none_hint: '插上一个麦克风，或者关掉麦克风',
+    cam_none_hint: '插上一个摄像头，或者关掉摄像头',
+    mic_noaudio: '这个浏览器处理不了声音（没有 Web Audio）：麦克风发不出去',
+    mic_paused: '被浏览器暂停了', tap_resume: '点一下页面或按任意键继续',
+    spk_blocked: '声音到了，但没有播放', tap_play: '浏览器拦下了播放：点一下页面或按任意键来播放',
+    mic_notarriving: '正在发送 · 没有到达 Mac',
+    mic_unavailable: '正在发送 · Mac 上的 Remote Visio Microphone 不可用',
+    vol_zero: '音量为 0%',
+    ...RELAY_EN,
+    btn_spk_off_r: '关闭扬声器（不再听远程电脑的声音）', btn_spk_on_r: '打开扬声器（听远程电脑的声音）',
+    mic_used_one_r: '正在发送 · 远程电脑上有 1 个网页在用', mic_used_other_r: '正在发送 · 远程电脑上有 {n} 个网页在用',
+    spk_declined_r: '未连接 · 远程电脑只把声音发给别的设备',
+    playing_r: '正在播放远程电脑的声音',
+    cam_declined_r: '未转发：远程电脑上没有摄像头',
+    mic_notarriving_r: '正在发送 · 没有到达远程电脑',
+    mic_unavailable_r: '正在发送 · 远程电脑上的 Remote Visio Microphone 不可用',
+    no_answer_r: '远程电脑 {s}s 内没有应答',
   },
   de: {
     title: 'Remote Visio',
     target: 'Empfänger werden automatisch gesucht (Zugang über {host})',
-    profile_denoise: 'Rauschunterdrückung', profile_clean: 'Sauber', profile_raw: 'Roh',
-    hear: 'Den entfernten Mac hören (Meeting-Ton, Hinweise)',
-    start: 'Sprechen starten', stop: 'Stopp',
+    profile_denoise: 'Rauschunterdrückung', profile_clean: 'Sauber', profile_raw: 'Roh', mic_processing: 'Tonverarbeitung',
+    mic: 'Mikrofon', speaker: 'Lautsprecher', camera: 'Kamera', dev_default: 'Systemstandard',
+    mic_volume: 'Mikrofonlautstärke', spk_volume: 'Lautsprecherlautstärke',
+    btn_mic_off: 'Mikrofon ausschalten', btn_mic_on: 'Mikrofon einschalten',
+    btn_cam_off: 'Kamera ausschalten', btn_cam_on: 'Kamera einschalten',
+    btn_spk_off: 'Lautsprecher ausschalten (den Mac nicht mehr hören)', btn_spk_on: 'Lautsprecher einschalten (den Mac hören)',
+    cam_is_off: 'Kamera ist aus', tile_ready: 'Ihre Kamera erscheint hier, sobald Sie starten',
+    start: 'Starten', stop: 'Stopp',
+    connection: 'Verbindung',
     not_connected: 'Nicht verbunden',
     source: 'Quellcode (AGPL-3.0)',
+    st_off: 'Aus', st_ready: 'Bereit', st_starting: 'Wird gestartet...', st_waiting_perm: 'Warte auf die Berechtigung',
+    st_no_permission: 'Keine Berechtigung', st_busy: 'Von einer anderen App belegt', st_error: 'Fehler', st_stopped: 'Gestoppt',
+    mic_none: 'Kein Mikrofon', mic_sending: 'Wird gesendet',
+    mic_used_one: 'Wird gesendet · von 1 Seite auf dem Mac genutzt', mic_used_other: 'Wird gesendet · von {n} Seiten auf dem Mac genutzt',
+    mic_used_by: 'Wird gesendet · genutzt von {pages}',
+    mic_unused: 'Wird gesendet · noch nutzt kein Meeting Remote Visio Microphone',
+    mic_nosound: 'Verbunden · noch geht kein Ton hinaus',
+    spk_playing: 'Der Meeting-Ton wird wiedergegeben',
+    spk_silent: 'Verbunden · in Remote Visio Speaker wird nichts abgespielt',
+    spk_unused: 'Verbunden · noch nutzt kein Meeting Remote Visio Speaker',
+    spk_declined: 'Nicht verbunden · der Mac sendet seinen Ton nur an andere Geräte',
+    cam_sending: 'Wird gesendet: {video}',
+    cam_shown_one: 'Wird gesendet: {video} · auf 1 Seite zu sehen', cam_shown_other: 'Wird gesendet: {video} · auf {n} Seiten zu sehen',
+    cam_shown_by: 'Wird gesendet: {video} · zu sehen auf {pages}',
+    cam_unused: 'Wird gesendet · noch nutzt kein Meeting Remote Visio Camera',
+    cam_nopicture: 'Verbunden · warte auf das Bild',
+    cam_noh264_short: 'Nicht weitergeleitet: dieser Browser kann kein H.264 senden',
+    cam_ended: 'Die Kamera ist ausgefallen: eine andere wählen oder sie aus- und wieder einschalten',
     mic_waiting: 'Warte auf die Mikrofon-Berechtigung: siehe die Abfrage links in der Adressleiste',
     connecting: 'Verbinde...', establishing: 'Verbindung wird aufgebaut...', negotiating: 'Aushandlung...',
     connected: 'Verbunden', hiccup: 'Netzwerkstörung, warte auf Wiederherstellung...',
@@ -370,7 +933,7 @@ const STRINGS = {
     mic_busy: 'Das Mikrofon wird von einem anderen Programm benutzt: Meeting-/Aufnahme-Apps und andere Tabs schließen',
     mic_constraints: 'Das Mikrofon unterstützt die nötigen Einstellungen nicht',
     mic_other: 'Mikrofon nicht verfügbar: {reason}', unknown: 'unbekannter Grund',
-    cam: 'Die Kamera dieses Geräts senden',
+    mic_ended: 'Das Mikrofon ist ausgefallen: ein anderes wählen oder Stopp drücken und neu starten',
     cam_none: 'Keine Kamera gefunden',
     cam_waiting: 'Warte auf die Kamera-Berechtigung: siehe die Abfrage links in der Adressleiste',
     cam_denied: 'Kamera verweigert: auf das Symbol links in der Adressleiste klicken und erlauben',
@@ -380,18 +943,61 @@ const STRINGS = {
     cam_other: 'Kamerafehler: {err}',
     cam_noh264: 'Dieser Browser kann kein H.264-Video senden; die Kamera wird nicht weitergeleitet',
     sending_video: 'Kamera wird gesendet',
-    cam_declined: 'Kamera nicht weitergeleitet: keine virtuelle Kamera auf dem Mac',
+    cam_declined: 'Nicht weitergeleitet: keine Kamera auf dem Mac',
     debug: 'Debug-Protokoll', debug_copy: 'Kopieren', debug_clear: 'Leeren', debug_copied: 'Kopiert',
     no_answer: 'Der Empfänger hat nicht innerhalb von {s} s geantwortet',
+    mic_level: 'Mikrofonpegel', spk_level: 'Lautsprecherpegel', announce: '{device}: {status}',
+    last_try: 'Letzter Versuch: {why}. Es wird automatisch erneut versucht.',
+    mic_none_hint: 'Ein Mikrofon anschließen oder das Mikrofon ausschalten',
+    cam_none_hint: 'Eine Kamera anschließen oder die Kamera ausschalten',
+    mic_noaudio: 'Dieser Browser kann keinen Ton verarbeiten (kein Web Audio): das Mikrofon kann nicht gesendet werden',
+    mic_paused: 'Vom Browser angehalten', tap_resume: 'Zum Fortsetzen auf die Seite tippen oder eine Taste drücken',
+    spk_blocked: 'Ton kommt an, wird aber nicht abgespielt', tap_play: 'Der Browser hält die Wiedergabe zurück: zum Abspielen auf die Seite tippen oder eine Taste drücken',
+    mic_notarriving: 'Wird gesendet · kommt auf dem Mac nicht an',
+    mic_unavailable: 'Wird gesendet · Remote Visio Microphone ist auf dem Mac nicht verfügbar',
+    vol_zero: 'Die Lautstärke steht auf 0 %',
+    ...RELAY_EN,
+    btn_spk_off_r: 'Lautsprecher ausschalten (den entfernten Computer nicht mehr hören)', btn_spk_on_r: 'Lautsprecher einschalten (den entfernten Computer hören)',
+    mic_used_one_r: 'Wird gesendet · von 1 Seite auf dem entfernten Computer genutzt', mic_used_other_r: 'Wird gesendet · von {n} Seiten auf dem entfernten Computer genutzt',
+    spk_declined_r: 'Nicht verbunden · der entfernte Computer sendet seinen Ton nur an andere Geräte',
+    playing_r: 'Ton des entfernten Computers wird wiedergegeben',
+    cam_declined_r: 'Nicht weitergeleitet: keine Kamera auf dem entfernten Computer',
+    mic_notarriving_r: 'Wird gesendet · kommt auf dem entfernten Computer nicht an',
+    mic_unavailable_r: 'Wird gesendet · Remote Visio Microphone ist auf dem entfernten Computer nicht verfügbar',
+    no_answer_r: 'Der Computer hat nicht innerhalb von {s} s geantwortet',
   },
   it: {
     title: 'Remote Visio',
     target: 'Ricerca automatica dei ricevitori (ingresso da {host})',
-    profile_denoise: 'Riduzione rumore', profile_clean: 'Pulito', profile_raw: 'Grezzo',
-    hear: 'Ascolta il Mac remoto (audio delle riunioni, avvisi)',
-    start: 'Inizia a parlare', stop: 'Ferma',
+    profile_denoise: 'Riduzione rumore', profile_clean: 'Pulito', profile_raw: 'Grezzo', mic_processing: 'Elaborazione del suono',
+    mic: 'Microfono', speaker: 'Altoparlante', camera: 'Fotocamera', dev_default: 'Predefinito di sistema',
+    mic_volume: 'Volume del microfono', spk_volume: "Volume dell'altoparlante",
+    btn_mic_off: 'Disattiva il microfono', btn_mic_on: 'Attiva il microfono',
+    btn_cam_off: 'Disattiva la fotocamera', btn_cam_on: 'Attiva la fotocamera',
+    btn_spk_off: "Disattiva l'altoparlante (smetti di sentire il Mac)", btn_spk_on: "Attiva l'altoparlante (senti il Mac)",
+    cam_is_off: 'La fotocamera è disattivata', tile_ready: "La tua fotocamera apparirà qui all'avvio",
+    start: 'Avvia', stop: 'Ferma',
+    connection: 'Connessione',
     not_connected: 'Non connesso',
     source: 'Codice sorgente (AGPL-3.0)',
+    st_off: 'Disattivato', st_ready: 'Pronto', st_starting: 'Avvio...', st_waiting_perm: 'In attesa del permesso',
+    st_no_permission: 'Nessun permesso', st_busy: "In uso da un'altra app", st_error: 'Errore', st_stopped: 'Fermato',
+    mic_none: 'Nessun microfono', mic_sending: 'Invio',
+    mic_used_one: 'Invio · usato da 1 pagina sul Mac', mic_used_other: 'Invio · usato da {n} pagine sul Mac',
+    mic_used_by: 'Invio · usato da {pages}',
+    mic_unused: 'Invio · nessuna riunione usa ancora Remote Visio Microphone',
+    mic_nosound: 'Connesso · ancora nessun suono in uscita',
+    spk_playing: "Riproduzione dell'audio della riunione",
+    spk_silent: 'Connesso · niente in riproduzione su Remote Visio Speaker',
+    spk_unused: 'Connesso · nessuna riunione usa ancora Remote Visio Speaker',
+    spk_declined: 'Non connesso · il Mac invia il suo audio solo ad altri dispositivi',
+    cam_sending: 'Invio {video}',
+    cam_shown_one: 'Invio {video} · mostrata in 1 pagina', cam_shown_other: 'Invio {video} · mostrata in {n} pagine',
+    cam_shown_by: 'Invio {video} · mostrata in {pages}',
+    cam_unused: 'Invio · nessuna riunione usa ancora Remote Visio Camera',
+    cam_nopicture: "Connesso · in attesa dell'immagine",
+    cam_noh264_short: 'Non inoltrata: questo browser non può inviare H.264',
+    cam_ended: "La fotocamera si è fermata: scegline un'altra, oppure disattivala e riattivala",
     mic_waiting: 'In attesa del permesso per il microfono: guarda la richiesta a sinistra della barra degli indirizzi',
     connecting: 'Connessione...', establishing: 'Creazione della connessione...', negotiating: 'Negoziazione...',
     connected: 'Connesso', hiccup: 'Problema di rete, in attesa del ripristino...',
@@ -404,7 +1010,7 @@ const STRINGS = {
     mic_busy: 'Il microfono è usato da un altro programma: chiudi le app di riunioni o registrazione e le altre schede',
     mic_constraints: 'Il microfono non supporta le impostazioni richieste',
     mic_other: 'Impossibile usare il microfono: {reason}', unknown: 'motivo sconosciuto',
-    cam: 'Invia la fotocamera di questo dispositivo',
+    mic_ended: 'Il microfono si è fermato: scegline un altro, oppure premi Ferma e ricomincia',
     cam_none: 'Nessuna fotocamera trovata',
     cam_waiting: 'In attesa del permesso per la fotocamera: guarda la richiesta a sinistra della barra degli indirizzi',
     cam_denied: "Fotocamera negata: fai clic sull'icona a sinistra della barra degli indirizzi e consentila",
@@ -414,18 +1020,61 @@ const STRINGS = {
     cam_other: 'Errore della fotocamera: {err}',
     cam_noh264: 'Questo browser non può inviare video H.264; la fotocamera non verrà inoltrata',
     sending_video: 'Invio della fotocamera',
-    cam_declined: 'fotocamera non inoltrata: nessuna fotocamera virtuale sul Mac',
+    cam_declined: 'Non inoltrata: nessuna fotocamera sul Mac',
     debug: 'Log di debug', debug_copy: 'Copia', debug_clear: 'Cancella', debug_copied: 'Copiato',
     no_answer: 'Il ricevitore non ha risposto entro {s} s',
+    mic_level: 'Livello del microfono', spk_level: "Livello dell'altoparlante", announce: '{device}: {status}',
+    last_try: 'Ultimo tentativo: {why}. Nuovo tentativo automatico.',
+    mic_none_hint: 'Collega un microfono, oppure disattiva il microfono',
+    cam_none_hint: 'Collega una fotocamera, oppure disattiva la fotocamera',
+    mic_noaudio: 'Questo browser non può elaborare il suono (niente Web Audio): il microfono non può essere inviato',
+    mic_paused: 'Messo in pausa dal browser', tap_resume: 'Tocca la pagina o premi un tasto per riprendere',
+    spk_blocked: "L'audio arriva, ma non viene riprodotto", tap_play: 'Il browser ha trattenuto la riproduzione: tocca la pagina o premi un tasto per sentirlo',
+    mic_notarriving: 'Invio · non arriva al Mac',
+    mic_unavailable: 'Invio · Remote Visio Microphone non è disponibile sul Mac',
+    vol_zero: 'Il volume è a 0 %',
+    ...RELAY_EN,
+    btn_spk_off_r: "Disattiva l'altoparlante (smetti di sentire il computer remoto)", btn_spk_on_r: "Attiva l'altoparlante (senti il computer remoto)",
+    mic_used_one_r: 'Invio · usato da 1 pagina sul computer remoto', mic_used_other_r: 'Invio · usato da {n} pagine sul computer remoto',
+    spk_declined_r: 'Non connesso · il computer remoto invia il suo audio solo ad altri dispositivi',
+    playing_r: "Riproduzione dell'audio del computer remoto",
+    cam_declined_r: 'Non inoltrata: nessuna fotocamera sul computer remoto',
+    mic_notarriving_r: 'Invio · non arriva al computer remoto',
+    mic_unavailable_r: 'Invio · Remote Visio Microphone non è disponibile sul computer remoto',
+    no_answer_r: 'Il computer non ha risposto entro {s} s',
   },
   hi: {
     title: 'Remote Visio',
     target: 'रिसीवर अपने आप खोजे जा रहे हैं ({host} से प्रवेश)',
-    profile_denoise: 'शोर कम करें', profile_clean: 'साफ़', profile_raw: 'मूल',
-    hear: 'दूर वाले Mac की आवाज़ सुनें (मीटिंग की आवाज़, सूचनाएँ)',
-    start: 'बोलना शुरू करें', stop: 'रोकें',
+    profile_denoise: 'शोर कम करें', profile_clean: 'साफ़', profile_raw: 'मूल', mic_processing: 'आवाज़ की प्रोसेसिंग',
+    mic: 'माइक्रोफ़ोन', speaker: 'स्पीकर', camera: 'कैमरा', dev_default: 'सिस्टम डिफ़ॉल्ट',
+    mic_volume: 'माइक्रोफ़ोन की आवाज़', spk_volume: 'स्पीकर की आवाज़',
+    btn_mic_off: 'माइक्रोफ़ोन बंद करें', btn_mic_on: 'माइक्रोफ़ोन चालू करें',
+    btn_cam_off: 'कैमरा बंद करें', btn_cam_on: 'कैमरा चालू करें',
+    btn_spk_off: 'स्पीकर बंद करें (Mac की आवाज़ सुनना बंद करें)', btn_spk_on: 'स्पीकर चालू करें (Mac की आवाज़ सुनें)',
+    cam_is_off: 'कैमरा बंद है', tile_ready: 'शुरू करने पर आपका कैमरा यहाँ दिखेगा',
+    start: 'शुरू करें', stop: 'रोकें',
+    connection: 'कनेक्शन',
     not_connected: 'कनेक्ट नहीं है',
     source: 'सोर्स कोड (AGPL-3.0)',
+    st_off: 'बंद', st_ready: 'तैयार', st_starting: 'शुरू हो रहा है...', st_waiting_perm: 'अनुमति का इंतज़ार',
+    st_no_permission: 'अनुमति नहीं है', st_busy: 'किसी और ऐप के पास है', st_error: 'गड़बड़ी', st_stopped: 'रुक गया',
+    mic_none: 'कोई माइक्रोफ़ोन नहीं', mic_sending: 'भेजा जा रहा है',
+    mic_used_one: 'भेजा जा रहा है · Mac पर 1 पेज इसे इस्तेमाल कर रहा है', mic_used_other: 'भेजा जा रहा है · Mac पर {n} पेज इसे इस्तेमाल कर रहे हैं',
+    mic_used_by: 'भेजा जा रहा है · {pages} इसे इस्तेमाल कर रहा है',
+    mic_unused: 'भेजा जा रहा है · अभी कोई मीटिंग Remote Visio Microphone इस्तेमाल नहीं कर रही',
+    mic_nosound: 'कनेक्ट है · अभी कोई आवाज़ नहीं जा रही',
+    spk_playing: 'मीटिंग की आवाज़ चल रही है',
+    spk_silent: 'कनेक्ट है · Remote Visio Speaker में कुछ नहीं चल रहा',
+    spk_unused: 'कनेक्ट है · अभी कोई मीटिंग Remote Visio Speaker इस्तेमाल नहीं कर रही',
+    spk_declined: 'कनेक्ट नहीं है · Mac अपनी आवाज़ सिर्फ़ दूसरे डिवाइस को भेजता है',
+    cam_sending: '{video} भेजा जा रहा है',
+    cam_shown_one: '{video} भेजा जा रहा है · 1 पेज में दिख रहा है', cam_shown_other: '{video} भेजा जा रहा है · {n} पेजों में दिख रहा है',
+    cam_shown_by: '{video} भेजा जा रहा है · {pages} में दिख रहा है',
+    cam_unused: 'भेजा जा रहा है · अभी कोई मीटिंग Remote Visio Camera इस्तेमाल नहीं कर रही',
+    cam_nopicture: 'कनेक्ट है · तस्वीर का इंतज़ार',
+    cam_noh264_short: 'आगे नहीं भेजा गया: यह ब्राउज़र H.264 नहीं भेज सकता',
+    cam_ended: 'कैमरा बंद हो गया: कोई दूसरा चुनें, या इसे बंद करके फिर चालू करें',
     mic_waiting: 'माइक्रोफ़ोन की अनुमति का इंतज़ार है: एड्रेस बार के बाईं ओर दिख रहे संकेत को देखें',
     connecting: 'कनेक्ट हो रहा है...', establishing: 'कनेक्शन बनाया जा रहा है...', negotiating: 'बातचीत जारी है...',
     connected: 'कनेक्ट हो गया', hiccup: 'नेटवर्क में रुकावट, ठीक होने का इंतज़ार...',
@@ -438,7 +1087,7 @@ const STRINGS = {
     mic_busy: 'माइक्रोफ़ोन किसी और प्रोग्राम के पास है: मीटिंग/रिकॉर्डिंग ऐप और दूसरे टैब बंद करें',
     mic_constraints: 'माइक्रोफ़ोन ज़रूरी सेटिंग्स का समर्थन नहीं करता',
     mic_other: 'माइक्रोफ़ोन नहीं मिल सका: {reason}', unknown: 'अज्ञात कारण',
-    cam: 'इस डिवाइस का कैमरा भेजें',
+    mic_ended: 'माइक्रोफ़ोन बंद हो गया: कोई दूसरा चुनें, या रोकें दबाकर फिर से शुरू करें',
     cam_none: 'कोई कैमरा नहीं मिला',
     cam_waiting: 'कैमरे की अनुमति का इंतज़ार है: एड्रेस बार के बाईं ओर दिख रहे संकेत को देखें',
     cam_denied: 'कैमरे की अनुमति नहीं मिली: एड्रेस बार के बाईं ओर के आइकन पर क्लिक करके अनुमति दें',
@@ -448,22 +1097,67 @@ const STRINGS = {
     cam_other: 'कैमरे में गड़बड़ी: {err}',
     cam_noh264: 'यह ब्राउज़र H.264 वीडियो नहीं भेज सकता; कैमरा आगे नहीं भेजा जाएगा',
     sending_video: 'कैमरा भेजा जा रहा है',
-    cam_declined: 'कैमरा नहीं भेजा गया: Mac पर वर्चुअल कैमरा नहीं है',
+    cam_declined: 'आगे नहीं भेजा गया: Mac पर कोई कैमरा नहीं है',
     debug: 'डीबग लॉग', debug_copy: 'कॉपी करें', debug_clear: 'साफ़ करें', debug_copied: 'कॉपी हो गया',
     no_answer: 'रिसीवर ने {s} सेकंड में जवाब नहीं दिया',
+    mic_level: 'माइक्रोफ़ोन का स्तर', spk_level: 'स्पीकर का स्तर', announce: '{device}: {status}',
+    last_try: 'पिछली कोशिश: {why}। अपने आप फिर से कोशिश होगी।',
+    mic_none_hint: 'कोई माइक्रोफ़ोन लगाएँ, या माइक्रोफ़ोन बंद करें',
+    cam_none_hint: 'कोई कैमरा लगाएँ, या कैमरा बंद करें',
+    mic_noaudio: 'यह ब्राउज़र आवाज़ प्रोसेस नहीं कर सकता (Web Audio नहीं है): माइक्रोफ़ोन नहीं भेजा जा सकता',
+    mic_paused: 'ब्राउज़र ने रोक दिया है', tap_resume: 'फिर से चालू करने के लिए पेज पर टैप करें या कोई कुंजी दबाएँ',
+    spk_blocked: 'आवाज़ आ रही है, पर चल नहीं रही', tap_play: 'ब्राउज़र ने आवाज़ चलाना रोक रखा है: चलाने के लिए पेज पर टैप करें या कोई कुंजी दबाएँ',
+    mic_notarriving: 'भेजा जा रहा है · Mac तक नहीं पहुँच रहा',
+    mic_unavailable: 'भेजा जा रहा है · Mac पर Remote Visio Microphone उपलब्ध नहीं है',
+    vol_zero: 'आवाज़ 0 % पर है',
+    ...RELAY_EN,
+    btn_spk_off_r: 'स्पीकर बंद करें (रिमोट कंप्यूटर की आवाज़ सुनना बंद करें)', btn_spk_on_r: 'स्पीकर चालू करें (रिमोट कंप्यूटर की आवाज़ सुनें)',
+    mic_used_one_r: 'भेजा जा रहा है · रिमोट कंप्यूटर पर 1 पेज इसे इस्तेमाल कर रहा है', mic_used_other_r: 'भेजा जा रहा है · रिमोट कंप्यूटर पर {n} पेज इसे इस्तेमाल कर रहे हैं',
+    spk_declined_r: 'कनेक्ट नहीं है · रिमोट कंप्यूटर अपनी आवाज़ सिर्फ़ दूसरे डिवाइस को भेजता है',
+    playing_r: 'रिमोट कंप्यूटर की आवाज़ चल रही है',
+    cam_declined_r: 'आगे नहीं भेजा गया: रिमोट कंप्यूटर पर कोई कैमरा नहीं है',
+    mic_notarriving_r: 'भेजा जा रहा है · रिमोट कंप्यूटर तक नहीं पहुँच रहा',
+    mic_unavailable_r: 'भेजा जा रहा है · रिमोट कंप्यूटर पर Remote Visio Microphone उपलब्ध नहीं है',
+    no_answer_r: 'कंप्यूटर ने {s} सेकंड में जवाब नहीं दिया',
   },
 };
 </script>
 <script src="/i18n.js"></script>
 <script>
-let stream = null, statsTimer = null, rafId = null, audioCtx = null;
+// How this page reaches the computers it sends to (its "transport", see Transports below). The Go receiver serves the
+// page as it is: the receiver transport, which talks to the receiver that served it and to the others that one found.
+// The website serves a copy with data-transport="relay" on <html> (site/scripts/build-sender.mjs): the relay transport
+// (relay.js), which pairs with the Remote Visio extension on a computer and reaches it through the site's relay,
+// encrypted end to end ("direct mode": bin/e2e-harness/DESIGN-direct-mode.md, section 8).
+const TRANSPORT = document.documentElement.dataset.transport === 'relay' ? 'relay' : 'receiver';
+
+// A pairing link carries its secret in the address's fragment (#p=1.<room>.<secret>). Relay mode takes it out of the
+// address at once, before anything on this page can log it (the debug log starts with the address), keep it (the
+// history, a bookmark, a restored tab) or pass it on. pair-ui.js takes it from here, once (takeFragment), and keeps it
+// in memory only. A link opened in a tab that already shows the page changes only the fragment: same treatment.
+let pendingFragment = '';
+function takeHash() {
+  if (TRANSPORT !== 'relay' || !location.hash) return false;
+  pendingFragment = location.hash;
+  history.replaceState(null, '', location.pathname + location.search);
+  return true;
+}
+function takeFragment() {
+  const f = pendingFragment;
+  pendingFragment = '';
+  return f;
+}
+takeHash();
+
+let stream = null, statsTimer = null, statusTimer = null, rafId = null;
 let live = false, discoverTimer = null;
 
 // One independent connection per receiver: each negotiates and reconnects on its own, so one going down doesn't affect the rest.
-// conns: origin string -> { target, pc, retry, retryTimer, healTimer, state, cls, rtt, needCert }
+// conns: target key -> { target, pc, retry, retryTimer, healTimer, state, cls, rtt, needCert, speaker, ... }, where
+// target is what the transport listed ({key, ...}; the receiver's key is its origin).
 const conns = new Map();
 
-$('target').textContent = t('target', { host: location.host });
+if (TRANSPORT === 'receiver') $('target').textContent = t('target', { host: location.host });
 
 // Debug log. A connection stuck on "Connecting" says nothing about why, and a phone has no developer tools. So the
 // page keeps a log of what it does -- permissions, discovery, and for each connection its ICE candidates (this
@@ -564,7 +1258,7 @@ function describeICE(servers) {
 // once with force), each with the checks sent and answered in both directions -- that tells "nothing gets through"
 // from "only one way does". Once connected: the pair in use, when it changes.
 function debugPairs(c, pc, stats, force) {
-  const h = hostOf(c.target);
+  const h = transport.tag(c);
   const state = pc.iceConnectionState;
   const pairs = [];
   let chosen = null;
@@ -599,20 +1293,255 @@ function debugPairs(c, pc, stats, force) {
 
 $('toggle').onclick = () => (live ? stop() : start());
 
+// ---- What the user wants: the three devices on or off, and the two volumes ----
+
+// Each switch is remembered ('1' on, '0' off) and works before Start too: it then only sets what Start will do. All
+// three are on by default, the camera included, as in a meeting's waiting room.
+function readFlag(key, def) {
+  const v = localStorage.getItem(key);
+  return v === null ? def : v === '1';
+}
+
+// The page used to have two checkboxes, "Send this device's camera" ('cam', off by default) and "Hear the remote Mac"
+// ('hear', on by default). A choice made there carries over to the camera and speaker switches, once: the old keys
+// are removed as soon as they are read.
+(() => {
+  const cam = localStorage.getItem('cam'), hear = localStorage.getItem('hear');
+  if (cam !== null) { localStorage.setItem('camOn', cam === '1' ? '1' : '0'); localStorage.removeItem('cam'); }
+  if (hear !== null) { localStorage.setItem('spkOn', hear === '0' ? '0' : '1'); localStorage.removeItem('hear'); }
+})();
+
+let micOn = readFlag('micOn', true);
+let spkOn = readFlag('spkOn', true);
+let camOn = readFlag('camOn', true);
+
+// readPercent reads a remembered volume, in percent, within its range.
+function readPercent(key, max, def) {
+  const v = parseInt(localStorage.getItem(key), 10);
+  return Number.isFinite(v) ? Math.min(max, Math.max(0, v)) : def;
+}
+// Microphone volume: a gain of 0-200 % applied here, before sending. Speaker volume: the return path's playback, 0-100 %.
+let micGain = readPercent('micGain', 200, 100);
+let spkVol = readPercent('spkVol', 100, 100);
+
+// ---- The microphone's sound graph ----
+
+// What every connection sends is not the microphone's own track but the output of a small WebAudio graph:
+//   microphone track -> MediaStreamSource -> GainNode (the volume) -> MediaStreamAudioDestinationNode -> sent track
+// and the level meter reads after the gain, so it shows what the Mac gets. The sent track lives as long as the session:
+// switching microphones (a pick, a profile, the echo cancellation following the speaker) only swaps the graph's
+// source, and muting is that track's enabled flag (silence, as in a meeting) -- no connection is touched for either.
+// The AudioContext is made on Start, inside the click, which is what lets it run. A browser without one (Safari before
+// 14.1 has only webkitAudioContext; anything may throw) gets a session without the microphone, which says why: the
+// camera and the speaker do not need it.
+let audioCtx = null, micSource = null, micGainNode = null, micDest = null, micAnalyser = null, sendTrack = null;
+const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+
+function ensureAudio() {
+  if (audioCtx) return;
+  if (!AudioContextClass) throw new Error('no AudioContext in this browser');
+  const ctx = audioCtx = new AudioContextClass({ latencyHint: 'interactive' });
+  // The browser may suspend the context on its own -- iOS does after a call, Siri or a while in the background, and
+  // calls it "interrupted" -- which silences what every connection sends. Ask for it back at once; where that needs a
+  // gesture, the next tap or key does it (wakeAudio), and meanwhile the microphone's status says so.
+  ctx.onstatechange = () => {
+    if (ctx !== audioCtx) return;
+    dlog('sound processing:', ctx.state);
+    if (live && (ctx.state === 'suspended' || ctx.state === 'interrupted')) ctx.resume().catch(() => { /* waits for a gesture */ });
+    renderStatus();
+  };
+  micGainNode = audioCtx.createGain();
+  micGainNode.gain.value = micGain / 100;
+  micDest = audioCtx.createMediaStreamDestination();
+  micDest.channelCount = 1; // a microphone is mono; a stereo track would only be mixed down again by the encoder
+  micAnalyser = audioCtx.createAnalyser();
+  micAnalyser.fftSize = 1024;
+  micGainNode.connect(micDest);
+  micGainNode.connect(micAnalyser);
+  sendTrack = micDest.stream.getAudioTracks()[0];
+  sendTrack.enabled = micOn;
+  audioCtx.resume().catch(() => { /* started inside the click: it normally runs already */ });
+}
+
+function closeAudio() {
+  if (sendTrack) sendTrack.stop();
+  if (audioCtx) audioCtx.close().catch(() => { /* closing anyway */ });
+  audioCtx = micSource = micGainNode = micDest = micAnalyser = sendTrack = null;
+}
+
+// audioRunning tells whether the sound graph runs: while it does not, nothing of the microphone leaves and the
+// analysers hold their last reading, so the meters must not believe them.
+function audioRunning() {
+  return !!audioCtx && audioCtx.state === 'running';
+}
+
+// wakeAudio brings back, on a user's tap or key, what a browser holds until one: a suspended sound graph, and a
+// return-path player whose play() it refused (autoplay rules, e.g. Safari with the microphone not allowed).
+function wakeAudio() {
+  if (!live) return;
+  if (audioCtx && audioCtx.state !== 'running' && audioCtx.state !== 'closed') audioCtx.resume().catch(() => { /* still held */ });
+  for (const c of conns.values()) {
+    if (c.speaker && c.speaker.srcObject && c.speaker.paused) c.speaker.play().catch(() => { /* still held */ });
+  }
+}
+addEventListener('pointerdown', wakeAudio, true);
+addEventListener('keydown', wakeAudio, true);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wakeAudio(); });
+
+// ---- Quick toggles ----
+
+// None of them renegotiates: every connection always carries the audio line both ways and a video line (see
+// connectOne), so turning a device off or on only changes what a line carries.
+
+// Microphone off: the sent track goes silent (enabled = false), and the meter greys out but keeps showing the input,
+// so speaking while muted is visible. The microphone itself stays open, ready to be turned back on at once.
+$('mic-toggle').onclick = () => setMic(!micOn);
+function setMic(on) {
+  micOn = on;
+  localStorage.setItem('micOn', on ? '1' : '0');
+  if (sendTrack) sendTrack.enabled = on;
+  recvMicMiss = 0; // the receiver's "no microphone sound lately" was about the muted track
+  dlog('microphone', on ? 'on' : 'off (muted)');
+  renderToggles();
+  renderStatus();
+  // Turned on with no microphone open (it failed at Start, or ended): this click is the user asking for it again.
+  if (on && live && !stream) reacquireMic();
+}
+
+// Speaker off: the return path's players are muted here; the Mac keeps sending. The microphone's echo cancellation
+// follows the speaker (see getMic), so the microphone is opened again with the new setting -- a source swap in the graph.
+$('spk-toggle').onclick = () => setSpeaker(!spkOn);
+function setSpeaker(on) {
+  spkOn = on;
+  localStorage.setItem('spkOn', on ? '1' : '0');
+  for (const c of conns.values()) if (c.speaker) c.speaker.muted = !on;
+  dlog('speaker', on ? 'on' : 'off (muted here)');
+  renderToggles();
+  renderStatus();
+  renderConns();
+  if (live) followSpeaker();
+}
+
+// followSpeaker gives the microphone the echo cancellation the speaker now calls for. It waits its turn behind any
+// acquisition under way -- Start's may still be at the permission prompt, opened with the speaker's previous setting --
+// and then reopens the microphone only if the one open has the wrong setting: quick toggles that end where they began
+// cost nothing, and with no microphone open (refused, failed) there is nothing to follow.
+function followSpeaker() {
+  return queueMic(async () => {
+    if (!live || !stream) return;
+    if (stream.getAudioTracks()[0]?.getSettings?.().echoCancellation === spkOn) return;
+    await reacquireMicNow(micId);
+  });
+}
+
+// Camera off: every connection's video line loses its track (replaceTrack(null)) and the camera is stopped, so its
+// light goes off. On: the remembered camera is opened again and put back on every line.
+$('cam-toggle').onclick = () => setCam(!camOn);
+function setCam(on) {
+  camOn = on;
+  localStorage.setItem('camOn', on ? '1' : '0');
+  dlog('camera', on ? 'on' : 'off');
+  renderToggles();
+  if (!live) { renderTile(); renderStatus(); return; }
+  if (on) acquireCam(camId); else releaseCam();
+  renderTile();
+  renderStatus();
+}
+
+// renderToggles shows each switch's state: aria-pressed, Meet's red when off, the slashed icon, and a title saying
+// what a click does. The accessible name stays the device's, so a screen reader says "Microphone, toggle, pressed",
+// followed by the device's status (aria-describedby). A device that is on but does not work (its status is red) gets
+// the slashed icon too, in the "problem" look: aria-pressed keeps what the user wants, so a click still turns it off,
+// and a second one tries again.
+const TOGGLES = [
+  { id: 'mic-toggle', kind: 'mic', on: () => micOn, name: 'mic', icon: 'i-mic', off: 'i-mic-off', tOff: 'btn_mic_off', tOn: 'btn_mic_on' },
+  { id: 'cam-toggle', kind: 'cam', on: () => camOn, name: 'camera', icon: 'i-cam', off: 'i-cam-off', tOff: 'btn_cam_off', tOn: 'btn_cam_on' },
+  { id: 'spk-toggle', kind: 'spk', on: () => spkOn, name: 'speaker', icon: 'i-spk', off: 'i-spk-off', tOff: 'btn_spk_off', tOn: 'btn_spk_on' },
+];
+function renderToggles() {
+  for (const x of TOGGLES) {
+    const b = $(x.id), on = x.on(), problem = on && statusNow[x.kind]?.state === 'bad';
+    b.setAttribute('aria-pressed', String(on));
+    b.setAttribute('aria-label', t(x.name));
+    b.title = t(on ? x.tOff : x.tOn);
+    b.classList.toggle('off', !on);
+    b.classList.toggle('problem', problem);
+    b.querySelector('use').setAttribute('href', '#' + (on && !problem ? x.icon : x.off));
+  }
+  $('mic-level').classList.toggle('muted', !micOn);
+  $('spk-level').classList.toggle('muted', !spkOn);
+  $('mic-bars').classList.toggle('muted', !micOn);
+}
+
+// ---- Volumes ----
+
+// The sliders act while they move; the choice is remembered, and logged, when they are let go.
+$('mic-gain').value = micGain;
+$('mic-gain').setAttribute('aria-label', t('mic_volume'));
+$('mic-gain').oninput = () => {
+  micGain = Number($('mic-gain').value);
+  if (micGainNode) micGainNode.gain.setTargetAtTime(micGain / 100, audioCtx.currentTime, 0.015);
+  renderVolumes();
+  renderStatus(); // "the volume is at 0 %"
+};
+$('mic-gain').onchange = () => {
+  localStorage.setItem('micGain', String(micGain));
+  dlog('microphone volume:', micGain + ' %');
+};
+$('spk-vol').value = spkVol;
+$('spk-vol').setAttribute('aria-label', t('spk_volume'));
+$('spk-vol').oninput = () => {
+  spkVol = Number($('spk-vol').value);
+  for (const c of conns.values()) if (c.speaker) c.speaker.volume = spkVol / 100;
+  renderVolumes();
+  renderStatus();
+};
+$('spk-vol').onchange = () => {
+  localStorage.setItem('spkVol', String(spkVol));
+  dlog('speaker volume:', spkVol + ' %');
+};
+
+// The value shown next to each slider is for the eye (aria-hidden: it would echo every step); assistive technology
+// reads the slider's own aria-valuetext instead.
+function renderVolumes() {
+  $('mic-gain-out').textContent = micGain + '%';
+  $('spk-vol-out').textContent = spkVol + '%';
+  $('mic-gain').setAttribute('aria-valuetext', micGain + ' %');
+  $('spk-vol').setAttribute('aria-valuetext', spkVol + ' %');
+}
+
+// iOS ignores a page setting a media element's volume (it is the device's buttons' alone, and reads back 1): there a
+// speaker slider would show 40 % while playing at 100 %, so it is left out, and the level meter stays.
+const canSetVolume = (() => {
+  try {
+    const a = document.createElement('audio');
+    a.volume = 0.5;
+    return Math.abs(a.volume - 0.5) < 0.01;
+  } catch { return false; }
+})();
+$('spk-vol-box').hidden = !canSetVolume;
+$('mic-level').setAttribute('aria-label', t('mic_level'));
+$('spk-level').setAttribute('aria-label', t('spk_level'));
+
+// ---- Audio profiles ----
+
 // Audio profiles: switch a whole group of settings at once instead of tuning one knob at a time.
 // The three tiers cover three real problems seen while troubleshooting: bubbly noise-suppression artifacts, background hiss, bad gain.
 const PROFILES = {
   denoise: { label: 'profile_denoise', ns: true,  agc: true  }, // noisy room, mic level fine
   clean:   { label: 'profile_clean',   ns: false, agc: true  }, // use when noise suppression sounds bubbly
-  raw:     { label: 'profile_raw',     ns: false, agc: false }, // leave everything to the receiver's AGC
+  raw:     { label: 'profile_raw',     ns: false, agc: false }, // no processing: for a mic whose level is already right
 };
 let profile = localStorage.getItem('profile');
 // Backwards compatibility with the old ?ns=0 usage
 if (!PROFILES[profile]) profile = new URLSearchParams(location.search).get('ns') === '0' ? 'clean' : 'denoise';
 
+$('profiles').setAttribute('aria-label', t('mic_processing'));
 for (const [key, p] of Object.entries(PROFILES)) {
   const b = document.createElement('button');
+  b.type = 'button';
   b.textContent = t(p.label);
+  b.title = t(p.label);
   b.dataset.key = key;
   b.onclick = () => switchProfile(key);
   $('profiles').appendChild(b);
@@ -620,70 +1549,135 @@ for (const [key, p] of Object.entries(PROFILES)) {
 renderProfiles();
 
 function renderProfiles() {
-  for (const b of $('profiles').children) b.classList.toggle('on', b.dataset.key === profile);
+  for (const b of $('profiles').children) {
+    b.classList.toggle('on', b.dataset.key === profile);
+    b.setAttribute('aria-pressed', String(b.dataset.key === profile));
+  }
 }
 
-// Switching while live: grab a new track with the new constraints and swap it in via replaceTrack,
-// so the connection stays up with no renegotiation. When not live, just remember the choice for the next start.
+// Switching while live: grab a new track with the new constraints and swap it into the graph,
+// so the connections stay up with no renegotiation. When not live, just remember the choice for the next start.
 async function switchProfile(key) {
   if (key === profile) return;
   profile = key;
   localStorage.setItem('profile', key);
+  dlog('profile:', key);
   renderProfiles();
   if (!live) return;
   await reacquireMic();
 }
 
-// Return path: the remote Mac's system audio (other people in a meeting, alerts, video) plays out here,
-// so the remote-desktop software's audio transport can be turned off. On by default.
-let hear = localStorage.getItem('hear') !== '0';
-$('hear').checked = hear;
-$('hear').onchange = () => toggleHear($('hear').checked);
+// ---- Devices ----
 
-async function toggleHear(on) {
-  hear = on;
-  localStorage.setItem('hear', on ? '1' : '0');
-  if (!live) return;
-  // The mic's echo cancellation follows this switch (replaceTrack, seamless); but whether we receive the
-  // return path lives in the m-line direction, so the connection must be rebuilt, with a brief drop -- this toggle is rarely used.
-  // Lock the checkbox during the rebuild so a double click can't start two rebuilds that trample each other.
-  $('hear').disabled = true;
-  try {
-    await reacquireMic();
-    for (const c of conns.values()) connectOne(c);
-  } finally {
-    $('hear').disabled = false;
-  }
+// Device pickers. Each one remembers its choice by the browser's device id (micId, spkId, camId), and '' stands for
+// "whatever the system uses", so that choice keeps following the system. A remembered device that is gone (unplugged,
+// or the browser rotated its id) gives way to the default when it is next opened, and is forgotten.
+// Chromium lists its own stand-ins for the system's devices next to the real ones; the pickers offer the system default
+// as their first entry instead.
+const BROWSER_DEFAULTS = new Set(['default', 'communications']);
+// The Remote Visio devices themselves (the browser extension's microphone, speaker and camera, and the Mac's virtual
+// camera) carry what this page sends: picking one here would loop it back. The pickers leave them out.
+const OURS = /^Remote Visio /;
+// A request with no device named asks for any microphone or camera, which the Remote Visio browser extension (when it is
+// in this browser, with "Use Remote Visio by default" on) answers with its own devices, after a question about this page.
+// Naming the browser's default device, as a mere preference, leaves the request to the browser: it picks the device it
+// would pick anyway (the system default microphone; a camera, as no camera has that id), and other browsers ignore it.
+const ANY_DEVICE = { ideal: 'default' };
+// The names of the devices seen so far, by id, so a log line can still name one that has just been unplugged.
+const deviceNames = new Map();
+
+// deviceName names a device for the debug log.
+function deviceName(id) {
+  if (!id) return 'default';
+  return deviceNames.has(id) ? `"${deviceNames.get(id)}"` : `id ${id.slice(0, 8)}...`;
 }
 
-// reacquireMic re-acquires the mic with the current settings and swaps it seamlessly into every connection.
-async function reacquireMic() {
+// Microphone: the one picked, or the system's default. Its state for the status line: a problem that left no
+// microphone open (micProblem), the permission prompt still waiting (micWaiting), or a note about a failed switch
+// while the previous microphone carries on (micNote).
+let micId = localStorage.getItem('micId') || '';
+let micProblem = null, micWaiting = false, micNote = '';
+$('micsel').onchange = () => switchMic($('micsel').value);
+$('micsel').setAttribute('aria-label', t('mic'));
+
+function rememberMic(id) {
+  micId = id;
+  if (id) localStorage.setItem('micId', id); else localStorage.removeItem('micId');
+}
+
+// Picking a microphone while live: open it and swap it in (reacquireMic); the connections stay up. When not live,
+// just remember the choice for the next start.
+async function switchMic(id) {
+  if (id === micId) return;
+  dlog('microphone picked:', deviceName(id));
+  if (!live) { rememberMic(id); return; }
+  $('micsel').disabled = true;
+  try { await reacquireMic(id); } finally { $('micsel').disabled = false; }
+}
+
+// Microphone acquisitions are queued, never concurrent, like the camera's: a pick made while Start is still waiting for
+// the first one must end with the microphone picked last, not race it.
+let micQueue = Promise.resolve();
+function queueMic(run) {
+  return micQueue = micQueue.then(run, run);
+}
+
+// reacquireMic re-acquires the mic (the one in use, or `want`) with the current settings and swaps it into the graph.
+// The pick is remembered once that mic is open; a failed switch keeps the one in use, and the picker returns to it.
+function reacquireMic(want = micId) {
+  return queueMic(() => reacquireMicNow(want));
+}
+
+// reacquireMicNow is reacquireMic's run, for a caller that already holds its turn in the queue.
+async function reacquireMicNow(want) {
+  if (!live || !audioCtx) return; // no sound graph: the microphone's status already says why
   try {
-    const next = await getMic();
+    let { next, id } = await openMic(want);
+    // Chrome cannot open a microphone with echo cancellation while it is open without: it hands back the open one's
+    // processing (seen when the speaker is turned back on). Then let go of the old one and open it again -- a
+    // moment of silence, on a switch the user just made.
+    if (stream && spkOn && next.getAudioTracks()[0].getSettings?.().echoCancellation === false) {
+      dlog('microphone: echo cancellation not applied while the previous one is open: reopening');
+      next.getTracks().forEach(t => t.stop());
+      dropMic();
+      ({ next, id } = await openMic(want));
+    }
     if (!live) { next.getTracks().forEach(t => t.stop()); return; }
-    const old = stream;
-    stream = next;
-    attachMic();
-    cancelAnimationFrame(rafId); rafId = null;
-    if (audioCtx) { audioCtx.close(); audioCtx = null; }
-    meter(stream);
-    if (old) old.getTracks().forEach(t => t.stop());
+    rememberMic(id);
+    useMic(next);
+    dlog('microphone:', describeTrack(next.getAudioTracks()[0]));
   } catch (err) {
-    $('micstate').textContent = explainMicError(err);
+    dlog('microphone switch failed:', err.name || '', err.message || '');
+    if (stream) micNote = explainMicError(err); else micProblem = micProblemOf(err);
+  }
+  renderStatus();
+  listDevices(); // the picker follows the mic in use (the list may have changed)
+}
+
+// openMic opens the microphone `want` (a device id, or '' for the default). A remembered one that is gone gives way to
+// the default. Resolves to the stream and the id of the choice it honoured.
+async function openMic(want) {
+  try {
+    return { next: await getMic(want), id: want };
+  } catch (err) {
+    if (!want || (err.name !== 'OverconstrainedError' && err.name !== 'NotFoundError')) throw err;
+    dlog('microphone', deviceName(want), `is not available (${err.name}): using the default`);
+    return { next: await getMic(''), id: '' };
   }
 }
 
-// getMic acquires the microphone for the current profile.
-// Gain is handled centrally by the receiver; this side only wants a fairly raw signal.
-// Echo cancellation is on only while hearing the return path: the remote audio plays from the local
-// speakers, the mic would send it straight back, and the browser's AEC knows exactly what it played.
-// Without the return path nothing can loop back, so leaving it on only adds latency.
-function getMic() {
+// getMic acquires one microphone (the default for '') for the current profile.
+// Gain control is the browser's own (autoGainControl, by profile), before the volume set here.
+// Echo cancellation is on only while the speaker is: the remote audio plays from the local speakers, the mic would
+// send it straight back, and the browser's AEC knows exactly what it played. With the speaker off nothing can loop
+// back, so leaving it on only adds latency.
+function getMic(id) {
   const p = PROFILES[profile];
   return withTimeout(
     navigator.mediaDevices.getUserMedia({
       audio: {
-        echoCancellation: hear,
+        deviceId: id ? { exact: id } : ANY_DEVICE,
+        echoCancellation: spkOn,
         noiseSuppression: p.ns,
         autoGainControl: p.agc,
       },
@@ -692,41 +1686,116 @@ function getMic() {
     'The microphone never responded');
 }
 
-// Camera: this device's camera goes to the Mac as a second, send-only track and comes out of the Remote Visio virtual
-// camera there. Off by default: it costs bandwidth and a second permission prompt, and most sessions are voice only.
-let cam = localStorage.getItem('cam') === '1';
-let camId = localStorage.getItem('camId') || '';
-let camStream = null;
-// The camera status line shows, in order: the last acquisition problem, "no camera" from the device list, the codec warning.
-let camErr = '', noCam = false, noH264 = false;
-$('cam').checked = cam;
-$('cam').onchange = () => toggleCam($('cam').checked);
-$('camsel').onchange = () => switchCam($('camsel').value);
-if (navigator.mediaDevices) navigator.mediaDevices.addEventListener('devicechange', listCams);
-listCams();
-
-function renderCamState() {
-  $('camstate').textContent = camErr || (cam && noCam ? t('cam_none') : '') || (cam && noH264 ? t('cam_noh264') : '');
+// useMic makes `next` the microphone in use: the graph's source (so every connection sends it, untouched), and the
+// meter's. The previous one, if any, is stopped.
+function useMic(next) {
+  const old = stream;
+  stream = next;
+  next.getAudioTracks()[0].onended = () => micEnded(next);
+  if (micSource) micSource.disconnect();
+  micSource = audioCtx.createMediaStreamSource(next);
+  micSource.connect(micGainNode);
+  micProblem = null;
+  micNote = '';
+  if (old) old.getTracks().forEach(t => t.stop());
 }
 
-async function toggleCam(on) {
-  cam = on;
-  localStorage.setItem('cam', on ? '1' : '0');
-  if (!live) { if (on) listCams(); else releaseCam(); return; }
-  // Like the return path, the camera lives in the m-line layout, so switching it takes a rebuild (brief drop);
-  // the checkbox is locked meanwhile so a double click can't start two rebuilds that trample each other.
-  $('cam').disabled = true;
+// dropMic takes the microphone out of the graph and stops it; the connections keep sending the graph's (now silent) track.
+function dropMic() {
+  if (micSource) { micSource.disconnect(); micSource = null; }
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+}
+
+// A microphone that ends on its own (unplugged, or taken by the system) would leave every connection sending silence.
+// Open the chosen one again -- the default, if the chosen one is gone -- but only when the browser already allows the
+// microphone: a permission prompt out of nowhere, or right after the user took the permission back, is not ours to
+// raise. Otherwise the status line says what happened. (Stopping a track ourselves fires no "ended".)
+async function micEnded(s) {
+  if (stream !== s || !live) return;
+  dlog('microphone ended:', describeTrack(s.getAudioTracks()[0]));
+  let allowed = false;
   try {
-    if (on) {
-      await acquireCam(camId);
-      if (!camStream) return; // nothing to send; the status line says why
-    } else {
-      releaseCam();
-    }
-    for (const c of conns.values()) connectOne(c);
-  } finally {
-    $('cam').disabled = false;
+    allowed = (await navigator.permissions.query({ name: 'microphone' })).state === 'granted';
+  } catch { /* the browser cannot tell: better silent than a prompt */ }
+  if (stream !== s || !live) return;
+  if (!allowed) {
+    dropMic();
+    micProblem = { key: 'ended', text: t('st_stopped'), detail: t('mic_ended') };
+    renderStatus();
+    return;
   }
+  await reacquireMic();
+}
+
+// Speaker: where the return path plays on this device. Browsers without setSinkId (Safari, Firefox, phones) get no
+// picker and play it on the system's default output; the switch, the volume and the level are theirs all the same.
+const canPickSpeaker = typeof HTMLMediaElement === 'function' && 'setSinkId' in HTMLMediaElement.prototype;
+let spkId = localStorage.getItem('spkId') || '';
+$('spksel').onchange = () => switchSpeaker($('spksel').value);
+$('spksel').setAttribute('aria-label', t('speaker'));
+$('spk-pill').hidden = !canPickSpeaker;
+
+function rememberSpeaker(id) {
+  spkId = id;
+  if (id) localStorage.setItem('spkId', id); else localStorage.removeItem('spkId');
+}
+
+// routeSpeaker points a connection's new return-path player at the chosen output, before it gets any sound, so nothing
+// plays on the wrong one first. Never rejects: a player that cannot follow the choice plays on the default.
+async function routeSpeaker(c, el) {
+  if (!canPickSpeaker || !spkId) return;
+  const want = spkId;
+  try {
+    await el.setSinkId(want);
+    dlog(transport.tag(c), 'return path plays on', deviceName(want));
+  } catch (err) {
+    dlog(transport.tag(c), 'return path cannot play on', deviceName(want) + ':', err.name || '', err.message || '');
+    if (err.name !== 'NotFoundError' || spkId !== want) return;
+    dlog('speaker', deviceName(want), 'is not available: using the default');
+    rememberSpeaker('');
+    listDevices();
+  }
+}
+
+// switchSpeaker moves every return-path player to the output picked, at once; the players made later follow it too
+// (routeSpeaker). When an output refuses, all of them go back to the previous one, and so does the picker.
+async function switchSpeaker(id) {
+  if (id === spkId) return;
+  const was = spkId;
+  dlog('speaker picked:', deviceName(id));
+  rememberSpeaker(id);
+  const players = [...conns.values()].map(c => c.speaker).filter(Boolean);
+  if (!players.length) return;
+  $('spksel').disabled = true;
+  try {
+    for (const el of players) await el.setSinkId(id);
+    dlog(`speaker switched: the return path plays on ${deviceName(id)} (${players.length} player${players.length === 1 ? '' : 's'})`);
+  } catch (err) {
+    dlog('speaker switch failed:', err.name || '', err.message || '');
+    rememberSpeaker(was);
+    for (const el of players) el.setSinkId(was).catch(() => { /* stays where it is */ });
+    $('spksel').value = was;
+  } finally {
+    $('spksel').disabled = false;
+  }
+}
+
+// Camera: this device's camera goes to the Mac on every connection's send-only video line and comes out of the Remote
+// Visio camera there. Its state for the status line, like the microphone's: a problem that left no camera open
+// (camProblem), the permission prompt still waiting (camWaiting), a failed switch while the previous camera carries on
+// (camNote); and from the device list and the offer, no camera at all (noCam) and no H.264 to send it with (noH264).
+let camId = localStorage.getItem('camId') || '';
+let camStream = null;
+let camProblem = null, camWaiting = false, camNote = '', noCam = false, noH264 = false;
+$('camsel').onchange = () => switchCam($('camsel').value);
+$('camsel').setAttribute('aria-label', t('camera'));
+if (navigator.mediaDevices) {
+  navigator.mediaDevices.addEventListener('devicechange', async () => {
+    const devs = await listDevices();
+    if (!devs) return;
+    const count = kind => devs.filter(d => d.kind === kind && !BROWSER_DEFAULTS.has(d.deviceId)).length;
+    dlog(`devices changed: ${count('audioinput')} microphones, ${count('audiooutput')} speakers, ${count('videoinput')} cameras`);
+  });
 }
 
 // getCam asks for one camera: the remembered one when there is one, else whatever the browser picks.
@@ -735,7 +1804,7 @@ function getCam(id) {
   return withTimeout(
     navigator.mediaDevices.getUserMedia({
       video: {
-        deviceId: id ? { exact: id } : undefined,
+        deviceId: id ? { exact: id } : ANY_DEVICE,
         width: { ideal: 1280 },
         height: { ideal: 720 },
         frameRate: { ideal: 30, max: 30 },
@@ -756,7 +1825,8 @@ function acquireCam(want) {
 }
 
 async function acquireCamNow(want) {
-  const hint = setTimeout(() => { camErr = t('cam_waiting'); renderCamState(); }, 2500);
+  if (!live || !camOn) return; // turned off (or stopped) while this run waited its turn
+  const hint = setTimeout(() => { camWaiting = true; renderStatus(); }, 2500);
   let released = ''; // a working camera let go of for the new one, to bring back if the new one fails
   try {
     let next;
@@ -765,6 +1835,7 @@ async function acquireCamNow(want) {
     } catch (err) {
       if (want && (err.name === 'OverconstrainedError' || err.name === 'NotFoundError')) {
         // The remembered camera is gone (unplugged, or the browser rotated its id): take whichever is there now.
+        dlog('camera', deviceName(want), `is not available (${err.name}): using whichever is there`);
         want = '';
         camId = '';
         localStorage.removeItem('camId');
@@ -778,181 +1849,309 @@ async function acquireCamNow(want) {
         throw err;
       }
     }
-    showCam(next, want);
-    camErr = '';
-    dlog('camera:', describeTrack(next.getVideoTracks()[0]));
+    if (showCam(next, want)) dlog('camera:', describeTrack(next.getVideoTracks()[0]));
   } catch (err) {
     dlog('camera failed:', err.name || '', err.message || '');
-    camErr = explainCamError(err);
     // The new camera failed after the old one was let go of: bring the old one back, so the picture stays and the
     // picker returns to it. The failed pick is not remembered; choosing it again is a fresh try.
     if (!camStream && released && released !== want) {
       try { showCam(await getCam(released), released); } catch { /* gone too; the message is about the new one */ }
     }
-    if (!camStream) { attachCam(null); $('campreview').hidden = true; }
+    if (camStream) camNote = explainCamError(err);
+    else { camProblem = camProblemOf(err); attachCam(null); }
   } finally {
     clearTimeout(hint);
-    renderCamState();
-    await listCams(); // labels are known now, and the picker follows the camera in use (the list may have changed)
+    camWaiting = false;
+    renderTile();
+    renderStatus();
+    await listDevices(); // labels are known now, and the picker follows the camera in use (the list may have changed)
   }
 }
 
 // showCam makes `next` the camera in use: remembered (by the id the browser reports, else as `want`), previewed and
-// sent on every connection; the previous camera, if any, is stopped. Nothing when the session ended meanwhile.
+// sent on every connection; the previous camera, if any, is stopped. Nothing when the session ended or the camera was
+// turned off meanwhile (false then).
 function showCam(next, want) {
-  if (!live || !cam) { next.getTracks().forEach(t => t.stop()); return; }
+  if (!live || !camOn) { next.getTracks().forEach(t => t.stop()); return false; }
   const old = camStream;
   camStream = next;
+  camProblem = null;
+  camNote = '';
   const track = next.getVideoTracks()[0];
   camId = track.getSettings?.().deviceId || want;
   localStorage.setItem('camId', camId);
   // A track that ends on its own (camera unplugged, capture stopped from the browser's UI, permission revoked) is
-  // not reopened -- that would be a new prompt out of nowhere -- but the badge and preview must not claim a picture
+  // not reopened -- that would be a new prompt out of nowhere -- but the tile and the status must not claim a picture
   // that is no longer sent; the picker offers the other cameras, or says there is none.
   track.onended = () => {
     if (camStream !== next) return;
+    dlog('camera ended:', describeTrack(track));
     camStream = null;
+    camProblem = { key: 'ended', text: t('st_stopped'), detail: t('cam_ended') };
     attachCam(null);
     $('campreview').srcObject = null;
-    $('campreview').hidden = true;
-    listCams();
+    renderTile();
+    renderStatus();
+    listDevices();
   };
   attachCam(track);
   const v = $('campreview');
   v.srcObject = next;
-  v.hidden = false;
   v.play().catch(() => { /* muted and inline, so autoplay is normally allowed */ });
   if (old) old.getTracks().forEach(t => t.stop());
+  return true;
 }
 
-// releaseCam stops the camera and takes the preview down; the connections keep their video line until the next rebuild.
+// releaseCam takes the camera off every connection (their video lines stay, empty), stops it and takes the preview down.
 function releaseCam() {
+  attachCam(null);
   if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
-  const v = $('campreview');
-  v.srcObject = null;
-  v.hidden = true;
-  camErr = '';
-  renderCamState();
-  listCams(); // hides the picker when the camera is off
+  $('campreview').srcObject = null;
+  camProblem = null;
+  camNote = '';
+  renderTile();
 }
 
 // Switching cameras while live: open the new one and swap it in with replaceTrack; the connections stay up. The pick
 // is remembered once that camera is open (a failed switch leaves the previous one in place and selected).
 async function switchCam(id) {
   if (id === camId) return;
-  if (!live || !cam) { camId = id; localStorage.setItem('camId', id); return; }
+  dlog('camera picked:', deviceName(id));
+  if (!live || !camOn) { camId = id; localStorage.setItem('camId', id); return; }
   $('camsel').disabled = true;
   try { await acquireCam(id); } finally { $('camsel').disabled = false; }
 }
 
-// listCams fills the camera picker and notes when there is no camera at all. Labels (and so the picker) only come once
-// a camera has been granted; the device kinds come earlier, enough to say up front that there is nothing to send.
-// Runs at load, after each grant, and whenever a camera is plugged in or pulled out.
-async function listCams() {
+// listDevices fills the three pickers and notes when there is no camera at all. Names only come once the browser has
+// been allowed a microphone or camera; until then each pill shows what it is for. The device kinds come earlier,
+// enough to say up front that there is no camera to send. Runs at load, after each grant, and whenever a device is
+// plugged in or pulled out. Resolves to the device list (nothing when there is none).
+async function listDevices() {
   let devs;
-  try { devs = await navigator.mediaDevices.enumerateDevices(); } catch { return; /* no picker, no hint */ }
-  const cams = devs.filter(d => d.kind === 'videoinput');
-  const sel = $('camsel');
-  sel.innerHTML = '';
-  for (const d of cams) {
-    if (!d.label) continue;
-    const o = document.createElement('option');
-    o.value = d.deviceId;
-    o.textContent = d.label;
-    sel.appendChild(o);
-  }
-  if (cams.some(d => d.deviceId === camId)) sel.value = camId;
-  sel.hidden = !cam || sel.options.length < 2; // one camera needs no picker
-  noCam = cams.length === 0;
-  renderCamState();
+  try { devs = await navigator.mediaDevices.enumerateDevices(); } catch { return; /* no pickers, no hint */ }
+  for (const d of devs) if (d.label && !BROWSER_DEFAULTS.has(d.deviceId)) deviceNames.set(d.deviceId, d.label);
+  noCam = !devs.some(d => d.kind === 'videoinput');
+  fillPicker($('micsel'), devs, 'audioinput', micId, true, t('mic'));
+  fillPicker($('spksel'), devs, 'audiooutput', spkId, true, t('speaker'));
+  fillPicker($('camsel'), devs, 'videoinput', camId, false, noCam ? t('cam_none') : t('camera'));
+  renderTile();
+  renderStatus();
+  return devs;
 }
 
+// fillPicker lists the named devices of one kind (but Remote Visio's) in a picker and selects `current` when it is
+// there. withDefault puts the system default first (value ''), named after the device it stands for when the browser
+// says which: Chromium gives its "default" entry the group of that device. The device's name comes first, as
+// "MacBook Pro Microphone (System default)": a narrow pill cuts the end off, and the name is what it must show. With
+// no names yet (no permission so far), the picker holds one entry, `placeholder`, which says what the pill is for.
+function fillPicker(sel, devs, kind, current, withDefault, placeholder) {
+  const named = devs.filter(d => d.kind === kind && d.label && !OURS.test(d.label));
+  const real = named.filter(d => !BROWSER_DEFAULTS.has(d.deviceId));
+  const entries = [];
+  if (withDefault && real.length) {
+    const def = named.find(d => d.deviceId === 'default');
+    const same = def ? real.filter(d => d.groupId === def.groupId) : [];
+    const name = same.length === 1 ? same[0].label : def ? def.label : '';
+    entries.push(['', name ? `${name} (${t('dev_default')})` : t('dev_default')]);
+  }
+  for (const d of real) entries.push([d.deviceId, d.label]);
+  const placeholderOnly = !entries.length;
+  if (placeholderOnly) entries.push(['', placeholder]);
+  sel.replaceChildren(...entries.map(([value, text]) => {
+    const o = document.createElement('option');
+    o.value = value;
+    o.textContent = text;
+    return o;
+  }));
+  sel.dataset.placeholder = placeholderOnly ? '1' : '0';
+  if (entries.some(([value]) => value === current)) sel.value = current;
+  sel.title = sel.selectedOptions[0]?.textContent || '';
+}
+
+// ---- Session ----
+
+// session counts Starts and Stops. A run that awaited something (a permission prompt, the receiver) goes on only while
+// its session is the current one: Stop then Start again, quickly, must not let the first Start's runs carry on as if
+// they belonged to the second.
+let session = 0;
+
 async function start() {
+  // Relay mode with nothing to send to (no computer paired, or none selected): the line under Start says so already.
+  if (transport.blocked?.()) return;
   live = true;
-  dlog('start: profile', profile, '| return path', hear ? 'on' : 'off', '| camera', cam ? 'on' : 'off');
+  const mine = ++session;
+  micProblem = null; micNote = ''; camProblem = null; camNote = '';
+  let noAudio = null;
+  try {
+    ensureAudio(); // first, inside the click
+  } catch (err) {
+    noAudio = err;
+    closeAudio();
+    dlog('sound processing unavailable:', err.name || '', err.message || String(err), '(the microphone cannot be sent)');
+    micProblem = { key: 'noaudio', text: t('st_error'), detail: t('mic_noaudio') };
+  }
+  // Relay mode: one live tab at a time, as two would keep taking the computer from each other. Asked only once the
+  // sound graph is made, which must happen inside the click. Refused, the session ends at once (the line under Start
+  // says why); stopped meanwhile, there is nothing left to do.
+  if (transport.begin && !(await transport.begin())) {
+    if (session === mine) stop();
+    return;
+  }
+  if (session !== mine) return;
+  dlog('start: profile', profile, '| microphone', micOn ? 'on' : 'off (muted)', '| speaker', spkOn ? 'on' : 'off', '| camera', camOn ? 'on' : 'off',
+    '| volumes: microphone', micGain + ' %, speaker', spkVol + ' %');
+  dlog('devices: microphone', deviceName(micId), '| speaker', canPickSpeaker ? deviceName(spkId) : 'default (this browser cannot pick one)',
+    '| camera', deviceName(camId));
   $('toggle').textContent = t('stop');
   $('toggle').classList.add('live');
+  statsTimer = setInterval(poll, 1000);
+  statusTimer = setInterval(fetchStatus, 3000);
+  fetchStatus();
+  tickLevels();
+  renderTile();
+  renderStatus();
 
   // Mic permission and network negotiation are independent; running them serially just adds their latencies.
-  // Kick off discovery and connections first (track attached later) while asking for the mic in parallel.
+  // Kick off discovery and connections first (they send the graph's track, silent until the mic is in) while asking
+  // for the mic in parallel.
   discover();
   discoverTimer = setInterval(discover, 30000);
 
+  // If it takes long, the permission prompt is probably still waiting in the address bar, or another app holds the mic.
+  // Stalling here with no explanation would just make the user think the product is broken.
+  // (With no sound graph there is nothing to send the microphone with: it is not asked for.)
+  const hint = setTimeout(() => { if (session === mine) { micWaiting = true; renderStatus(); } }, 2500);
   try {
-    // If it takes long, the permission prompt is probably still waiting in the address bar, or another app holds the mic.
-    // Stalling here with no explanation would just make the user think the product is broken.
-    const hint = setTimeout(() => {
-      $('micstate').textContent = t('mic_waiting');
-    }, 2500);
-
-    stream = await getMic();
-    clearTimeout(hint);
-    $('micstate').textContent = '';
-    dlog('microphone:', describeTrack(stream.getAudioTracks()[0]));
+    if (!noAudio) {
+      await queueMic(async () => {
+        const { next, id } = await openMic(micId);
+        if (session !== mine) { next.getTracks().forEach(t => t.stop()); return; }
+        rememberMic(id);
+        useMic(next);
+      });
+    }
   } catch (err) {
+    // Like a meeting: the session goes on without the microphone (the camera and the speaker may well work), and the
+    // microphone's status says what to fix. Turning the microphone on again, or picking one, tries again.
     dlog('microphone failed:', err.name || '', err.message || '');
-    $('micstate').textContent = explainMicError(err);
-    stop();
-    return;
+    if (session === mine) micProblem = micProblemOf(err);
+  } finally {
+    clearTimeout(hint);
+    if (session === mine) micWaiting = false;
   }
-  meter(stream);
-  attachMic();
-  // The camera is optional: a failure shows on its own status line and doesn't stop the session.
-  if (cam) acquireCam(camId);
+  if (session !== mine) return; // stopped (and maybe started again) while the microphone was being asked for
+  if (stream) dlog('microphone:', describeTrack(stream.getAudioTracks()[0]));
+  renderStatus();
+  listDevices(); // the names are known now: fill the pickers
+  // The camera comes after the microphone, so the two permission prompts don't stack; a failure shows on its own
+  // status line and doesn't stop the session.
+  if (camOn) acquireCam(camId);
 }
 
-// discover finds all receivers: the one that served this page plus the others it scanned for us.
-// The browser can't reach the Tailscale device list itself, so the receiver does it (/api/receivers).
-let lastDiscovered = null; // the debug log notes the list when it changes, not every 30 s
+// discover connects to every target the transport lists: the receiver that served this page and the others it scanned
+// for (receiver mode), or the selected computer (relay mode). Again every 30 s while live, as a receiver may come up.
+// A transport that keeps only what it lists (relay mode: the computer selected now) also loses the others.
+let discoverRun = 0; // the latest discover's: an earlier one still going leaves the list to it
 async function discover() {
   if (!live) return;
-  ensureConn(location.origin);
-  let found;
-  try {
-    const res = await fetch('/api/receivers');
-    if (res.ok) {
-      const list = await res.json();
-      found = list.length ? list.join(', ') : 'none';
-      for (const t of list) ensureConn(t);
-    } else {
-      found = `failed (HTTP ${res.status})`;
-    }
-  } catch (err) { /* no list: connect to this receiver only */
-    found = `failed (${err.message || err})`;
+  const run = ++discoverRun;
+  const listed = new Set();
+  for await (const target of transport.targets()) {
+    if (!live || run !== discoverRun) return; // stopped, or listed again, while the list was coming
+    listed.add(target.key);
+    ensureConn(target);
   }
-  if (found !== lastDiscovered) { lastDiscovered = found; dlog('other receivers:', found); }
+  if (!live || !transport.only || run !== discoverRun) return;
+  for (const c of [...conns.values()]) if (!listed.has(c.target.key)) dropConn(c);
 }
 
 function ensureConn(target) {
-  const key = hostOf(target);
-  for (const c of conns.values()) if (hostOf(c.target) === key) return;
+  for (const c of conns.values()) {
+    if (c.target.key === target.key || transport.sameTarget?.(c.target, target)) return;
+  }
   const c = { target, retry: 0, state: t('connecting'), cls: 'warn', rtt: '', video: '' };
-  conns.set(target, c);
+  conns.set(target.key, c);
   renderConns();
   connectOne(c);
+}
+
+// dropConn ends one connection and takes it off the list, as Stop does with all of them (relay mode: the computer is
+// no longer the selected one, or was forgotten).
+function dropConn(c) {
+  if (conns.get(c.target.key) !== c) return;
+  dlog(transport.tag(c), 'connection closed: no longer a target');
+  c.gen = (c.gen || 0) + 1; // a run still under way gives up at its next step
+  clearTimeout(c.retryTimer);
+  clearTimeout(c.healTimer);
+  transport.close(c, 'stop');
+  if (c.pc) { c.pc.close(); c.pc = null; }
+  detachSpeaker(c);
+  conns.delete(c.target.key);
+  renderConns();
+  renderStatus();
+}
+
+// endConn ends a connection's attempt from the transport's side (relay mode: the computer ended it, or the encrypted
+// session broke) as a failed attempt ends: the usual retry follows, unless the transport holds the connection.
+function endConn(c, why) {
+  if (!live || conns.get(c.target.key) !== c) return;
+  c.gen = (c.gen || 0) + 1; // a run still under way gives up at its next step
+  clearTimeout(c.healTimer); c.healTimer = null;
+  transport.close(c);
+  if (c.pc) { c.pc.close(); c.pc = null; }
+  detachSpeaker(c);
+  c.rtt = c.video = ''; // what the row said of the connection just closed
+  scheduleRetry(c, why);
+  renderConns();
+  renderStatus();
 }
 
 function hostOf(target) {
   try { return new URL(target).hostname; } catch { return target; }
 }
 
-// attachMic pushes the mic track into every established connection. replaceTrack doesn't trigger
-// renegotiation, so connections can be built first and start streaming as soon as the track arrives.
-function attachMic() {
-  if (!stream) return;
-  for (const c of conns.values()) {
-    if (!c.pc) continue;
-    const sender = senderOf(c.pc, 'audio');
-    if (sender) sender.replaceTrack(stream.getAudioTracks()[0]);
-  }
+// isStale tells a run of connectOne (and of the transport's calls it makes) that it no longer counts: a newer attempt
+// of the same connection started (its generation), Stop came, or the connection is no longer in the list.
+function isStale(c, gen) {
+  return c.gen !== gen || !live || conns.get(c.target.key) !== c;
 }
 
-// attachCam does the same for the camera; null takes the picture away without a rebuild.
+// mainConn is the connection the device statuses follow: the one to the receiver that served this page (the one whose
+// /api/status the page reads) or the selected computer, else the first.
+function mainConn() {
+  for (const c of conns.values()) if (transport.isMain(c)) return c;
+  return conns.values().next().value || null;
+}
+
+// attachCam puts the camera's track (or none: null) on every established connection's video line; replaceTrack needs
+// no renegotiation.
 function attachCam(track) {
   for (const c of conns.values()) {
     if (!c.pc) continue;
     const sender = senderOf(c.pc, 'video');
-    if (sender) sender.replaceTrack(track);
+    if (sender) {
+      sender.replaceTrack(track)
+        .catch(err => dlog(transport.tag(c), 'camera not attached:', err.name || '', err.message || ''));
+    }
+  }
+}
+
+// applyDemand starts or pauses the camera's encoding on a connection, as the other side asks (relay mode: the
+// computer sends "demand" when the first page shows the camera and when the last one stops). Paused, the camera stays
+// open and on the line: nothing is renegotiated, and no picture is encoded or sent for nobody.
+function applyDemand(c) {
+  const sender = c.pc && senderOf(c.pc, 'video');
+  if (!sender) return;
+  const want = c.videoWanted !== false;
+  try {
+    const p = sender.getParameters();
+    if (!p.encodings || !p.encodings.length || p.encodings[0].active === want) return;
+    p.encodings[0].active = want;
+    sender.setParameters(p)
+      .then(() => dlog(transport.tag(c), want ? 'camera wanted: sending it' : 'camera not wanted: paused'))
+      .catch(err => dlog(transport.tag(c), 'camera demand not applied:', err.name || '', err.message || ''));
+  } catch (err) {
+    dlog(transport.tag(c), 'camera demand not applied:', err.name || '', err.message || '');
   }
 }
 
@@ -981,42 +2180,168 @@ async function fetchWithin(ms, url, init) {
   }
 }
 
-// Each receiver serves its own /ice-config (same TURN set); fetched cross-origin.
-async function loadICE(target) {
-  try {
-    const res = await fetchWithin(5000, target + '/ice-config');
-    if (res.ok) return await res.json();
-    dlog(hostOf(target), 'ice-config: HTTP', res.status, '(using the default STUN server)');
-  } catch (err) { /* fall back to the default below */
-    dlog(hostOf(target), 'ice-config failed:', err.message || err, '(using the default STUN server)');
-  }
-  return { iceServers: [{ urls: 'stun:stun.miwifi.com:3478' }] };
-}
+// ---- Transports ----
 
-// connectOne maintains the connection to one receiver. On loss it reconnects with backoff -- network
-// recovery, receiver restart, and waking from sleep all go through this path with no extra button press.
+// A transport is how the page reaches the computers it sends to. Both have the same shape, so that the connection code
+// (connectOne and what it calls) is one and the same in both modes:
+//   kind            'receiver' or 'relay'
+//   needsH264       the other side decodes H.264 only: a browser without it cannot send the camera
+//   certHint        a target's self-signed certificate may need accepting once (a cross-origin fetch then fails)
+//   only            keep only the targets listed now (a connection to any other is closed)
+//   jitter          (optional) how much a retry's delay varies at random, as a fraction of it
+//   bundlePolicy    (optional) the RTCPeerConnection's bundle policy; the browser's default without it
+//   targets()       the targets to connect to, as {key, ...}: an async iterable, so the first one starts at once
+//   sameTarget(a,b) (optional) two targets with different keys that are still one computer
+//   label(c)        the connection's name, for its row: plain text, always rendered with textContent
+//   tag(c)          the name at the head of the connection's lines in the debug log
+//   iceConfig(c)    -> {iceServers, iceTransportPolicy?, name?} for a new attempt
+//   prepare(c, pc)  right after the attempt's RTCPeerConnection is made, before its offer
+//   exchange(c, pc, gen) -> the answer to pc's offer; null when the attempt went stale meanwhile
+//   status(c)       -> what the other side reports, {browser, camera}, or null when it reports nothing
+//   isMain(c)       c is the connection the device statuses follow
+//   close(c, why)   the attempt c had is over: a new one starts, or the connection ends (why = 'stop')
+//   stop()          the session is over (Stop)
+// Relay mode adds blocked() (nothing to send to: Start does nothing), begin() (resolves false to refuse Start),
+// linkArrived() (a pairing link came in through the fragment) and hiccup(c) (c's connection lost its peer for now).
+// A transport may hold a connection (c.hold, the reason, shown in its row): no automatic retry then. And a connection's
+// row may carry buttons (c.actions: [{text, run}]).
+
+// The receiver transport: the receivers this page can reach over HTTP. It is the code this page always had, moved
+// here: /api/receivers, /ice-config, the offer POSTed with its candidates, and /api/status.
+let lastDiscovered = null; // the debug log notes the list when it changes, not every 30 s
+const receiverTransport = {
+  kind: 'receiver', needsH264: true, certHint: true, only: false,
+
+  // The receiver that served this page, at once; then the others it scanned for. The browser can't reach the
+  // Tailscale device list itself, so the receiver does it (/api/receivers).
+  async *targets() {
+    yield { key: location.origin };
+    let found, list = [];
+    try {
+      const res = await fetch('/api/receivers');
+      if (res.ok) {
+        list = await res.json();
+        found = list.length ? list.join(', ') : 'none';
+      } else {
+        found = `failed (HTTP ${res.status})`;
+      }
+    } catch (err) { /* no list: connect to this receiver only */
+      found = `failed (${err.message || err})`;
+    }
+    for (const key of list) yield { key };
+    if (found !== lastDiscovered) { lastDiscovered = found; dlog('other receivers:', found); }
+  },
+  // One receiver per host: its page's own address and the scan's entry for it are the same machine.
+  sameTarget(a, b) { return hostOf(a.key) === hostOf(b.key); },
+  label(c) { return (c.name ? c.name + ' · ' : '') + hostOf(c.target.key); },
+  tag(c) { return hostOf(c.target.key); },
+
+  // Each receiver serves its own /ice-config (same TURN set); fetched cross-origin.
+  async iceConfig(c) {
+    const target = c.target.key;
+    try {
+      const res = await fetchWithin(5000, target + '/ice-config');
+      if (res.ok) return await res.json();
+      dlog(hostOf(target), 'ice-config: HTTP', res.status, '(using the default STUN server)');
+    } catch (err) { /* fall back to the default below */
+      dlog(hostOf(target), 'ice-config failed:', err.message || err, '(using the default STUN server)');
+    }
+    return { iceServers: [{ urls: 'stun:stun.miwifi.com:3478' }] };
+  },
+
+  prepare() {},
+
+  // The receiver takes the offer whole, with this side's candidates in it (it does not trickle), and answers the POST.
+  async exchange(c, pc, gen) {
+    const h = hostOf(c.target.key);
+    // Wait for candidate gathering, but at most 3 s: when STUN is unreachable, don't sit through the browser's full 10 s.
+    await new Promise(done => {
+      if (pc.iceGatheringState === 'complete') return done();
+      const cap = setTimeout(() => { dlog(h, 'gathering not complete after 3 s: sending the candidates found so far'); done(); }, 3000);
+      pc.onicegatheringstatechange = () => {
+        if (pc.iceGatheringState === 'complete') { clearTimeout(cap); done(); }
+      };
+    });
+    if (isStale(c, gen)) return null;
+
+    setConnState(c, t('negotiating'), 'warn');
+    const sent = (pc.localDescription.sdp.match(/^a=candidate:/gm) || []).length;
+    dlog(h, `sending the offer (${sent} candidate${sent === 1 ? '' : 's'})`);
+    const asked = performance.now();
+    const res = await fetchWithin(15000, c.target.key + '/offer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(pc.localDescription),
+    });
+    if (isStale(c, gen)) return null;
+    dlog(h, `offer answered: HTTP ${res.status} in ${Math.round(performance.now() - asked)} ms`);
+    if (!res.ok) throw new Error(await res.text());
+    const answer = await res.json();
+    const theirs = String(answer.sdp || '').split(/\r?\n/).filter(l => l.startsWith('a=candidate:'));
+    for (const l of theirs) dlog(h, 'receiver candidate:', describeCandidate(l));
+    if (!theirs.length) dlog(h, 'the receiver sent no candidates');
+    return answer;
+  },
+
+  // The receiver that served this page says which pages on the Mac use its devices (/api/status). An older receiver
+  // has no such endpoint: null then.
+  async status() {
+    try {
+      const res = await fetchWithin(2500, '/api/status', { cache: 'no-store' });
+      if (res.ok) return await res.json();
+    } catch { /* below */ }
+    return null;
+  },
+
+  isMain(c) { return hostOf(c.target.key) === location.hostname; },
+  close() {},
+  stop() {},
+};
+
+// The transport in use. Relay mode swaps in relay.js's once it has loaded (see the end of this script); Start waits
+// for it.
+let transport = receiverTransport;
+
+// connectOne maintains the connection to one receiver (relay mode: to the selected computer). On loss it reconnects
+// with backoff -- network recovery, receiver restart, and waking from sleep all go through this path with no extra
+// button press.
 async function connectOne(c) {
   if (!live) return;
   clearTimeout(c.retryTimer); c.retryTimer = null;
   if (c.pc) { c.pc.close(); c.pc = null; }
   detachSpeaker(c);
-  // A retry and the return-path toggle may both trigger a rebuild of the same connection. Last one wins:
+  // A retry and a recovery may both trigger a rebuild of the same connection. Last one wins:
   // each entry bumps a generation token, and an earlier run bails after any await once it sees it is stale --
-  // no orphaned connections, and no stray retry scheduled in its catch on behalf of the newer one.
+  // no orphaned connections, and no stray retry scheduled in its catch on behalf of the newer one. Stop bumps it too,
+  // and a connection no longer in the list (Stop cleared it; a new Start made its own) is stale for good.
   const gen = c.gen = (c.gen || 0) + 1;
-  const stale = () => c.gen !== gen || !live;
+  const stale = () => isStale(c, gen);
+  // What the previous attempt had on the transport's side (relay mode: its relay socket and encrypted session) ends
+  // with it.
+  transport.close(c);
 
-  const h = hostOf(c.target);
+  const h = transport.tag(c);
   try {
     setConnState(c, t('establishing'), 'warn');
     dlog(h, `--- connecting (attempt ${c.retry + 1})`);
-    const cfg = await loadICE(c.target);
+    const cfg = await transport.iceConfig(c);
     if (stale()) return;
     if (cfg.name) { c.name = cfg.name; }
-    dlog(h, 'receiver', cfg.name ? `"${cfg.name}"` : '(no name)', '| ICE servers:', describeICE(cfg.iceServers));
-    const pc = new RTCPeerConnection({ iceServers: cfg.iceServers });
+    dlog(h, transport.kind === 'relay' ? 'computer' : 'receiver', cfg.name ? `"${cfg.name}"` : '(no name)', '| ICE servers:', describeICE(cfg.iceServers));
+    // Relay mode: the computer may ask for relayed candidates only (its "Always relay through TURN" test setting), and
+    // the transport may choose the bundle policy (relay.js: one set of candidates for every line).
+    const pc = new RTCPeerConnection({
+      iceServers: cfg.iceServers,
+      ...(cfg.iceTransportPolicy === 'relay' ? { iceTransportPolicy: 'relay' } : {}),
+      ...(transport.bundlePolicy ? { bundlePolicy: transport.bundlePolicy } : {}),
+    });
     c.pc = pc;
+    transport.prepare(c, pc);
     c.camDeclined = false;
+    c.returnDeclined = false;
+    c.packetsSent = c.packetsReceived = c.framesSent = undefined;
+    c.audioSent = false;
+    c.video = '';
     // Debug log: everything this connection goes through. Listeners, not on* handlers, which the code below sets.
     let localCount = 0, mdns = false;
     pc.addEventListener('icecandidate', e => {
@@ -1046,25 +2371,24 @@ async function connectOne(c) {
       // Failing or stalling: the candidate pairs say why; log them now, before a retry closes this connection.
       if (s === 'failed' || s === 'disconnected') pc.getStats().then(st => debugPairs(c, pc, st, true), () => {});
     });
-    // Declare an audio transceiver up front to claim the m-line so ICE gathering starts right away; attachMic
-    // fills in the real track once the mic is ready. On reconnect the mic is already in hand, so attach it now.
-    // With the return path on, this m-line is sendrecv and the receiver sends the remote Mac's system audio back over it.
-    const tx = pc.addTransceiver('audio', { direction: hear ? 'sendrecv' : 'sendonly' });
-    if (stream) tx.sender.replaceTrack(stream.getAudioTracks()[0]);
-    // The camera is a second m-line in the same offer, always sendonly: the receiver spots the return path by a=sendrecv,
-    // so a sendrecv video line would be taken for one. The receiver decodes H.264 only, so it goes first in the codec
-    // list; the full reordered list is passed (never a trimmed one) so a browser without H.264 still negotiates -- the
-    // receiver then declines the line and the status line says why. No virtual camera on the Mac: same, declined.
-    let vtx = null;
-    if (cam) {
-      vtx = pc.addTransceiver('video', { direction: 'sendonly', sendEncodings: [{ maxBitrate: 2_500_000, maxFramerate: 30 }] });
-      if (camStream) vtx.sender.replaceTrack(camStream.getVideoTracks()[0]);
-      const caps = RTCRtpSender.getCapabilities?.('video')?.codecs || [];
-      const h264 = caps.filter(x => /video\/h264/i.test(x.mimeType));
-      const rest = caps.filter(x => !/video\/h264/i.test(x.mimeType));
-      if (h264.length && vtx.setCodecPreferences) {
-        try { vtx.setCodecPreferences([...h264, ...rest]); } catch { /* default order: the receiver only answers H.264 anyway */ }
-      }
+    // The audio line is always sendrecv: this side sends the graph's track (silent until the mic is in, or while
+    // muted), and the receiver sends back over it what Mac pages play into Remote Visio Speaker -- the return path,
+    // which the speaker switch mutes here. A receiver that keeps it to itself (as it does for a page on the Mac) answers
+    // recvonly. Declaring it up front claims the m-line, so ICE gathering starts right away.
+    const tx = pc.addTransceiver('audio', { direction: 'sendrecv' });
+    if (sendTrack) tx.sender.replaceTrack(sendTrack);
+    // The camera is a second m-line in the same offer, always there and always sendonly (the receiver spots the return
+    // path by a=sendrecv, so a sendrecv video line would be taken for one); the camera switch only puts a track on it
+    // or takes it off. The receiver decodes H.264 only, so it goes first in the codec list; the full reordered list is
+    // passed (never a trimmed one) so a browser without H.264 still negotiates -- the receiver then declines the line
+    // and the status says why. No camera on the Mac: same, declined.
+    const vtx = pc.addTransceiver('video', { direction: 'sendonly', sendEncodings: [{ maxBitrate: 2_500_000, maxFramerate: 30 }] });
+    if (camStream) vtx.sender.replaceTrack(camStream.getVideoTracks()[0]);
+    const caps = RTCRtpSender.getCapabilities?.('video')?.codecs || [];
+    const h264 = caps.filter(x => /video\/h264/i.test(x.mimeType));
+    const rest = caps.filter(x => !/video\/h264/i.test(x.mimeType));
+    if (h264.length && vtx.setCodecPreferences) {
+      try { vtx.setCodecPreferences([...h264, ...rest]); } catch { /* default order: the receiver only answers H.264 anyway */ }
     }
     pc.ontrack = e => {
       // Only the return-path audio ever comes back; the video line is sendonly, but never let a stray track become a player.
@@ -1073,11 +2397,28 @@ async function connectOne(c) {
       const el = document.createElement('audio');
       el.autoplay = true;
       el.playsInline = true;
-      el.srcObject = new MediaStream([e.track]);
-      document.body.appendChild(el);
-      el.play().catch(() => { /* a user gesture already happened, so this is rarely blocked */ });
+      el.muted = !spkOn;
+      el.volume = spkVol / 100;
       c.speaker = el;
       renderConns();
+      // The player goes to the chosen speaker before it gets any sound, so nothing plays on the wrong one first.
+      routeSpeaker(c, el).then(() => {
+        if (c.speaker !== el) return; // replaced or taken down meanwhile
+        const ms = new MediaStream([e.track]);
+        el.srcObject = ms;
+        document.body.appendChild(el);
+        // A user gesture already happened, so this is rarely refused; when it is, the speaker's status says so and
+        // the next tap or key plays it (wakeAudio).
+        el.play().catch(err => { dlog(transport.tag(c), 'return path not playing:', err.name || '', err.message || ''); renderStatus(); });
+        // The speaker's level meter reads the same stream. Chrome feeds a remote track to WebAudio only while a media
+        // element plays it, which this one does (muted or not).
+        if (audioCtx) {
+          c.spkSource = audioCtx.createMediaStreamSource(ms);
+          c.spkAnalyser = audioCtx.createAnalyser();
+          c.spkAnalyser.fftSize = 1024;
+          c.spkSource.connect(c.spkAnalyser);
+        }
+      });
     };
     pc.oniceconnectionstatechange = () => {
       if (c.pc !== pc) return;
@@ -1092,6 +2433,9 @@ async function connectOne(c) {
       } else if (s === 'disconnected') {
         // 'disconnected' only means "no packets from the peer for now"; ICE retries on its own and usually recovers.
         setConnState(c, t('hiccup'), 'warn');
+        // The transport may know better (relay mode asks the relay whether the computer is still the one this
+        // connection reached: one that restarted cannot heal it, and the next attempt then starts at once).
+        if (transport.hiccup) transport.hiccup(c);
         if (!c.healTimer) {
           c.healTimer = setTimeout(() => {
             c.healTimer = null;
@@ -1107,57 +2451,40 @@ async function connectOne(c) {
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    if (vtx) { noH264 = !/ H264\//.test(offer.sdp); renderCamState(); }
-    if (vtx && noH264) dlog(h, 'this browser offers no H.264: the camera cannot be relayed');
-    // Wait for candidate gathering, but at most 3 s: when STUN is unreachable, don't sit through the browser's full 10 s.
-    await new Promise(done => {
-      if (pc.iceGatheringState === 'complete') return done();
-      const cap = setTimeout(() => { dlog(h, 'gathering not complete after 3 s: sending the candidates found so far'); done(); }, 3000);
-      pc.onicegatheringstatechange = () => {
-        if (pc.iceGatheringState === 'complete') { clearTimeout(cap); done(); }
-      };
-    });
+    noH264 = transport.needsH264 && !/ H264\//.test(offer.sdp);
+    if (noH264) dlog(h, 'this browser offers no H.264: the camera cannot be relayed');
+    // The offer goes to the other side, whole (receiver mode, after gathering) or at once with its candidates
+    // trickling after it (relay mode), and its answer comes back.
+    const answer = await transport.exchange(c, pc, gen);
     if (stale()) { pc.close(); return; }
-
-    setConnState(c, t('negotiating'), 'warn');
-    const sent = (pc.localDescription.sdp.match(/^a=candidate:/gm) || []).length;
-    dlog(h, `sending the offer (${sent} candidate${sent === 1 ? '' : 's'})`);
-    const asked = performance.now();
-    const res = await fetchWithin(15000, c.target + '/offer', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(pc.localDescription),
-    });
-    if (stale()) { pc.close(); return; }
-    dlog(h, `offer answered: HTTP ${res.status} in ${Math.round(performance.now() - asked)} ms`);
-    if (!res.ok) throw new Error(await res.text());
-    const answer = await res.json();
-    const theirs = String(answer.sdp || '').split(/\r?\n/).filter(l => l.startsWith('a=candidate:'));
-    for (const l of theirs) dlog(h, 'receiver candidate:', describeCandidate(l));
-    if (!theirs.length) dlog(h, 'the receiver sent no candidates');
     await pc.setRemoteDescription(answer);
     if (stale()) { pc.close(); return; }
     // The receiver takes the camera line as recvonly; inactive means it has no virtual camera (or nothing it can
-    // decode from this browser). The track stays attached to an idle line, so the row says so instead of the badge.
-    if (vtx) { c.camDeclined = vtx.currentDirection !== 'sendonly'; renderConns(); }
-    if (vtx) dlog(h, 'camera line:', vtx.currentDirection, c.camDeclined ? '(declined by the receiver)' : '');
-    if (vtx) preferFramerate(vtx.sender);
-
-    if (!statsTimer) statsTimer = setInterval(poll, 1000);
+    // decode from this browser). A track on that line goes nowhere, so the status says so. Likewise the audio line
+    // answered recvonly: no return path from that receiver.
+    c.camDeclined = vtx.currentDirection !== 'sendonly';
+    c.returnDeclined = tx.currentDirection !== 'sendrecv';
+    dlog(h, 'audio line:', tx.currentDirection, c.returnDeclined ? '(no return path from this receiver)' : '(with the return path)');
+    dlog(h, 'camera line:', vtx.currentDirection, c.camDeclined ? '(declined by the receiver)' : '');
+    preferFramerate(vtx.sender);
+    renderConns();
+    renderStatus();
   } catch (err) {
     if (stale()) return; // a stale attempt's failure doesn't count; don't schedule a retry on behalf of the newer one
     dlog(h, 'attempt failed:', err.name || '', err.message || String(err));
     // A cross-origin fetch blowing up (TypeError) on a target other than this receiver most likely means
     // its self-signed cert hasn't been accepted in this browser yet -- prompt to open it once; the retry picks it up.
-    if (err instanceof TypeError && hostOf(c.target) !== location.hostname) {
+    if (transport.certHint && err instanceof TypeError && !transport.isMain(c)) {
       c.needCert = true;
     }
     scheduleRetry(c, err.message);
   }
 }
 
-// detachSpeaker stops and removes a connection's return-path playback.
+// detachSpeaker stops and removes a connection's return-path playback and its level meter's tap.
 function detachSpeaker(c) {
+  if (c.spkSource) { c.spkSource.disconnect(); c.spkSource = c.spkAnalyser = null; }
+  c.spkRms = 0;
   if (!c.speaker) return;
   c.speaker.srcObject = null;
   c.speaker.remove();
@@ -1175,10 +2502,20 @@ function preferFramerate(sender) {
 }
 
 function scheduleRetry(c, why) {
-  if (!live || c.retryTimer) return;
-  const delay = Math.min(1000 * 2 ** c.retry, 15000);
+  if (!live || c.retryTimer || conns.get(c.target.key) !== c) return;
+  // Held by the transport (relay mode: the computer declined the connection, or another device took it over): no
+  // retry until the user acts; the row says why.
+  if (c.hold) {
+    dlog(transport.tag(c), 'not retrying:', why);
+    setConnState(c, c.hold, 'err');
+    return;
+  }
+  // Relay mode spreads its retries (transport.jitter: ±20 %), so that the senders a relay outage cut off together do
+  // not all come back at the same moment.
+  const delay = Math.min(1000 * 2 ** c.retry, 15000) * (1 + (Math.random() * 2 - 1) * (transport.jitter || 0));
   c.retry++;
-  dlog(hostOf(c.target), `retrying in ${Math.round(delay / 1000)} s: ${why}`);
+  c.lastWhy = why; // for the device statuses, which say the connection is down and why
+  dlog(transport.tag(c), `retrying in ${Math.round(delay / 1000)} s: ${why}`);
   setConnState(c, t('retry', { why, s: Math.round(delay / 1000) }), 'warn');
   c.retryTimer = setTimeout(() => { c.retryTimer = null; connectOne(c); }, delay);
 }
@@ -1186,30 +2523,43 @@ function scheduleRetry(c, why) {
 function stop() {
   if (live) dlog('stop');
   live = false;
+  session++;
   clearInterval(discoverTimer); discoverTimer = null;
   clearInterval(statsTimer); statsTimer = null;
+  clearInterval(statusTimer); statusTimer = null;
   cancelAnimationFrame(rafId); rafId = null;
-  if (audioCtx) { audioCtx.close(); audioCtx = null; }
   for (const c of conns.values()) {
+    // An attempt still awaiting the receiver (its ICE configuration, the offer) has no pc to close yet: a new
+    // generation makes it stale, so it gives up at its next step instead of connecting, after a quick Start, beside
+    // the new session's.
+    c.gen = (c.gen || 0) + 1;
     clearTimeout(c.retryTimer);
     clearTimeout(c.healTimer);
+    transport.close(c, 'stop');
     if (c.pc) c.pc.close();
     detachSpeaker(c);
   }
   conns.clear();
+  transport.stop();
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  closeAudio();
   releaseCam();
+  micProblem = null; micWaiting = false; micNote = '';
+  camWaiting = false;
+  recvStatus = null; recvMicMiss = 0;
   $('toggle').textContent = t('start');
   $('toggle').classList.remove('live');
-  $('level').style.width = '0';
-  $('micstate').textContent = '';
+  showLevel('mic', 0);
+  showLevel('spk', 0);
   renderConns();
+  renderStatus();
 }
 
 function setConnState(c, text, cls) {
   c.state = text;
   c.cls = cls || '';
   renderConns();
+  renderStatus();
 }
 
 // sendingVideo says whether a connection currently carries the camera: its video sender has a track and the
@@ -1218,21 +2568,54 @@ function sendingVideo(c) {
   return !!(c.pc && !c.camDeclined && senderOf(c.pc, 'video')?.track);
 }
 
+// renderConns draws one row per connection: its name (and the icons of what goes over it), the round trip, its state
+// and the camera's picture. Built element by element and filled with textContent only: a name comes from the other
+// side (the receiver's /ice-config, a paired computer), and a state can carry a message from it, so none of it may
+// ever be read as markup -- even with scripts blocked, injected markup could navigate the page away.
 function renderConns() {
   const box = $('conns');
   if (conns.size === 0) {
-    box.innerHTML = `<div class="empty">${t('not_connected')}</div>`;
+    box.replaceChildren(make('div', 'empty', t('not_connected')));
     return;
   }
-  box.innerHTML = [...conns.values()].map(c => `
-    <div class="conn">
-      <span class="host">${c.name ? c.name + ' · ' : ''}${hostOf(c.target)}${c.speaker ? ` <span title="${t('playing')}">🔊</span>` : ''}${sendingVideo(c) ? ` <span title="${t('sending_video')}">📷</span>` : ''}</span>
-      <span class="st ${c.cls}">${c.needCert
-        ? `${t('cert_before')}<a href="${c.target}" target="_blank">${t('cert_link')}</a>${t('cert_after')}`
-        : c.state}</span>
-      ${c.video ? `<span class="vid">${c.video}</span>` : c.camDeclined ? `<span class="vid">${t('cam_declined')}</span>` : ''}
-      <span class="rtt">${c.rtt}</span>
-    </div>`).join('');
+  box.replaceChildren(...[...conns.values()].map(c => {
+    const host = make('span', 'host', transport.label(c));
+    if (c.speaker && spkOn) host.append(' ', make('span', '', '🔊', { title: t('playing') }));
+    if (sendingVideo(c)) host.append(' ', make('span', '', '📷', { title: t('sending_video') }));
+    const state = make('span', c.cls ? 'st ' + c.cls : 'st');
+    if (c.needCert && transport.certHint) {
+      // The certificate's page is the target itself; only ever an https: one (the receiver's own address).
+      const a = make('a', '', t('cert_link'), { target: '_blank', rel: 'noopener' });
+      if (/^https:/.test(c.target.key)) a.href = c.target.key;
+      state.append(t('cert_before'), a, t('cert_after'));
+    } else {
+      state.textContent = c.state;
+    }
+    const line = make('div', 'connst', state);
+    if (c.video) line.append(' · ', make('span', 'vid', c.video));
+    else if (c.camDeclined && camOn) line.append(' · ', make('span', 'vid note', t('cam_declined')));
+    const row = make('div', 'conn', make('div', 'connhead', host, make('span', 'rtt', c.rtt)), line);
+    if (c.actions && c.actions.length) {
+      row.append(make('div', 'connact', ...c.actions.map(x => {
+        const b = make('button', 'btn', x.text, { type: 'button' });
+        b.onclick = x.run;
+        return b;
+      })));
+    }
+    return row;
+  }));
+}
+
+// make makes an element of a class, with children (text, as text nodes, or elements) and attributes. Text is never
+// parsed as markup.
+function make(tag, cls, ...rest) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  for (const x of rest) {
+    if (x instanceof Node || typeof x === 'string') e.append(x);
+    else if (x && typeof x === 'object') for (const [k, v] of Object.entries(x)) e.setAttribute(k, v);
+  }
+  return e;
 }
 
 // withTimeout rejects after ms. A getUserMedia that answers later (the user found the permission prompt after the
@@ -1265,35 +2648,249 @@ function explainCamError(err) {
   return t('cam_other', { err: err.message || name || t('unknown') });
 }
 
-// Local level meter: confirm this side is actually capturing audio before suspecting the network.
-function meter(stream) {
-  audioCtx = new AudioContext();
-  const analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 1024;
-  audioCtx.createMediaStreamSource(stream).connect(analyser);
-  const buf = new Float32Array(analyser.fftSize);
-  (function tick() {
-    analyser.getFloatTimeDomainData(buf);
-    let sum = 0;
-    for (const v of buf) sum += v * v;
-    const rms = Math.sqrt(sum / buf.length);
-    $('level').style.width = Math.min(100, rms * 300) + '%';
-    rafId = requestAnimationFrame(tick);
-  })();
+// micProblemOf and camProblemOf turn a failure to open the device into its status: a short state for the status line
+// (key, for the debug log; text) and the explanation under it (detail).
+function micProblemOf(err) {
+  const name = err.name || '';
+  const [key, text] = name === 'NotAllowedError' ? ['denied', t('st_no_permission')]
+    : name === 'NotFoundError' ? ['none', t('mic_none')]
+    : name === 'NotReadableError' ? ['busy', t('st_busy')]
+    : ['error', t('st_error')];
+  // "No microphone" needs no explanation, but what to do about it.
+  return { key, text, detail: key === 'none' ? t('mic_none_hint') : explainMicError(err) };
 }
 
-// poll scans every connection's stats once a second and writes the RTT (and relay marker) into its row.
+function camProblemOf(err) {
+  const name = err.name || '';
+  const [key, text] = name === 'NotAllowedError' ? ['denied', t('st_no_permission')]
+    : name === 'NotFoundError' ? ['none', t('cam_none')]
+    : name === 'NotReadableError' || name === 'AbortError' ? ['busy', t('st_busy')]
+    : ['error', t('st_error')];
+  return { key, text, detail: key === 'none' ? t('cam_none_hint') : explainCamError(err) };
+}
+
+// ---- Levels ----
+
+// The meters: the microphone's after the volume (what the Mac gets; greyed while muted), the speaker's from the return
+// path as it arrives (greyed while the speaker is off). A level is the signal's RMS on a 60 dB scale, which is how loud
+// it sounds rather than how big it is. The microphone switch also shows it, as a ring, and the tile as Meet's three
+// bars. With reduced motion asked for, the meters move in steps a few times a second and the ring only says "sound or not".
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const levelBuf = new Float32Array(1024);
+let levelsAt = 0, ringOn = false;
+
+function rmsOf(analyser) {
+  analyser.getFloatTimeDomainData(levelBuf);
+  let sum = 0;
+  for (const v of levelBuf) sum += v * v;
+  return Math.sqrt(sum / levelBuf.length);
+}
+
+function levelOf(rms) {
+  if (rms <= 0.001) return 0; // below -60 dBFS
+  return Math.min(1, Math.max(0, (20 * Math.log10(rms) + 60) / 60));
+}
+
+// showLevel draws one meter. Its data-level (0-100) is there for tests and its aria-valuenow for assistive technology.
+function showLevel(kind, v) {
+  const el = $(kind + '-level');
+  el.style.setProperty('--lvl', v.toFixed(3));
+  const pct = String(Math.round(v * 100));
+  if (el.dataset.level !== pct) { el.dataset.level = pct; el.setAttribute('aria-valuenow', pct); }
+}
+
+function tickLevels() {
+  cancelAnimationFrame(rafId);
+  rafId = requestAnimationFrame(tickLevels);
+  const now = performance.now();
+  if (reducedMotion.matches && now - levelsAt < 250) return;
+  levelsAt = now;
+  // A suspended graph leaves the analysers on their last buffer: no reading then, rather than a frozen one.
+  const running = audioRunning();
+  const mic = running && micAnalyser && stream ? levelOf(rmsOf(micAnalyser)) : 0;
+  let spk = 0;
+  for (const c of conns.values()) {
+    c.spkRms = running && c.spkAnalyser ? rmsOf(c.spkAnalyser) : 0;
+    spk = Math.max(spk, levelOf(c.spkRms));
+  }
+  showLevel('mic', mic);
+  showLevel('spk', spk);
+  const speaking = micOn ? mic : 0;
+  if (reducedMotion.matches) {
+    ringOn = ringOn ? speaking > 0.25 : speaking > 0.35; // a little hysteresis, so it doesn't flicker
+    $('mic-toggle').style.setProperty('--lvl', ringOn ? '0.6' : '0');
+  } else {
+    $('mic-toggle').style.setProperty('--lvl', speaking.toFixed(3));
+  }
+  $('mic-bars').style.setProperty('--lvl', speaking.toFixed(3));
+}
+
+// ---- Status ----
+
+// The receiver's own view, from GET /api/status on the receiver that served this page (relay mode: the "status"
+// messages of the selected computer): which pages there use its microphone, speaker and camera ("browser"), and its
+// system camera ("camera"). Polled every few seconds while live. An older receiver has fewer fields, or no such
+// endpoint: the statuses then say only what this side can see.
+let recvStatus = null, recvStatusOk = null, recvMicMiss = 0;
+async function fetchStatus() {
+  if (!live) return;
+  const got = await transport.status(mainConn());
+  if (!live) return;
+  const ok = !!got;
+  recvStatus = got || null;
+  // The receiver says whether the microphone's packets reached it lately (an older one does not say). Packets leaving
+  // here that do not arrive there, two polls running, is a status of its own: a single one may just be the first.
+  const m = recvStatus?.browser?.microphone;
+  recvMicMiss = m && m.audio === false && mainConn()?.audioSent ? recvMicMiss + 1 : 0;
+  if (ok !== recvStatusOk) { recvStatusOk = ok; dlog('receiver status:', ok ? 'available' : 'not available (the statuses say only what this page sees)'); }
+  renderStatus();
+}
+
+// isUp tells whether a connection's ICE is through.
+function isUp(c) {
+  const s = c && c.pc && c.pc.iceConnectionState;
+  return s === 'connected' || s === 'completed';
+}
+
+// countText says how many pages use a device, or names them when the receiver did (only to a page on the Mac).
+function countText(key, n, pages, vars = {}) {
+  if (Array.isArray(pages) && pages.length) return t(key + '_by', { ...vars, pages: pages.map(p => String(p).replace(/^https?:\/\//, '')).join(', ') });
+  return t(key + (n === 1 ? '_one' : '_other'), { ...vars, n });
+}
+
+// A device's status: state (ok green, wait amber, bad red, off grey), key (what kind of status, for the debug log,
+// which notes changes of kind and not every new frame rate), text, and detail (the explanation under it, if any).
+const st = (state, key, text, detail = '') => ({ state, key, text, detail });
+
+// connStatus is a device's status while the connection it goes over is not up (null once it is): connecting the first
+// time, a network hiccup it may recover from, or -- after an attempt failed -- red "Not connected", with the last
+// reason under it (the connection retries on its own).
+function connStatus(c) {
+  if (isUp(c)) return null;
+  if (c && c.hold) return st('bad', 'held', t('not_connected'), c.hold);
+  if (c && c.retry > 0) return st('bad', 'notconnected', t('not_connected'), t('last_try', { why: c.lastWhy || t('failed') }));
+  if (c && c.pc && c.pc.iceConnectionState === 'disconnected') return st('wait', 'hiccup', t('hiccup'));
+  return st('wait', 'connecting', t('connecting'));
+}
+
+function micStatus() {
+  if (live && micOn && micProblem) return st('bad', micProblem.key, micProblem.text, micProblem.detail);
+  if (!micOn) return st('off', 'off', t('st_off'));
+  if (!live) return st('off', 'ready', t('st_ready'));
+  if (micWaiting) return st('wait', 'permission', t('st_waiting_perm'), t('mic_waiting'));
+  if (!stream) return st('wait', 'starting', t('st_starting'));
+  if (!audioRunning()) return st('wait', 'paused', t('mic_paused'), t('tap_resume'));
+  const c = mainConn();
+  const down = connStatus(c);
+  if (down) return { ...down, detail: micNote || down.detail };
+  const note = micNote || (micGain === 0 ? t('vol_zero') : '');
+  if (!c.audioSent) return st('wait', 'nosound', t('mic_nosound'), note);
+  const m = recvStatus?.browser?.microphone;
+  if (!m || typeof m.listeners !== 'number') return st('ok', 'sending', t('mic_sending'), note);
+  if (m.on === false) return st('wait', 'unavailable', t('mic_unavailable'), note);
+  if (recvMicMiss >= 2) return st('wait', 'notarriving', t('mic_notarriving'), note);
+  if (m.listeners > 0) return st('ok', 'used', countText('mic_used', m.listeners, m.pages), note);
+  return st('wait', 'unused', t('mic_unused'), note);
+}
+
+function spkStatus() {
+  if (!spkOn) return st('off', 'off', t('st_off'));
+  if (!live) return st('off', 'ready', t('st_ready'));
+  const c = mainConn();
+  const down = connStatus(c);
+  if (down) return down;
+  if (c.returnDeclined) return st('bad', 'declined', t('spk_declined'));
+  const note = spkVol === 0 && canSetVolume ? t('vol_zero') : '';
+  if (c.spkHeardAt && Date.now() - c.spkHeardAt < 3000) {
+    // Sound arrives, but a player the browser would not start (autoplay rules) plays none of it.
+    if (c.speaker && c.speaker.srcObject && c.speaker.paused) return st('wait', 'blocked', t('spk_blocked'), t('tap_play'));
+    return st('ok', 'playing', t('spk_playing'), note);
+  }
+  const s = recvStatus?.browser?.speaker;
+  if (s && typeof s.sources === 'number' && s.sources === 0) return st('wait', 'unused', t('spk_unused'), note);
+  return st('wait', 'silent', t('spk_silent'), note);
+}
+
+function camStatus() {
+  if (live && camOn && camProblem) return st('bad', camProblem.key, camProblem.text, camProblem.detail);
+  if (!camOn) return st('off', 'off', t('st_off'));
+  if (!live) return noCam ? st('bad', 'none', t('cam_none'), t('cam_none_hint')) : st('off', 'ready', t('st_ready'));
+  if (camWaiting) return st('wait', 'permission', t('st_waiting_perm'), t('cam_waiting'));
+  if (!camStream) return noCam ? st('bad', 'none', t('cam_none'), t('cam_none_hint')) : st('wait', 'starting', t('st_starting'));
+  const c = mainConn();
+  const down = connStatus(c);
+  if (down) return { ...down, detail: camNote || down.detail };
+  if (noH264) return st('bad', 'noh264', t('cam_noh264_short'), t('cam_noh264'));
+  if (c.camDeclined) return st('bad', 'declined', t('cam_declined'), camNote);
+  if (!c.video) return st('wait', 'nopicture', t('cam_nopicture'), camNote);
+  const b = recvStatus?.browser;
+  if (!b || typeof b.viewers !== 'number') return st('ok', 'sending', t('cam_sending', { video: c.video }), camNote);
+  if (b.viewers > 0) return st('ok', 'shown', countText('cam_shown', b.viewers, b.pages, { video: c.video }), camNote);
+  // The system camera (the Mac's virtual camera) does not say who watches it: when it is there, sending is all we know.
+  if (recvStatus.camera?.available) return st('ok', 'sending', t('cam_sending', { video: c.video }), camNote);
+  return st('wait', 'unused', t('cam_unused'), camNote);
+}
+
+// renderStatus writes the three statuses (only what changed), redraws the switches (a red status is their "problem"
+// look), and logs each change of kind. A change of kind is also announced to screen readers (#announce, polite), once:
+// not every new frame rate, and not the first statuses, which are simply there to be read.
+const lastStatus = {}, statusNow = {};
+const DEVICE_NAMES = { mic: 'mic', spk: 'speaker', cam: 'camera' };
+function renderStatus() {
+  const said = [];
+  for (const [kind, s] of [['mic', micStatus()], ['spk', spkStatus()], ['cam', camStatus()]]) {
+    statusNow[kind] = s;
+    const el = $(kind + '-status'), detail = $(kind + '-detail');
+    if (el.dataset.state !== s.state) el.dataset.state = s.state;
+    const text = el.querySelector('.st-text');
+    if (text.textContent !== s.text) text.textContent = s.text;
+    if (detail.textContent !== s.detail) detail.textContent = s.detail;
+    detail.hidden = !s.detail;
+    const sig = s.state + ' ' + s.key;
+    if (lastStatus[kind] !== sig) {
+      if (lastStatus[kind] !== undefined) said.push(t('announce', { device: t(DEVICE_NAMES[kind]), status: s.text }));
+      lastStatus[kind] = sig;
+      dlog('status', kind + ':', s.state, '-', s.text);
+    }
+  }
+  if (said.length) $('announce').textContent = said.join('. ');
+  renderToggles();
+  $('mic-bars').hidden = !(live && stream);
+}
+
+// renderTile shows the camera, or what stands in for it: off, not started yet, or why there is no picture.
+function renderTile() {
+  const showing = !!camStream;
+  $('campreview').hidden = !showing;
+  $('camoff').hidden = showing;
+  if (showing) return;
+  const s = camStatus();
+  const text = !camOn ? t('cam_is_off')
+    : !live ? (noCam ? t('cam_none') : t('tile_ready'))
+    : s.state === 'bad' ? s.text
+    : s.state === 'wait' ? s.text
+    : t('cam_is_off');
+  $('camoff-text').textContent = text;
+  $('camoff').querySelector('use').setAttribute('href', camOn && s.state !== 'bad' ? '#i-cam' : '#i-cam-off');
+}
+
+// poll scans every connection's stats once a second: the RTT (and relay marker) and the camera's resolution and frame
+// rate for its row, and for the statuses whether audio leaves, whether the return path brings sound, and the camera.
 async function poll() {
   let dirty = false;
   for (const c of conns.values()) {
     if (!c.pc || c.pc.connectionState === 'closed') continue;
     const pc = c.pc;
     const stats = await pc.getStats();
-    if (c.pc === pc) debugPairs(c, pc, stats, false);
-    let pair = null, video = null;
+    if (c.pc !== pc) continue;
+    debugPairs(c, pc, stats, false);
+    let pair = null, video = null, aout = null, ain = null;
     stats.forEach(r => {
       if (r.type === 'candidate-pair' && r.state === 'succeeded' && r.nominated !== false) pair = r;
-      if (r.type === 'outbound-rtp' && (r.kind || r.mediaType) === 'video') video = r;
+      const kind = r.kind || r.mediaType;
+      if (r.type === 'outbound-rtp' && kind === 'video') video = r;
+      if (r.type === 'outbound-rtp' && kind === 'audio') aout = r;
+      if (r.type === 'inbound-rtp' && kind === 'audio') ain = r;
     });
     if (pair && pair.currentRoundTripTime != null) {
       const local = stats.get(pair.localCandidateId);
@@ -1302,10 +2899,20 @@ async function poll() {
       const txt = Math.round(pair.currentRoundTripTime * 1000) + 'ms' + (relayed ? ' ' + t('relay') : '');
       if (txt !== c.rtt) { c.rtt = txt; dirty = true; }
     }
+    // Audio out: packets leaving since the last look (a muted microphone still sends, silence).
+    const sentNow = aout ? aout.packetsSent || 0 : 0;
+    c.audioSent = c.packetsSent !== undefined && sentNow > c.packetsSent;
+    c.packetsSent = sentNow;
+    // Return path: packets arriving with sound in them (the receiver's audioLevel, or the meter's own reading).
+    const gotNow = ain ? ain.packetsReceived || 0 : 0;
+    if (c.packetsReceived !== undefined && gotNow > c.packetsReceived && ((ain.audioLevel ?? 0) > 0.003 || (c.spkRms || 0) > 0.003)) {
+      c.spkHeardAt = Date.now();
+    }
+    c.packetsReceived = gotNow;
     // Camera: the resolution and frame rate actually leaving this device, so "no picture on the Mac" splits into
     // "not sending" and "not arriving". Firefox lacks framesPerSecond; there, count framesSent between polls.
     let vtxt = '';
-    if (video && video.framesSent) {
+    if (video && video.framesSent && senderOf(pc, 'video')?.track) {
       const fps = video.framesPerSecond ?? Math.max(0, video.framesSent - (c.framesSent ?? video.framesSent));
       vtxt = (video.frameHeight ? video.frameHeight + 'p · ' : '') + Math.round(fps) + ' fps';
     }
@@ -1313,7 +2920,47 @@ async function poll() {
     if (vtxt !== c.video) { c.video = vtxt; dirty = true; }
   }
   if (dirty) renderConns();
+  renderStatus();
 }
+
+// ---- Relay mode ----
+
+// What relay.js and pair-ui.js use of this page. They are modules, written against this and nothing else of the page.
+const api = {
+  dlog, t, renderConns, renderStatus, ensureConn, dropConn, endConn, connectOne, scheduleRetry, setConnState,
+  applyDemand, isStale, describeCandidate, takeFragment, stop,
+  isLive: () => live,
+  conns: () => [...conns.values()],
+  // The selected computer changed: while live, connect to it, and close the connection to the one before.
+  retarget: () => discover(),
+};
+
+if (TRANSPORT === 'relay') {
+  // Start waits for relay.js, which loads in a moment: it has the computer to send to.
+  $('toggle').disabled = true;
+  import('/send/relay.js')
+    .then(m => {
+      const relay = m.createRelayTransport(api);
+      return relay.ready.then(() => {
+        transport = relay;
+        $('toggle').disabled = false;
+      });
+    })
+    .catch(err => {
+      dlog('relay mode did not load:', err.name || '', err.message || String(err));
+      const hint = $('starthint');
+      hint.textContent = t('relay_failed', { why: err.message || String(err) });
+      hint.hidden = false;
+    });
+  // A pairing link opened in this tab while it shows the page changes only the fragment: take it out the same way.
+  addEventListener('hashchange', () => { if (takeHash()) transport.linkArrived?.(); });
+}
+
+renderToggles();
+renderVolumes();
+renderTile();
+renderStatus();
+listDevices();
 
 addEventListener('pagehide', stop);
 </script>

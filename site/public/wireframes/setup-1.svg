@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="rvw" viewBox="0 0 880 480" width="880" height="480" role="img" aria-labelledby="rvs1-title rvs1-desc">
+<title id="rvs1-title">Install the Remote Visio app</title>
+<desc id="rvs1-desc">Open RemoteVisio-2.0-arm64.pkg to install the app; it starts in the Mac's menu bar. Its menu shows: Remote Visio receiver: running; Endpoint, click to copy, with the Mac's addresses, such as https://192.168.1.23:7420 and https://100.101.102.103:7420, to open on your phone or laptop; Controls; Start at Login; Install Browser Extension…, which opens the Chrome Web Store; Uninstall Remote Visio…; and Quit Remote Visio.</desc>
+<style>
+:where(svg.rvw){--rvw-bg:#f6f5f2;--rvw-panel:#ecebe6;--rvw-card:#ffffff;--rvw-ink:#131417;--rvw-muted:#55575e;--rvw-faint:#85878e;--rvw-accent:#9a5700;--rvw-soft:#ffe7b3;--rvw-live:#1b7f45;font-family:var(--rvw-font,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif)}
+@media (prefers-color-scheme:dark){:root:where(svg.rvw){--rvw-bg:#131417;--rvw-panel:#191a1f;--rvw-card:#202228;--rvw-ink:#eceae6;--rvw-muted:#a3a49d;--rvw-faint:#73757c;--rvw-accent:#ffb000;--rvw-soft:#3b2f12;--rvw-live:#57d08a}}
+@supports (color:light-dark(#000,#fff)){:where(svg.rvw){--rvw-bg:light-dark(#f6f5f2,#131417);--rvw-panel:light-dark(#ecebe6,#191a1f);--rvw-card:light-dark(#ffffff,#202228);--rvw-ink:light-dark(#131417,#eceae6);--rvw-muted:light-dark(#55575e,#a3a49d);--rvw-faint:light-dark(#85878e,#73757c);--rvw-accent:light-dark(#9a5700,#ffb000);--rvw-soft:light-dark(#ffe7b3,#3b2f12);--rvw-live:light-dark(#1b7f45,#57d08a)}}
+:root:where(svg.rvw){color-scheme:light dark}
+.rvw-l,.rvw-l2,.rvw-lm,.rvw-la,.rvw-a3,.rvw-ds,.rvw-dt,.rvw-sep,.rvw-bar,.rvw-i,.rvw-ia,.rvw-im{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.rvw-l{stroke:var(--rvw-ink);stroke-width:3}
+.rvw-l2{stroke:var(--rvw-ink);stroke-width:2}
+.rvw-lm{stroke:var(--rvw-muted);stroke-width:2}
+.rvw-la{stroke:var(--rvw-accent);stroke-width:4}
+.rvw-a3{stroke:var(--rvw-accent);stroke-width:3}
+.rvw-ds{stroke:var(--rvw-muted);stroke-width:2.5;stroke-dasharray:10 9}
+.rvw-dt{stroke:var(--rvw-muted);stroke-width:3;stroke-dasharray:.5 9}
+.rvw-sep{stroke:var(--rvw-faint);stroke-width:1.5}
+.rvw-bar{stroke:var(--rvw-faint);stroke-width:7}
+.rvw-i{stroke:var(--rvw-ink)}
+.rvw-ia{stroke:var(--rvw-accent)}
+.rvw-im{stroke:var(--rvw-muted)}
+.rvw-bg{fill:var(--rvw-bg)}
+.rvw-pn{fill:var(--rvw-panel)}
+.rvw-cd{fill:var(--rvw-card)}
+.rvw-sf{fill:var(--rvw-soft)}
+.rvw-ik{fill:var(--rvw-ink)}
+.rvw-lv{fill:var(--rvw-live)}
+.rvw-t{fill:var(--rvw-ink)}
+.rvw-tm{fill:var(--rvw-muted)}
+.rvw-ta{fill:var(--rvw-accent)}
+.rvw-tc{fill:var(--rvw-card)}
+.rvw-mono{font-family:var(--rvw-mono,ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace)}
+</style>
+<defs><symbol id="rvs1-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol><symbol id="rvs1-chevr" viewBox="0 0 24 24"><path d="M10 7.5l4.5 4.5-4.5 4.5"/></symbol><symbol id="rvs1-glyph" viewBox="2 10 92 78"><path d="M7.5 22.5H31l4.4-7.2q1.1-1.8 3.2-1.8h18.8q2.1 0 3.2 1.8l4.4 7.2h23.5q3 0 3 3v56q0 3-3 3h-81q-3 0-3-3v-56q0-3 3-3z"/><path d="M13.5 22.5v-4q0-2 2-2h8q2 0 2 2v4M75 22.5a4 4 0 0 1 8 0"/><rect x="38" y="28.5" width="20" height="30" rx="10"/><path d="M31.75 46.5v3a16.25 16.25 0 0 0 32.5 0v-3M48 65.75V73M37.5 73h21M10 46.5v3M17.5 46.5v3M25 46.5v3M71 46.5v3M78.5 46.5v3M86 46.5v3"/></symbol><symbol id="rvs1-pkg" viewBox="0 0 24 24"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9M7.8 5.3l8.4 4.5"/></symbol><symbol id="rvs1-wifi" viewBox="0 0 24 24"><path d="M2.5 9.5a13.5 13.5 0 0 1 19 0M5.8 13a8.8 8.8 0 0 1 12.4 0M9.1 16.5a4.2 4.2 0 0 1 5.8 0M12 19.8v.1"/></symbol></defs>
+<rect width="880" height="480" class="rvw-bg"/>
+<rect x="0" y="0" width="880" height="48" class="rvw-pn"/>
+<path d="M0 48H880" class="rvw-sep"/>
+<path d="M30 24H66" class="rvw-bar"/>
+<path d="M94 24H132" class="rvw-bar"/>
+<path d="M156 24H200" class="rvw-bar"/>
+<path d="M224 24H262" class="rvw-bar"/>
+<rect x="450" y="6" width="60" height="36" rx="8" class="rvw-sf"/>
+<use href="#rvs1-glyph" x="460" y="7" width="40" height="34" class="rvw-i" stroke-width="4.8"/>
+<use href="#rvs1-wifi" x="548" y="11" width="26" height="26" class="rvw-im" stroke-width="1.8"/>
+<rect x="598" y="16" width="40" height="18" rx="4" class="rvw-lm"/>
+<rect x="602" y="20" width="26" height="10" rx="2" class="rvw-ik"/>
+<path d="M642 22V28" class="rvw-lm"/>
+<text x="860" y="31" font-size="19" text-anchor="end" class="rvw-tm">Mon 9:41</text>
+<rect x="452" y="54" width="420" height="400" rx="12" class="rvw-cd rvw-l2"/>
+<text x="492" y="88" font-size="21" class="rvw-tm">Remote Visio receiver: running</text>
+<path d="M466 107H858" class="rvw-sep"/>
+<text x="492" y="140" font-size="21" class="rvw-tm">Endpoint — click to copy:</text>
+<text x="516" y="177" font-size="19" class="rvw-t rvw-mono">https://192.168.1.23:7420</text>
+<text x="516" y="215" font-size="19" class="rvw-t rvw-mono">https://100.101.102.103:7420</text>
+<path d="M466 235H858" class="rvw-sep"/>
+<text x="492" y="268" font-size="21" class="rvw-t">Controls</text>
+<use href="#rvs1-chevr" x="832" y="249" width="26" height="26" class="rvw-i" stroke-width="2"/>
+<use href="#rvs1-check" x="463" y="286" width="22" height="22" class="rvw-i" stroke-width="2.4"/>
+<text x="492" y="306" font-size="21" class="rvw-t">Start at Login</text>
+<path d="M466 325H858" class="rvw-sep"/>
+<rect x="460" y="333" width="404" height="36" rx="7" class="rvw-sf"/>
+<text x="492" y="358" font-size="21" font-weight="600" class="rvw-t">Install Browser Extension…</text>
+<text x="492" y="396" font-size="21" class="rvw-t">Uninstall Remote Visio…</text>
+<text x="492" y="434" font-size="21" class="rvw-t">Quit Remote Visio</text>
+<text x="856" y="434" font-size="19" text-anchor="end" class="rvw-tm">⌘Q</text>
+<use href="#rvs1-pkg" x="36" y="62" width="60" height="60" class="rvw-i" stroke-width="1"/>
+<text x="112" y="86" font-size="24" font-weight="600" class="rvw-t">Install the app</text>
+<text x="112" y="112" font-size="16" class="rvw-t rvw-mono">RemoteVisio-2.0-arm64.pkg</text>
+<text x="112" y="136" font-size="19" class="rvw-tm">It starts in the menu bar</text>
+<path d="M318 78C388 78 404 26 438 26" class="rvw-a3"/>
+<path d="M431 32.9L442 26L431 19.1" class="rvw-a3"/>
+<text x="40" y="196" font-size="22" font-weight="600" class="rvw-t">Your Mac's addresses</text>
+<text x="40" y="222" font-size="19" class="rvw-tm">Open one on your phone or laptop</text>
+<text x="40" y="266" font-size="22" font-weight="600" class="rvw-t">Keep the room quiet</text>
+<text x="40" y="292" font-size="19" class="rvw-tm">Controls mutes this Mac's own</text>
+<text x="40" y="316" font-size="19" class="rvw-tm">speakers and microphone</text>
+<circle cx="400" cy="261" r="4" class="rvw-lm"/>
+<path d="M404 261H482" class="rvw-lm"/>
+<circle cx="400" cy="196" r="4" class="rvw-a3"/>
+<path d="M404 196H498" class="rvw-a3"/>
+<path d="M500 158V224" class="rvw-a3"/>
+<text x="40" y="358" font-size="22" font-weight="600" class="rvw-t">Add the browser extension</text>
+<text x="40" y="384" font-size="19" class="rvw-tm">It opens the Chrome Web Store</text>
+<circle cx="400" cy="351" r="4" class="rvw-a3"/>
+<path d="M404 351H452" class="rvw-a3"/>
+<path d="M445.8 357.4L456 351L445.8 344.6" class="rvw-a3"/>
+</svg>

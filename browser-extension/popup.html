@@ -20,20 +20,69 @@
   <section class="card" aria-live="polite">
     <div id="state" class="dim" data-i18n="popup_checking">Checking…</div>
     <div id="hint" class="detail"></div>
-    <div id="pages" class="detail"></div>
+    <ul id="devices" hidden>
+      <li id="camera"><span class="name" data-i18n="popup_device_camera">Camera</span><span class="state"></span><div class="detail hint"></div><div class="detail pages"></div></li>
+      <li id="microphone"><span class="name" data-i18n="popup_device_microphone">Microphone</span><span class="state"></span><div class="detail hint"></div><div class="detail pages"></div></li>
+      <li id="speaker"><span class="name" data-i18n="popup_device_speaker">Speaker</span><span class="state"></span><div class="detail hint"></div><div class="detail pages"></div></li>
+    </ul>
+  </section>
+
+  <section class="card" id="connectionCard" hidden>
+    <label class="select-row">
+      <span data-i18n="popup_connection">Connection</span>
+      <select id="connection">
+        <option value="auto" data-i18n="popup_connection_auto">Automatic</option>
+        <option value="app" data-i18n="popup_connection_app">Remote Visio app on this Mac</option>
+        <option value="direct" data-i18n="popup_connection_direct">Direct (no app)</option>
+      </select>
+    </label>
+  </section>
+
+  <section class="card" id="directCard" aria-live="polite" hidden>
+    <h2 data-i18n="popup_direct_title">Direct mode</h2>
+    <div id="directState"></div>
+    <div id="directHint" class="detail"></div>
+    <div id="directOrPair" class="detail" data-i18n="popup_direct_or_pair" hidden></div>
+    <button type="button" id="pairStart" class="action" data-i18n="popup_pair">Pair a device</button>
+    <div id="pairPanel" hidden>
+      <div id="pairQr" class="qr" hidden></div>
+      <div id="pairInvite" hidden>
+        <p class="detail" data-i18n="popup_pair_scan"></p>
+        <code id="pairLink"></code>
+        <div class="row-buttons">
+          <button type="button" id="pairCopy" data-i18n="popup_pair_copy">Copy link</button>
+          <button type="button" id="pairLarger" data-i18n="popup_pair_larger">Show larger</button>
+        </div>
+      </div>
+      <div id="pairStatus"></div>
+      <div class="row-buttons">
+        <button type="button" id="pairReview" data-i18n="popup_pair_review" hidden>Review</button>
+        <button type="button" id="pairCancel" data-i18n="popup_pair_cancel">Cancel</button>
+        <span id="pairCountdown" class="detail"></span>
+      </div>
+    </div>
+    <div id="directMore" hidden>
+      <h3 data-i18n="popup_devices">Paired devices</h3>
+      <ul id="directDevices"></ul>
+      <label class="field" id="browserNameRow">
+        <span data-i18n="popup_browser_name">This browser's name</span>
+        <input type="text" id="browserName" maxlength="60" autocomplete="off" spellcheck="false">
+        <small data-i18n="popup_browser_name_hint"></small>
+      </label>
+    </div>
   </section>
 
   <section class="card">
     <label class="switch-row" id="enabledRow">
       <span class="text">
-        <span data-i18n="popup_enabled">Offer Remote Visio Camera to websites</span>
+        <span data-i18n="popup_enabled">Offer Remote Visio's devices to websites</span>
         <small data-i18n="popup_enabled_hint"></small>
       </span>
       <input type="checkbox" id="enabled" class="switch" role="switch">
     </label>
     <label class="switch-row" id="preferRow">
       <span class="text">
-        <span data-i18n="popup_prefer">Use it when a site asks for any camera</span>
+        <span data-i18n="popup_prefer">Use Remote Visio by default</span>
         <small data-i18n="popup_prefer_hint"></small>
       </span>
       <input type="checkbox" id="prefer" class="switch" role="switch">

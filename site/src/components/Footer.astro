@@ -1,0 +1,53 @@
+---
+import { footer, links, publisher, product } from "@utils/config";
+import Logo from "./Logo.astro";
+const year = new Date().getFullYear();
+---
+
+<footer class="relative mt-24 bg-neutral text-neutral-content">
+  <div aria-hidden="true" class="absolute -top-10 left-0 h-10 w-full rounded-t-[50%] bg-neutral"></div>
+  <div class="mx-auto max-w-screen-lg px-4 pb-12 pt-6">
+    <div class="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr]">
+      <div>
+        <a href="/" class="inline-flex items-center gap-2 text-xl font-extrabold tracking-tight">
+          <Logo class="h-8 w-auto" />
+          Remote Visio
+        </a>
+        <p class="mt-3 max-w-sm text-neutral-content/80">
+          Your microphone, camera and speaker, on the Mac you remote into. Free and open source.
+        </p>
+        <p class="mt-4 text-sm text-neutral-content/80">
+          Questions: <a class="link" href={`mailto:${publisher.email}`}>{publisher.email}</a>
+        </p>
+      </div>
+      <nav aria-label="Product">
+        <h2 class="eyebrow !text-neutral-content/70">Product</h2>
+        <ul class="mt-3 space-y-1">
+          {footer.product.map(({ title, href }) => <li><a class="inline-flex min-h-9 items-center hover:underline" href={href}>{title}</a></li>)}
+          <li><a class="inline-flex min-h-9 items-center hover:underline" href={links.chromeWebStoreUrl} rel="noopener">Chrome Web Store</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Legal">
+        <h2 class="eyebrow !text-neutral-content/70">Legal and source</h2>
+        <ul class="mt-3 space-y-1">
+          {footer.legal.map(({ title, href }) => <li><a class="inline-flex min-h-9 items-center hover:underline" href={href}>{title}</a></li>)}
+          <li>
+            <button type="button" class="inline-flex min-h-9 items-center hover:underline" data-consent="open">Cookie settings</button>
+          </li>
+          <li><a class="inline-flex min-h-9 items-center hover:underline" href={links.sourceUrl} rel="noopener">Source code (AGPL-3.0)</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="mt-12 space-y-2 border-t border-neutral-content/15 pt-6 text-sm text-neutral-content/75">
+      <p>
+        © {year} {publisher.name}. Remote Visio is free software under the
+        <a class="underline" href={product.licenseUrl} rel="noopener">GNU AGPL-3.0</a>, originally written by
+        <a class="underline" href={links.upstreamUrl} rel="noopener">{product.originalAuthor}</a>.
+        <a class="underline" href={links.sourceUrl} rel="noopener">Get the source code</a>.
+      </p>
+      <p>
+        All product names are trademarks of their respective owners. Remote Visio is not affiliated with or endorsed by them.
+      </p>
+    </div>
+  </div>
+</footer>

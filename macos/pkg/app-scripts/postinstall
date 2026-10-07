@@ -1,7 +1,41 @@
 #!/bin/sh
-# Runs as root after RemoteVisio.app lands in /Applications: register it with
-# LaunchServices and start it for the person at the console. The app
-# registers itself to start at login on its first run from /Applications.
+# Runs as root after RemoteVisio.app lands in /Applications: remove the audio
+# device driver of earlier versions, register the app with LaunchServices and
+# start it for the person at the console. The app registers itself to start
+# at login on its first run from /Applications.
+
+# Earlier versions installed the Remote Visio virtual audio device, a Core
+# Audio driver; the browser extension's microphone and speaker replace it.
+# Installer leaves the files of a component that a newer package no longer
+# carries, so the driver goes here, with its receipt; so does one from before
+# the RelayMic rename, on a Mac that comes straight from it. coreaudiod only
+# lets go of a plug-in when it restarts, so restart it, but only when a
+# driver was there: system audio pauses for about a second. killall rather
+# than launchctl kickstart: SIP refuses kickstart on system daemons, and
+# launchd brings coreaudiod back by itself within a second. The app starts
+# once it is back (bounded: not fatal if it takes longer), so that "Mute This
+# Mac's Microphone" finds the microphones.
+removed=0
+for driver in /Library/Audio/Plug-Ins/HAL/RemoteVisio.driver /Library/Audio/Plug-Ins/HAL/RelayMic.driver; do
+    if [ -e "$driver" ] || [ -L "$driver" ]; then
+        rm -rf "$driver"
+        removed=1
+    fi
+done
+pkgutil --forget com.remotevisio.driver >/dev/null 2>&1 || true
+pkgutil --forget com.relaymic.driver >/dev/null 2>&1 || true
+if [ $removed -eq 1 ]; then
+    old=$(pgrep -x coreaudiod 2>/dev/null || true)
+    killall coreaudiod 2>/dev/null || true
+    i=0
+    while [ $i -lt 50 ]; do
+        new=$(pgrep -x coreaudiod 2>/dev/null || true)
+        [ -n "$new" ] && [ "$new" != "$old" ] && break
+        sleep 0.2
+        i=$((i + 1))
+    done
+fi
+
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 "$LSREGISTER" -f /Applications/RemoteVisio.app >/dev/null 2>&1 || true
 

@@ -1,0 +1,68 @@
+---
+import { nav } from "@utils/config";
+import Logo from "./Logo.astro";
+import Icon from "./Icon.astro";
+import ThemeSwitch from "./ThemeSwitch.astro";
+const path = Astro.url.pathname.replace(/\/$/, "") || "/";
+const isCurrent = (href: string) => !href.includes("#") && (href === path || (href !== "/" && path.startsWith(href + "/")));
+---
+
+<header class="sticky top-0 z-50 px-2 pt-2 md:px-4 md:pt-3">
+  <a href="#main" class="btn btn-sm btn-primary absolute left-4 top-3 z-[60] -translate-y-20 focus:translate-y-0">Skip to content</a>
+  <nav aria-label="Main" class="relative mx-auto flex max-w-screen-lg items-center gap-2 rounded-full px-3 py-2 md:px-4">
+    <span aria-hidden="true" class="nav-pill-bg absolute inset-0 -z-10 rounded-full border border-base-300 bg-base-100/90 shadow-[0_10px_30px_-18px_rgba(19,20,23,.5)] backdrop-blur"></span>
+    <a href="/" class="flex min-h-11 items-center gap-2 rounded-lg pr-2 font-extrabold tracking-tight" aria-label="Remote Visio home">
+      <Logo class="h-7 w-auto" />
+      <span class="whitespace-nowrap text-lg">Remote Visio</span>
+    </a>
+    <ul class="ml-auto hidden items-center gap-1 lg:flex">
+      {
+        nav.map(({ title, href }) => (
+          <li>
+            <a
+              href={href}
+              aria-current={isCurrent(href) ? "page" : undefined}
+              class="inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3 text-sm font-medium hover:bg-base-200 aria-[current=page]:bg-base-200"
+            >
+              {title}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+    <div class="ml-auto flex items-center gap-1 lg:ml-2">
+      <ThemeSwitch />
+      <a href="/download" class="btn btn-primary btn-sm hidden h-10 min-h-10 whitespace-nowrap rounded-full px-4 sm:inline-flex">
+        <Icon name="download" class="h-4 w-4" />
+        Download for Mac
+      </a>
+      <button
+        type="button"
+        class="btn btn-ghost btn-circle lg:hidden"
+        aria-controls="mobile-menu"
+        aria-expanded="false"
+        aria-label="Open menu"
+        data-menu-button
+      >
+        <Icon name="menu" class="h-6 w-6" />
+      </button>
+    </div>
+  </nav>
+  <div id="mobile-menu" hidden class="mx-auto mt-2 max-w-screen-lg rounded-box border border-base-300 bg-base-100 p-3 shadow-xl lg:hidden">
+    <ul class="flex flex-col gap-1">
+      {
+        nav.map(({ title, href }) => (
+          <li>
+            <a href={href} class="flex min-h-11 items-center rounded-btn px-3 font-medium hover:bg-base-200" aria-current={isCurrent(href) ? "page" : undefined}>
+              {title}
+            </a>
+          </li>
+        ))
+      }
+      <li class="mt-2 grid grid-cols-1 gap-2 2xs:grid-cols-2">
+        <a href="/download" class="btn btn-primary"><Icon name="download" class="h-4 w-4" />Download for Mac</a>
+        <a href="/extension" class="btn btn-outline"><Icon name="puzzle" class="h-4 w-4" />Browser extension</a>
+      </li>
+    </ul>
+  </div>
+</header>

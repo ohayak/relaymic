@@ -6,9 +6,8 @@ import (
 )
 
 // SilenceDBFS is the level reported when not a single non-zero sample was
-// seen: silence has no logarithm. It doubles as a sentinel: the monitor page
-// shows "silent" text for a return-path level at or below -119, so this
-// value must reach it unchanged.
+// seen: silence has no logarithm. It doubles as a sentinel: a level meter can
+// show "silent" for it rather than a number.
 const SilenceDBFS = -120.0
 
 // Peak returns the largest sample magnitude in pcm.
@@ -67,8 +66,7 @@ func (m *PeakMeter) TakeDBFS() (db float64, ok bool) {
 
 // Framer regroups the chunks a capture callback delivers (whatever length the
 // sound card chose) into fixed-size frames for an encoder, and tracks the peak
-// level on the way. The sender's microphone and the receiver's return path
-// share it.
+// level on the way. The native sender's microphone uses it.
 //
 // Push runs on the realtime callback thread and only copies: it never blocks
 // and never allocates. Frames are handed to the consumer through a channel of

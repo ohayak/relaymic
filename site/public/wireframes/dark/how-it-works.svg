@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="rvw" viewBox="0 0 1600 870" width="1600" height="870" role="img" aria-labelledby="rvhwd-title rvhwd-desc">
+<title id="rvhwd-title">How Remote Visio works</title>
+<desc id="rvhwd-desc">1. In front of you, the sender page at https://your-mac:7420 runs in any browser on a phone, laptop or tablet. 2. Your voice and camera go to the remote Mac over one encrypted, peer-to-peer WebRTC connection, and the meeting's sound comes back the same way. On the Mac, the Remote Visio menu-bar app receives them and passes them on, untouched, over the Mac's own address 127.0.0.1. 3. The Remote Visio extension in Chrome, Edge, Brave, Arc or another Chromium browser adds three devices to web pages. 4. The web meeting picks Remote Visio Camera, Remote Visio Microphone and Remote Visio Speaker like any other. The screen, keyboard and mouse stay with your remote desktop tool, as before.</desc>
+<style>
+:where(svg.rvw){--rvw-bg:#131417;--rvw-panel:#191a1f;--rvw-card:#202228;--rvw-ink:#eceae6;--rvw-muted:#a3a49d;--rvw-faint:#73757c;--rvw-accent:#ffb000;--rvw-soft:#3b2f12;--rvw-live:#57d08a;font-family:var(--rvw-font,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif)}
+.rvw-l,.rvw-l2,.rvw-lm,.rvw-la,.rvw-a3,.rvw-ds,.rvw-dt,.rvw-sep,.rvw-bar,.rvw-i,.rvw-ia,.rvw-im{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.rvw-l{stroke:var(--rvw-ink);stroke-width:3}
+.rvw-l2{stroke:var(--rvw-ink);stroke-width:2}
+.rvw-lm{stroke:var(--rvw-muted);stroke-width:2}
+.rvw-la{stroke:var(--rvw-accent);stroke-width:4}
+.rvw-a3{stroke:var(--rvw-accent);stroke-width:3}
+.rvw-ds{stroke:var(--rvw-muted);stroke-width:2.5;stroke-dasharray:10 9}
+.rvw-dt{stroke:var(--rvw-muted);stroke-width:3;stroke-dasharray:.5 9}
+.rvw-sep{stroke:var(--rvw-faint);stroke-width:1.5}
+.rvw-bar{stroke:var(--rvw-faint);stroke-width:7}
+.rvw-i{stroke:var(--rvw-ink)}
+.rvw-ia{stroke:var(--rvw-accent)}
+.rvw-im{stroke:var(--rvw-muted)}
+.rvw-bg{fill:var(--rvw-bg)}
+.rvw-pn{fill:var(--rvw-panel)}
+.rvw-cd{fill:var(--rvw-card)}
+.rvw-sf{fill:var(--rvw-soft)}
+.rvw-ik{fill:var(--rvw-ink)}
+.rvw-lv{fill:var(--rvw-live)}
+.rvw-t{fill:var(--rvw-ink)}
+.rvw-tm{fill:var(--rvw-muted)}
+.rvw-ta{fill:var(--rvw-accent)}
+.rvw-tc{fill:var(--rvw-card)}
+.rvw-mono{font-family:var(--rvw-mono,ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace)}
+</style>
+<defs><symbol id="rvhwd-cam" viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="13" height="11" rx="2"/><path d="M15.5 10.5 21.5 7v10l-6-3.5"/></symbol><symbol id="rvhwd-chev" viewBox="0 0 24 24"><path d="M7.5 10l4.5 4.5 4.5-4.5"/></symbol><symbol id="rvhwd-glyph" viewBox="2 10 92 78"><path d="M7.5 22.5H31l4.4-7.2q1.1-1.8 3.2-1.8h18.8q2.1 0 3.2 1.8l4.4 7.2h23.5q3 0 3 3v56q0 3-3 3h-81q-3 0-3-3v-56q0-3 3-3z"/><path d="M13.5 22.5v-4q0-2 2-2h8q2 0 2 2v4M75 22.5a4 4 0 0 1 8 0"/><rect x="38" y="28.5" width="20" height="30" rx="10"/><path d="M31.75 46.5v3a16.25 16.25 0 0 0 32.5 0v-3M48 65.75V73M37.5 73h21M10 46.5v3M17.5 46.5v3M25 46.5v3M71 46.5v3M78.5 46.5v3M86 46.5v3"/></symbol><symbol id="rvhwd-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5M12 14.5v2"/></symbol><symbol id="rvhwd-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></symbol><symbol id="rvhwd-person" viewBox="0 0 24 24"><circle cx="12" cy="9" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></symbol><symbol id="rvhwd-spk" viewBox="0 0 24 24"><path d="M3.5 9.5H7L11.5 5.5v13L7 14.5H3.5z"/><path d="M15 9a4 4 0 0 1 0 6M17.8 6.3a7.8 7.8 0 0 1 0 11.4"/></symbol></defs>
+<rect width="1600" height="870" class="rvw-bg"/>
+<text x="250" y="70" font-size="24" font-weight="600" text-anchor="middle" class="rvw-tm">In front of you</text>
+<text x="1115" y="70" font-size="24" font-weight="600" text-anchor="middle" class="rvw-tm">On the remote Mac</text>
+<g transform="translate(150 110)">
+<rect x="0" y="0" width="200" height="400" rx="32" class="rvw-cd rvw-l"/>
+<path d="M84 16H116" class="rvw-l2"/>
+<rect x="12" y="30" width="176" height="340" rx="14" class="rvw-pn"/>
+<text x="24" y="58" font-size="17" font-weight="600" class="rvw-t">Remote Visio</text>
+<rect x="24" y="70" width="152" height="128" rx="12" class="rvw-cd rvw-l2"/>
+<use href="#rvhwd-person" x="72" y="80" width="56" height="56" class="rvw-im" stroke-width="1.1"/>
+<circle cx="66" cy="172" r="13" class="rvw-cd rvw-l2"/>
+<use href="#rvhwd-mic" x="58" y="164" width="16" height="16" class="rvw-i" stroke-width="2.7"/>
+<circle cx="100" cy="172" r="13" class="rvw-cd rvw-l2"/>
+<use href="#rvhwd-cam" x="92" y="164" width="16" height="16" class="rvw-i" stroke-width="2.7"/>
+<circle cx="134" cy="172" r="13" class="rvw-cd rvw-l2"/>
+<use href="#rvhwd-spk" x="126" y="164" width="16" height="16" class="rvw-i" stroke-width="2.7"/>
+<rect x="24" y="210" width="152" height="30" rx="15" class="rvw-l2"/>
+<text x="100" y="230" font-size="15" font-weight="600" text-anchor="middle" class="rvw-tm">Stop</text>
+<use href="#rvhwd-mic" x="26" y="257" width="18" height="18" class="rvw-im" stroke-width="2.4"/>
+<circle cx="57" cy="266" r="5" class="rvw-lv"/>
+<path d="M70 266H150" class="rvw-bar"/>
+<use href="#rvhwd-spk" x="26" y="291" width="18" height="18" class="rvw-im" stroke-width="2.4"/>
+<circle cx="57" cy="300" r="5" class="rvw-lv"/>
+<path d="M70 300H132" class="rvw-bar"/>
+<use href="#rvhwd-cam" x="26" y="325" width="18" height="18" class="rvw-im" stroke-width="2.4"/>
+<circle cx="57" cy="334" r="5" class="rvw-lv"/>
+<path d="M70 334H160" class="rvw-bar"/>
+<path d="M84 386H116" class="rvw-l2"/>
+</g>
+<circle cx="152" cy="112" r="17" class="rvw-cd rvw-a3"/>
+<text x="152" y="118.8" font-size="20" font-weight="700" text-anchor="middle" class="rvw-ta">1</text>
+<text x="250" y="556" font-size="26" font-weight="600" text-anchor="middle" class="rvw-t">Sender page</text>
+<text x="250" y="588" font-size="21" text-anchor="middle" class="rvw-tm">Any browser, any device</text>
+<text x="250" y="620" font-size="19" text-anchor="middle" class="rvw-t rvw-mono">https://your-mac:7420</text>
+<path d="M362 250H696" class="rvw-la"/>
+<path d="M683.3 257.9L696 250L683.3 242.1" class="rvw-la"/>
+<path d="M696 410H362" class="rvw-la"/>
+<path d="M374.7 402.1L362 410L374.7 417.9" class="rvw-la"/>
+<text x="512" y="232" font-size="22" font-weight="600" text-anchor="middle" class="rvw-t">Your voice and camera</text>
+<use href="#rvhwd-lock" x="494" y="280" width="34" height="34" class="rvw-i" stroke-width="2"/>
+<text x="512" y="346" font-size="21" font-weight="600" text-anchor="middle" class="rvw-t">Encrypted WebRTC</text>
+<text x="512" y="372" font-size="20" text-anchor="middle" class="rvw-tm">peer-to-peer</text>
+<text x="512" y="444" font-size="22" font-weight="600" text-anchor="middle" class="rvw-t">The meeting's sound</text>
+<rect x="670" y="96" width="890" height="644" rx="26" class="rvw-pn rvw-l"/>
+<path d="M1097 740l-8 30h52l-8-30" class="rvw-l"/>
+<path d="M1050 771H1180" class="rvw-l"/>
+<rect x="700" y="180" width="200" height="260" rx="18" class="rvw-cd rvw-l"/>
+<use href="#rvhwd-glyph" x="754" y="222" width="92" height="78" class="rvw-i" stroke-width="3.2"/>
+<text x="800" y="352" font-size="24" font-weight="600" text-anchor="middle" class="rvw-t">Remote Visio</text>
+<text x="800" y="382" font-size="20" text-anchor="middle" class="rvw-tm">menu-bar app</text>
+<circle cx="702" cy="182" r="17" class="rvw-cd rvw-a3"/>
+<text x="702" y="188.8" font-size="20" font-weight="700" text-anchor="middle" class="rvw-ta">2</text>
+<text x="800" y="480" font-size="20" text-anchor="middle" class="rvw-tm">Passes your audio and</text>
+<text x="800" y="506" font-size="20" text-anchor="middle" class="rvw-tm">video on, untouched</text>
+<path d="M906 250H1004" class="rvw-la"/>
+<path d="M993 256.9L1004 250L993 243.1" class="rvw-la"/>
+<path d="M1004 410H906" class="rvw-la"/>
+<path d="M917 403.1L906 410L917 416.9" class="rvw-la"/>
+<text x="955" y="318" font-size="18" text-anchor="middle" class="rvw-t rvw-mono">127.0.0.1</text>
+<text x="955" y="344" font-size="18" text-anchor="middle" class="rvw-tm">on this Mac</text>
+<text x="1270" y="136" font-size="18" text-anchor="middle" class="rvw-tm">Chrome, Edge, Brave, Arc or other Chromium browser</text>
+<g transform="translate(1010 150)">
+<rect x="0" y="0" width="520" height="490" rx="16" class="rvw-cd rvw-l"/>
+<circle cx="24" cy="26" r="6" class="rvw-l2"/>
+<circle cx="44" cy="26" r="6" class="rvw-l2"/>
+<circle cx="64" cy="26" r="6" class="rvw-l2"/>
+<rect x="88" y="10" width="350" height="32" rx="16" class="rvw-l2"/>
+<path d="M108 26H220" class="rvw-bar"/>
+<circle cx="480" cy="26" r="21" class="rvw-sf"/>
+<use href="#rvhwd-glyph" x="461" y="10" width="38" height="32" class="rvw-i" stroke-width="5.9"/>
+<path d="M0 52H520" class="rvw-l2"/>
+<rect x="20" y="70" width="480" height="180" rx="12" class="rvw-pn"/>
+<use href="#rvhwd-person" x="185" y="89" width="150" height="150" class="rvw-im" stroke-width="0.5"/>
+<rect x="20" y="270" width="480" height="52" rx="12" class="rvw-sf rvw-a3"/>
+<use href="#rvhwd-cam" x="34" y="282" width="28" height="28" class="rvw-i" stroke-width="2.1"/>
+<text x="76" y="304" font-size="22" font-weight="600" class="rvw-t">Remote Visio Camera</text>
+<use href="#rvhwd-chev" x="458" y="282" width="28" height="28" class="rvw-i" stroke-width="2.1"/>
+<rect x="20" y="334" width="480" height="52" rx="12" class="rvw-sf rvw-a3"/>
+<use href="#rvhwd-mic" x="34" y="346" width="28" height="28" class="rvw-i" stroke-width="2.1"/>
+<text x="76" y="368" font-size="22" font-weight="600" class="rvw-t">Remote Visio Microphone</text>
+<use href="#rvhwd-chev" x="458" y="346" width="28" height="28" class="rvw-i" stroke-width="2.1"/>
+<rect x="20" y="398" width="480" height="52" rx="12" class="rvw-sf rvw-a3"/>
+<use href="#rvhwd-spk" x="34" y="410" width="28" height="28" class="rvw-i" stroke-width="2.1"/>
+<text x="76" y="432" font-size="22" font-weight="600" class="rvw-t">Remote Visio Speaker</text>
+<use href="#rvhwd-chev" x="458" y="410" width="28" height="28" class="rvw-i" stroke-width="2.1"/>
+</g>
+<circle cx="1534" cy="146" r="17" class="rvw-cd rvw-a3"/>
+<text x="1534" y="152.8" font-size="20" font-weight="700" text-anchor="middle" class="rvw-ta">3</text>
+<circle cx="1528" cy="420" r="17" class="rvw-cd rvw-a3"/>
+<text x="1528" y="426.8" font-size="20" font-weight="700" text-anchor="middle" class="rvw-ta">4</text>
+<circle cx="1046" cy="669" r="15" class="rvw-cd rvw-a3"/>
+<text x="1046" y="675" font-size="17" font-weight="700" text-anchor="middle" class="rvw-ta">3</text>
+<text x="1072" y="677" font-size="21" font-weight="600" class="rvw-t">The extension adds three devices</text>
+<circle cx="1046" cy="707" r="15" class="rvw-cd rvw-a3"/>
+<text x="1046" y="713" font-size="17" font-weight="700" text-anchor="middle" class="rvw-ta">4</text>
+<text x="1072" y="715" font-size="21" font-weight="600" class="rvw-t">The meeting picks them like any other</text>
+<path d="M250 650V832H1115V786" class="rvw-ds"/>
+<path d="M256.9 661L250 650L243.1 661" class="rvw-lm"/>
+<path d="M1121.9 797L1115 786L1108.1 797" class="rvw-lm"/>
+<text x="682" y="818" font-size="21" text-anchor="middle" class="rvw-tm">Screen, keyboard and mouse: your remote desktop tool, as before</text>
+</svg>

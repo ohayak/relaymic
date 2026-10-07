@@ -1,0 +1,25 @@
+---
+import { links } from "@utils/config";
+import Icon from "./Icon.astro";
+interface Props {
+  inverted?: boolean;
+  center?: boolean;
+}
+const { inverted = false, center = false } = Astro.props;
+---
+
+<div class={`flex flex-col gap-3 2xs:flex-row 2xs:flex-wrap ${center ? "justify-center" : ""}`}>
+  <a href="/download" class={`btn btn-lg rounded-full px-6 ${inverted ? "border-0 bg-neutral-content text-neutral hover:bg-neutral-content/90" : "btn-primary"}`}>
+    <Icon name="download" class="h-5 w-5" />
+    Download for Mac
+  </a>
+  <a
+    href={links.chromeWebStoreUrl}
+    rel="noopener"
+    class={`btn btn-lg rounded-full px-6 ${inverted ? "btn-outline border-neutral-content/40 text-neutral-content hover:border-neutral-content hover:bg-neutral-content hover:text-neutral" : "btn-outline"}`}
+  >
+    <Icon name="puzzle" class="h-5 w-5" />
+    Add to Chrome
+    <span class="sr-only">(opens the Chrome Web Store)</span>
+  </a>
+</div>

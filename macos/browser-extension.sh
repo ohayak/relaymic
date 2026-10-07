@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Put the Remote Visio Camera browser extension where the person at this Mac
-# can load it into a Chromium browser, and help them do so. The menu-bar app
-# runs it ("Install Browser Camera Extension…", `sync` at every launch and
-# `remove` when it uninstalls); it can be run from Terminal as well.
+# Put the Remote Visio browser extension where the person at this Mac can
+# load it into a Chromium browser, and help them do so. It gives web pages
+# the Remote Visio microphone, speaker and camera; the browser and the Chrome
+# Web Store list it as "Remote Visio Camera", its name from when it carried
+# only the camera. The menu-bar app runs this ("Install Browser Extension…",
+# `sync` at every launch and `remove` when it uninstalls); it can be run from
+# Terminal as well.
 #
 #   browser-extension.sh detect                  → the default browser and the
 #                                                  installed Chromium browsers
@@ -25,7 +28,9 @@
 # an unpacked extension from a folder the user picks and keeps reading it
 # from there, so it has to be a stable folder the user owns, not the inside
 # of an app bundle that an update replaces. That copy lives at
-# ~/Library/Application Support/RemoteVisio/Browser Camera Extension;
+# ~/Library/Application Support/RemoteVisio/Browser Camera Extension (named,
+# like the extension, from the camera-only days; the browser keeps loading
+# from the folder it was given, so it keeps that name);
 # REMOTEVISIO_BROWSER_EXTENSION_DIR overrides that, for tests.
 #
 # The extension files come from BrowserExtension/ next to this script (how

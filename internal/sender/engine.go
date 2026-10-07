@@ -37,8 +37,9 @@ type Config struct {
 	Discover bool     // auto-discovery: scan the tailnet for receivers and add them to the broadcast
 	Device   string   // input device name substring; empty = system default
 	Bitrate  int      // Opus bitrate; 0 = 96000
-	// Speaker receives the remote Mac's system audio (return path) and plays it
-	// on the local default output device. The native sender has no echo
+	// Speaker receives the return path, the sound of the remote Mac's pages
+	// that play into the browser extension's Remote Visio Speaker, and plays
+	// it on the local default output device. The native sender has no echo
 	// cancellation: use headphones with the return path on, or the remote audio
 	// from the speakers gets picked up by the mic and sent back.
 	Speaker bool
@@ -64,7 +65,8 @@ func (l *link) currentTrack() *webrtc.TrackLocalStaticSample {
 // Engine manages the full "capture -> encode -> multiple connections" lifecycle.
 // Capture and encoding happen once and each frame fans out to every active
 // receiver, so a user moving between machines never has to switch; every
-// machine's virtual mic carries live audio. After Start each link maintains
+// machine's Remote Visio Microphone (the browser extension's) carries live
+// audio. After Start each link maintains
 // its own reconnects; Stop tears everything down.
 type Engine struct {
 	cfg Config
@@ -399,9 +401,10 @@ func (e *Engine) connectOnce(l *link, stopped <-chan struct{}) (<-chan struct{},
 		}
 	}()
 
-	// Return path: the receiver sends the remote Mac's system audio back on the
-	// same m-line. If we take it the direction is sendrecv; otherwise say
-	// sendonly explicitly so the receiver does not encode for nothing.
+	// Return path: the receiver sends the sound of the remote Mac's pages on
+	// Remote Visio Speaker back on the same m-line. If we take it the
+	// direction is sendrecv; otherwise say sendonly explicitly so the
+	// receiver does not send it for nothing.
 	dir := webrtc.RTPTransceiverDirectionSendonly
 	if e.cfg.Speaker {
 		dir = webrtc.RTPTransceiverDirectionSendrecv

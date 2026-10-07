@@ -1,0 +1,31 @@
+name: cloudflare
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  deploy:
+    if: github.event_name == 'push'
+    environment: ${{ github.ref_name == 'main' && 'production' || 'preview' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: lts
+      - run: deno install --allow-scripts
+      - if: ${{ github.ref_name == 'main' }}
+        name: marketing
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          environment: production
+          workingDirectory: cloudflare/marketing
+          packageManager: npm

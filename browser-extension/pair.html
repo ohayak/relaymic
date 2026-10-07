@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Remote Visio Camera</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body class="consent pair">
+<main>
+  <div class="brand">
+    <img src="icons/icon-32.png" alt="">
+    <span data-i18n="ext_name">Remote Visio Camera</span>
+  </div>
+
+  <section id="approve" hidden>
+    <h1 data-i18n="pair_title">A device wants to pair with this browser</h1>
+    <p id="device"><b id="deviceName"></b> <span id="devicePlatform" class="dim"></span> <span id="deviceFrom" class="dim"></span></p>
+    <p class="dim" data-i18n="pair_body"></p>
+    <label class="number">
+      <span data-i18n="pair_type_number">Type the number shown on your device</span>
+      <input type="text" id="pairNumberInput" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="9">
+    </label>
+    <p id="mismatch" class="err" hidden></p>
+    <div class="buttons">
+      <button type="button" id="deny" data-i18n="pair_deny">Deny</button>
+      <button type="button" id="allow" class="primary" data-i18n="pair_allow" disabled>Allow</button>
+    </div>
+  </section>
+
+  <section id="show" hidden>
+    <h1 data-i18n="pair_show_title">Pair a device</h1>
+    <div id="bigQr" class="qr big"></div>
+    <p class="dim" data-i18n="popup_pair_scan"></p>
+    <code id="showLink"></code>
+  </section>
+
+  <p id="over" hidden></p>
+</main>
+<script src="pair.js"></script>
+</body>
+</html>

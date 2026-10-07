@@ -1,5 +1,4 @@
 User-agent: *
 Allow: /
-Disallow: /api/
 
-Sitemap: https://relaymic.com/sitemap.xml
+Sitemap: https://remotevisio.com/sitemap-index.xml

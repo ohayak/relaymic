@@ -7,8 +7,9 @@ import (
 	"github.com/pion/interceptor"
 )
 
-// What every sending side shares: the sender's microphone, the receiver's
-// return path and the selfcheck tone all packetize Opus the same way.
+// What every sending side that encodes shares: the native sender's
+// microphone and the selfcheck tone packetize Opus the same way. (The
+// receiver's return path encodes nothing: the browser speaker's pages do.)
 const (
 	FrameMS = 20
 	// Samples per channel in one frame.
@@ -19,7 +20,8 @@ const (
 
 // NewOpusEncoder creates a 48kHz encoder with the switches every sending side
 // uses: the given bitrate, and in-band FEC on for 5% expected loss, so one
-// lost packet does not cost a word (the receiver decodes it, see Decode).
+// lost packet does not cost a word (the decoder uses the copy: browsers do,
+// and so does Decode).
 // channels is what goes inside the packets; SDP always says 2 regardless (see
 // Channels). DTX is left off: silence detection belongs to whoever listens.
 func NewOpusEncoder(app opus.Application, channels, bitrate int) (*opus.Encoder, error) {

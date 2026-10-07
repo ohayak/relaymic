@@ -1,0 +1,19 @@
+---
+import Layout from "../Layout.astro";
+import { seo } from "@utils/config";
+import Icon from "@components/Icon.astro";
+---
+
+<Layout title={seo.notFound.title} description={seo.notFound.description} noindex>
+  <section class="mx-auto max-w-screen-lg px-4 py-20 md:py-28">
+    <p class="font-mono text-sm text-base-content/75"><span class="dot dot-peak mr-2"></span>404 · no signal</p>
+    <h1 class="mt-4 max-w-2xl text-4xl font-extrabold leading-[1.05] tracking-tight md:text-6xl">This page isn't here.</h1>
+    <p class="lede mt-5 max-w-xl">The address may have changed. One of these is probably what you were looking for.</p>
+    <ul class="mt-10 grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+      <li><a class="card-surface flex min-h-11 items-center gap-2 p-4 font-semibold hover:bg-base-200" href="/"><Icon name="arrowRight" class="h-4 w-4" />Home</a></li>
+      <li><a class="card-surface flex min-h-11 items-center gap-2 p-4 font-semibold hover:bg-base-200" href="/download"><Icon name="download" class="h-4 w-4" />Download</a></li>
+      <li><a class="card-surface flex min-h-11 items-center gap-2 p-4 font-semibold hover:bg-base-200" href="/guides"><Icon name="book" class="h-4 w-4" />Guides</a></li>
+      <li><a class="card-surface flex min-h-11 items-center gap-2 p-4 font-semibold hover:bg-base-200" href="/support"><Icon name="chat" class="h-4 w-4" />Support</a></li>
+    </ul>
+  </section>
+</Layout>

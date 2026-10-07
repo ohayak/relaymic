@@ -1,8 +1,8 @@
-// Package audio enumerates local audio devices and plays to them.
-//
-// The receiver does one thing: write decoded PCM to the chosen output device
-// (the Remote Visio virtual device). It never opens any input device, so a
-// loopback is structurally impossible.
+// Package audio enumerates local audio devices, plays to them and captures
+// from them, for the native sender (its microphone, and the return path it
+// plays). The receiver opens no audio device at all: its microphone and
+// speaker are the browser extension's; it only uses this package to mute the
+// Mac's own microphones (micmute.go).
 package audio
 
 import (
@@ -45,7 +45,7 @@ func (c *Context) Playbacks() ([]Device, error) {
 }
 
 // FindPlayback finds an output device by name substring (ignoring case and
-// spaces). "remotevisio" matches "Remote Visio". An empty string returns the
+// spaces). "macbookpro" matches "MacBook Pro Speakers". An empty string returns the
 // system default.
 func (c *Context) FindPlayback(substr string) (Device, error) {
 	devices, err := c.Playbacks()

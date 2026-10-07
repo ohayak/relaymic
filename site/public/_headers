@@ -1,65 +1,22 @@
+# Security headers for every response served from the static assets.
+# script-src allows Google's tag only because /js/consent.js loads it after
+# the visitor clicks Accept; nothing else on the site is third-party.
 /*
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.google-analytics.com https://*.googletagmanager.com; font-src 'self'; connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+  Strict-Transport-Security: max-age=31536000
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
-  Permissions-Policy: geolocation=(), camera=(), payment=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://*.googletagmanager.com; style-src 'self'; img-src 'self' data: https://*.google-analytics.com https://*.googletagmanager.com; font-src 'self'; connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com; form-action 'self'; base-uri 'none'; frame-ancestors 'none'
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()
+  Cross-Origin-Opener-Policy: same-origin
 
-# no-transform 是标准指令：禁止中间代理改动响应体。Cloudflare 会据此关掉它
-# 对 HTML 的全部后处理 —— 包括自动往页面里塞 Web Analytics 的 beacon。
-# 那个 beacon 会被本站的 script-src 'self' 拦下，除了给每个访客留一条 console
-# 报错什么也做不成。这条声明同时挡住将来的 Rocket Loader、自动 minify 之类，
-# 它们同样会破坏 CSP。只加在 HTML 上，静态资源不需要。
-/
-  Cache-Control: no-transform, public, max-age=0, must-revalidate
-
-/privacy
-  Cache-Control: no-transform, public, max-age=0, must-revalidate
-
-/terms
-  Cache-Control: no-transform, public, max-age=0, must-revalidate
-
-/es/
-  Cache-Control: no-transform, public, max-age=0, must-revalidate
-
-/es/privacy
-  Cache-Control: no-transform, public, max-age=0, must-revalidate
-
-/es/terms
-  Cache-Control: no-transform, public, max-age=0, must-revalidate
-
-/zh/
-  Cache-Control: no-transform, public, max-age=0, must-revalidate
-
-/zh/privacy
-  Cache-Control: no-transform, public, max-age=0, must-revalidate
-
-/zh/terms
-  Cache-Control: no-transform, public, max-age=0, must-revalidate
-
-# 规则是累加的，路径不能重叠 —— 用 /assets/* 兜底会让字体同时收到两个
-# Cache-Control，浏览器取哪个不好说，长缓存就白设了。
-/assets/fonts/*
+# Fingerprinted build output and fonts never change.
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+/fonts/*
   Cache-Control: public, max-age=31536000, immutable
 
-/assets/og.png
-  Cache-Control: public, max-age=86400
-
-/assets/favicon-32.png
-  Cache-Control: public, max-age=86400
-
-/assets/favicon-96.png
-  Cache-Control: public, max-age=86400
-
-/assets/brand.png
-  Cache-Control: public, max-age=86400
-
-# 样式和脚本改了要马上能看到效果，缓存给短的
-/assets/site.css
-  Cache-Control: public, max-age=600
-
-/assets/signal.js
-  Cache-Control: public, max-age=600
-
-/assets/ga.js
-  Cache-Control: public, max-age=600
+# The installer: a download, never rendered.
+/downloads/*
+  Content-Disposition: attachment
+  X-Robots-Tag: noindex

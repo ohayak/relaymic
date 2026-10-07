@@ -3,9 +3,8 @@
 <!-- Hardened-runtime entitlements for RemoteVisio.app when it carries the
      camera system extension: a template, macos/assemble-app.sh fills in @TEAM@
      from REMOTEVISIO_TEAM_ID at assembly time (without the extension the app
-     is signed with app.entitlements instead). The app stays unsandboxed, as
-     there: it runs the receiver and the uninstall script.
-     audio-input: as in app.entitlements.
+     needs no entitlement and is signed without any). The app stays
+     unsandboxed: it runs the receiver and the uninstall script.
      system-extension.install: lets the app activate the extension. It is a
      restricted entitlement: macOS honours it only with the Developer ID
      provisioning profile embedded in the app (Contents/embedded.provisionprofile),
@@ -13,8 +12,6 @@
      match; AMFI kills an app that claims it without the profile. -->
 <plist version="1.0">
 <dict>
-    <key>com.apple.security.device.audio-input</key>
-    <true/>
     <key>com.apple.developer.system-extension.install</key>
     <true/>
     <key>com.apple.application-identifier</key>

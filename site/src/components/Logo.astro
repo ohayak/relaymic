@@ -1,0 +1,33 @@
+---
+// The Remote Visio mark: the line-art camera with a microphone inside it and
+// signal bars on each side, from icons/icon.svg, drawn in currentColor so it
+// follows the theme (ink on paper, paper on ink).
+interface Props {
+  class?: string;
+  title?: string;
+}
+const { class: className = "h-8 w-8", title } = Astro.props;
+---
+
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="1 10 94 78"
+  class={className}
+  fill="none"
+  stroke="currentColor"
+  stroke-width="5"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  role={title ? "img" : undefined}
+  aria-label={title}
+  aria-hidden={title ? undefined : "true"}
+  focusable="false"
+>
+  <path
+    d="M7.5 22.5H31l4.4-7.2q1.1-1.8 3.2-1.8h18.8q2.1 0 3.2 1.8L65 22.5h23.5q3 0 3 3v56q0 3-3 3h-81q-3 0-3-3v-56q0-3 3-3z"
+  ></path>
+  <path d="M13.5 22.5v-4q0-2 2-2h8q2 0 2 2v4M75 22.5a4 4 0 0 1 8 0"></path>
+  <rect x="38" y="28.5" width="20" height="30" rx="10"></rect>
+  <path d="M31.75 46.5v3a16.25 16.25 0 0 0 32.5 0v-3M48 65.75V73M37.5 73h21"></path>
+  <path d="M10 46.5v3M17.5 46.5v3M25 46.5v3M71 46.5v3M78.5 46.5v3M86 46.5v3"></path>
+</svg>

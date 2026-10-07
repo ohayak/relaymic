@@ -1,0 +1,32 @@
+---
+// A real screenshot from public/media at 1x and 2x, with its intrinsic size
+// so nothing shifts while it loads. Lazy unless `eager`; `priority` marks the
+// one image per page that should be fetched first (fetchpriority=high).
+import { media, type MediaName } from "@utils/media";
+interface Props {
+  name: MediaName;
+  alt: string;
+  class?: string;
+  eager?: boolean;
+  priority?: boolean;
+  sizes?: string;
+}
+const { name, alt, class: className, eager = false, priority = false, sizes } = Astro.props;
+const { w, h } = media[name];
+const srcset = sizes
+  ? `/media/${name}@1x.webp ${w}w, /media/${name}.webp ${w * 2}w`
+  : `/media/${name}@1x.webp 1x, /media/${name}.webp 2x`;
+---
+
+<img
+  src={`/media/${name}@1x.webp`}
+  srcset={srcset}
+  sizes={sizes}
+  width={w}
+  height={h}
+  alt={alt}
+  class={className}
+  loading={eager ? "eager" : "lazy"}
+  decoding={eager ? "auto" : "async"}
+  fetchpriority={priority ? "high" : undefined}
+/>

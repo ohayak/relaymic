@@ -7,9 +7,7 @@ import (
 	"github.com/gen2brain/malgo"
 )
 
-// Capture is for the sender only. The receiver's "never opens an input
-// device" anti-loopback rule still holds: they are two processes, and nothing
-// in the receiver's code path calls into this.
+// Capture is for the native sender only: its microphone.
 
 // Captures lists all input devices.
 func (c *Context) Captures() ([]Device, error) {

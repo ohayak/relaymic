@@ -1,8 +1,12 @@
 // The consent window, opened by the service worker the first time a site
-// asks for the Remote Visio Camera. The answer is stored per site (the one
-// in the address bar; storage.local "sites": {origin: "allow" | "block"}),
-// where the pages waiting for it see it arrive; closing the window without
-// answering decides nothing (the service worker tells the waiting pages).
+// asks for one of Remote Visio's devices (the camera, the microphone, or the
+// speaker for its sound). One answer covers the three. It is stored per site
+// (the one in the address bar; storage.local "sites": {origin: "allow" |
+// "block"}, or "allow-camera" for a site an older version allowed the
+// camera alone, which this window then asks about all three), where the
+// pages waiting for it see it arrive; closing the
+// window without answering decides nothing (the service worker tells the
+// waiting pages).
 //
 // A page can make this window appear whenever it likes (and, with the
 // user's click, bring it back to the front), so the window guards its

@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="rvw" viewBox="0 0 1600 850" width="1600" height="850" role="img" aria-labelledby="rvdvd-title rvdvd-desc">
+<title id="rvdvd-title">Remote Visio's three devices</title>
+<desc id="rvdvd-desc">Microphone: your device's microphone, with echo and noise handled on that device and not on the Mac, becomes Remote Visio Microphone on the remote Mac, passed on untouched, and the web meeting hears you. Speaker: the meeting's sound plays into Remote Visio Speaker, which carries it back while the Mac stays silent, and you hear it on your device's speakers or headphones. Camera: your device's camera becomes Remote Visio Camera, which the web meeting picks like any webcam; video apps can use it too through the optional virtual camera, where macOS allows it. Remote Visio Microphone and Speaker exist only in web pages of Chromium browsers (Chrome, Edge, Brave, Arc); the Zoom, Teams and FaceTime apps don't see them.</desc>
+<style>
+:where(svg.rvw){--rvw-bg:#131417;--rvw-panel:#191a1f;--rvw-card:#202228;--rvw-ink:#eceae6;--rvw-muted:#a3a49d;--rvw-faint:#73757c;--rvw-accent:#ffb000;--rvw-soft:#3b2f12;--rvw-live:#57d08a;font-family:var(--rvw-font,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif)}
+.rvw-l,.rvw-l2,.rvw-lm,.rvw-la,.rvw-a3,.rvw-ds,.rvw-dt,.rvw-sep,.rvw-bar,.rvw-i,.rvw-ia,.rvw-im{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.rvw-l{stroke:var(--rvw-ink);stroke-width:3}
+.rvw-l2{stroke:var(--rvw-ink);stroke-width:2}
+.rvw-lm{stroke:var(--rvw-muted);stroke-width:2}
+.rvw-la{stroke:var(--rvw-accent);stroke-width:4}
+.rvw-a3{stroke:var(--rvw-accent);stroke-width:3}
+.rvw-ds{stroke:var(--rvw-muted);stroke-width:2.5;stroke-dasharray:10 9}
+.rvw-dt{stroke:var(--rvw-muted);stroke-width:3;stroke-dasharray:.5 9}
+.rvw-sep{stroke:var(--rvw-faint);stroke-width:1.5}
+.rvw-bar{stroke:var(--rvw-faint);stroke-width:7}
+.rvw-i{stroke:var(--rvw-ink)}
+.rvw-ia{stroke:var(--rvw-accent)}
+.rvw-im{stroke:var(--rvw-muted)}
+.rvw-bg{fill:var(--rvw-bg)}
+.rvw-pn{fill:var(--rvw-panel)}
+.rvw-cd{fill:var(--rvw-card)}
+.rvw-sf{fill:var(--rvw-soft)}
+.rvw-ik{fill:var(--rvw-ink)}
+.rvw-lv{fill:var(--rvw-live)}
+.rvw-t{fill:var(--rvw-ink)}
+.rvw-tm{fill:var(--rvw-muted)}
+.rvw-ta{fill:var(--rvw-accent)}
+.rvw-tc{fill:var(--rvw-card)}
+.rvw-mono{font-family:var(--rvw-mono,ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace)}
+</style>
+<defs><symbol id="rvdvd-cam" viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="13" height="11" rx="2"/><path d="M15.5 10.5 21.5 7v10l-6-3.5"/></symbol><symbol id="rvdvd-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></symbol><symbol id="rvdvd-spk" viewBox="0 0 24 24"><path d="M3.5 9.5H7L11.5 5.5v13L7 14.5H3.5z"/><path d="M15 9a4 4 0 0 1 0 6M17.8 6.3a7.8 7.8 0 0 1 0 11.4"/></symbol></defs>
+<rect width="1600" height="850" class="rvw-bg"/>
+<rect x="554" y="26" width="492" height="712" rx="24" class="rvw-pn"/>
+<text x="270" y="68" font-size="26" font-weight="600" text-anchor="middle" class="rvw-t">On your device</text>
+<text x="270" y="98" font-size="20" text-anchor="middle" class="rvw-tm">the sender page, in any browser</text>
+<text x="800" y="68" font-size="26" font-weight="600" text-anchor="middle" class="rvw-t">On the remote Mac</text>
+<text x="800" y="98" font-size="20" text-anchor="middle" class="rvw-tm">added to web pages by the extension</text>
+<text x="1330" y="68" font-size="26" font-weight="600" text-anchor="middle" class="rvw-t">In the web meeting</text>
+<text x="1330" y="98" font-size="20" text-anchor="middle" class="rvw-tm">Google Meet, Teams, Zoom on the web</text>
+<rect x="50" y="130" width="440" height="160" rx="18" class="rvw-cd rvw-l"/>
+<use href="#rvdvd-mic" x="76" y="156" width="40" height="40" class="rvw-i" stroke-width="1.7"/>
+<text x="134" y="186" font-size="24" font-weight="600" class="rvw-t">Your microphone</text>
+<text x="134" y="222" font-size="20" class="rvw-tm">Echo and noise handled here,</text>
+<text x="134" y="250" font-size="20" class="rvw-tm">once, not on the Mac</text>
+<rect x="580" y="130" width="440" height="160" rx="18" class="rvw-cd rvw-l"/>
+<use href="#rvdvd-mic" x="606" y="156" width="40" height="40" class="rvw-ia" stroke-width="1.7"/>
+<text x="664" y="186" font-size="24" font-weight="600" class="rvw-t">Remote Visio Microphone</text>
+<text x="664" y="222" font-size="20" class="rvw-tm">Your voice, passed on untouched</text>
+<rect x="1110" y="130" width="440" height="160" rx="18" class="rvw-cd rvw-l"/>
+<use href="#rvdvd-mic" x="1136" y="156" width="40" height="40" class="rvw-i" stroke-width="1.7"/>
+<text x="1194" y="186" font-size="24" font-weight="600" class="rvw-t">The meeting hears you</text>
+<text x="1194" y="222" font-size="20" class="rvw-tm">Picked like any microphone</text>
+<path d="M498 210H572" class="rvw-la"/>
+<path d="M559.3 217.9L572 210L559.3 202.1" class="rvw-la"/>
+<path d="M1028 210H1102" class="rvw-la"/>
+<path d="M1089.3 217.9L1102 210L1089.3 202.1" class="rvw-la"/>
+<rect x="50" y="335" width="440" height="160" rx="18" class="rvw-cd rvw-l"/>
+<use href="#rvdvd-spk" x="76" y="361" width="40" height="40" class="rvw-i" stroke-width="1.7"/>
+<text x="134" y="391" font-size="24" font-weight="600" class="rvw-t">You hear the meeting</text>
+<text x="134" y="427" font-size="20" class="rvw-tm">On your device's speakers</text>
+<text x="134" y="455" font-size="20" class="rvw-tm">or headphones</text>
+<rect x="580" y="335" width="440" height="160" rx="18" class="rvw-cd rvw-l"/>
+<use href="#rvdvd-spk" x="606" y="361" width="40" height="40" class="rvw-ia" stroke-width="1.7"/>
+<text x="664" y="391" font-size="24" font-weight="600" class="rvw-t">Remote Visio Speaker</text>
+<text x="664" y="427" font-size="20" class="rvw-tm">Carries the sound back;</text>
+<text x="664" y="455" font-size="20" class="rvw-tm">the Mac stays silent</text>
+<rect x="1110" y="335" width="440" height="160" rx="18" class="rvw-cd rvw-l"/>
+<use href="#rvdvd-spk" x="1136" y="361" width="40" height="40" class="rvw-i" stroke-width="1.7"/>
+<text x="1194" y="391" font-size="24" font-weight="600" class="rvw-t">The meeting's sound</text>
+<text x="1194" y="427" font-size="20" class="rvw-tm">Sent to Remote Visio Speaker</text>
+<path d="M1102 415H1028" class="rvw-la"/>
+<path d="M1040.7 407.1L1028 415L1040.7 422.9" class="rvw-la"/>
+<path d="M572 415H498" class="rvw-la"/>
+<path d="M510.7 407.1L498 415L510.7 422.9" class="rvw-la"/>
+<rect x="50" y="540" width="440" height="160" rx="18" class="rvw-cd rvw-l"/>
+<use href="#rvdvd-cam" x="76" y="566" width="40" height="40" class="rvw-i" stroke-width="1.7"/>
+<text x="134" y="596" font-size="24" font-weight="600" class="rvw-t">Your camera</text>
+<text x="134" y="632" font-size="20" class="rvw-tm">Any camera on the device,</text>
+<text x="134" y="660" font-size="20" class="rvw-tm">on or off at any time</text>
+<rect x="580" y="540" width="440" height="160" rx="18" class="rvw-cd rvw-l"/>
+<use href="#rvdvd-cam" x="606" y="566" width="40" height="40" class="rvw-ia" stroke-width="1.7"/>
+<text x="664" y="596" font-size="24" font-weight="600" class="rvw-t">Remote Visio Camera</text>
+<text x="664" y="632" font-size="20" class="rvw-tm">Video apps too, with the optional</text>
+<text x="664" y="660" font-size="20" class="rvw-tm">virtual camera, where allowed</text>
+<rect x="1110" y="540" width="440" height="160" rx="18" class="rvw-cd rvw-l"/>
+<use href="#rvdvd-cam" x="1136" y="566" width="40" height="40" class="rvw-i" stroke-width="1.7"/>
+<text x="1194" y="596" font-size="24" font-weight="600" class="rvw-t">The meeting sees you</text>
+<text x="1194" y="632" font-size="20" class="rvw-tm">Picked like any webcam</text>
+<path d="M498 620H572" class="rvw-la"/>
+<path d="M559.3 627.9L572 620L559.3 612.1" class="rvw-la"/>
+<path d="M1028 620H1102" class="rvw-la"/>
+<path d="M1089.3 627.9L1102 620L1089.3 612.1" class="rvw-la"/>
+<text x="800" y="786" font-size="20" text-anchor="middle" class="rvw-tm">Remote Visio Microphone and Speaker exist in web pages of Chromium browsers (Chrome, Edge, Brave, Arc…).</text>
+<text x="800" y="814" font-size="20" text-anchor="middle" class="rvw-tm">The Zoom, Teams and FaceTime apps don't see them: join those meetings from the browser.</text>
+</svg>

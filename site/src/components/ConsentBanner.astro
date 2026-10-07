@@ -1,0 +1,21 @@
+---
+// Shown by /js/consent.js only when no choice is stored. Decline and Accept
+// are the same size and weight. No Google request happens before Accept.
+---
+
+<section
+  id="consent-banner"
+  hidden
+  aria-label="Cookie consent"
+  class="fixed inset-x-2 bottom-2 z-[70] mx-auto max-w-xl rounded-box border border-base-300 bg-base-100 p-4 text-sm shadow-2xl sm:bottom-4"
+>
+  <h2 class="text-base font-bold">Analytics cookies?</h2>
+  <p class="mt-1 text-base-content/85">
+    With your consent, we use Google Analytics to learn which pages help people. It sets cookies. Without it, nothing is loaded.
+    <a class="link" href="/cookies">Cookie policy</a>.
+  </p>
+  <div class="mt-3 grid grid-cols-2 gap-2">
+    <button type="button" class="btn btn-outline" data-consent="decline">Decline</button>
+    <button type="button" class="btn btn-outline" data-consent="accept">Accept</button>
+  </div>
+</section>

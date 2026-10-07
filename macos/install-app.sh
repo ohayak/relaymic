@@ -37,6 +37,15 @@ $SUDO cp -R "$APP" "$INSTALLED"
 [[ -z "$SUDO" ]] || sudo chown -R root:wheel "$INSTALLED"
 "$LSREGISTER" -f "$INSTALLED"
 echo "==> installed $INSTALLED"
+# Earlier versions came with a virtual audio device, which this one no
+# longer uses. The installer package removes its driver; this leaves it, as
+# that takes the admin password and a restart of coreaudiod, and says how.
+LEGACY_DRIVER=/Library/Audio/Plug-Ins/HAL/RemoteVisio.driver
+if [[ -e "$LEGACY_DRIVER" ]]; then
+    echo "note: the Remote Visio audio device of earlier versions is still installed, and unused now;"
+    echo "    remove it with: sudo rm -rf $LEGACY_DRIVER && sudo killall coreaudiod"
+    echo "    (system audio pauses for about a second)"
+fi
 if [[ $was_running -eq 1 ]]; then
     echo "==> relaunching Remote Visio"
     open -a "$INSTALLED"

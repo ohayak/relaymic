@@ -1,0 +1,23 @@
+---
+// A plain CSS browser window around a screenshot taken on the Mac: three
+// dots and an address pill (text only, no product logos).
+interface Props {
+  url: string;
+  label?: string;
+  class?: string;
+}
+const { url, label, class: className = "" } = Astro.props;
+---
+
+<div class={`overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-[0_30px_60px_-35px_rgba(19,20,23,.45)] ${className}`}>
+  <div class="flex items-center gap-3 border-b border-base-300 bg-base-200 px-3 py-2">
+    <span aria-hidden="true" class="flex gap-1.5">
+      <span class="h-2.5 w-2.5 rounded-full bg-base-300"></span>
+      <span class="h-2.5 w-2.5 rounded-full bg-base-300"></span>
+      <span class="h-2.5 w-2.5 rounded-full bg-base-300"></span>
+    </span>
+    <span class="min-w-0 flex-1 truncate rounded-full bg-base-100 px-3 py-0.5 text-center font-mono text-[11px] text-base-content/75">{url}</span>
+    {label && <span class="hidden rounded-full border border-base-300 px-2 py-0.5 text-[11px] text-base-content/75 sm:inline">{label}</span>}
+  </div>
+  <slot />
+</div>

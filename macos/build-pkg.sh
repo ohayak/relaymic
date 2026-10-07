@@ -4,8 +4,7 @@
 #
 #   macos/build-pkg.sh preflight            → fail early if the keychain is not
 #                                             ready for a signed package
-#   macos/build-pkg.sh build OUT APP        → package bin/RemoteVisio.driver and
-#                                             the app bundle APP into OUT
+#   macos/build-pkg.sh build OUT APP        → package the app bundle APP into OUT
 #
 # NOTARIZE=0 in the environment skips notarization; REMOTEVISIO_SIGN=adhoc
 # (what `make pkg-unsigned` sets) produces an unsigned package for this Mac.
@@ -79,27 +78,26 @@ run() {
 build() {
     local out=$1 app=$2 pkg sign result status id verdict
     pkg="$STAGE/RemoteVisio.pkg"
-    [[ -d bin/RemoteVisio.driver && -f "$app/Contents/Info.plist" ]] || { echo "!!  build the driver and the app first: make pkg" >&2; exit 1; }
+    [[ -f "$app/Contents/Info.plist" ]] || { echo "!!  build the app first: make pkg" >&2; exit 1; }
     if [[ -z "$PKG_SIGN_ID" && "$out" != *-unsigned.pkg ]]; then
         echo "!!  no Developer ID Installer certificate: an unsigned package is only built as $out" >&2
         echo "    with an -unsigned suffix; use make pkg-unsigned" >&2
         exit 1
     fi
 
-    echo "==> building component packages"
+    # One component, the app. Earlier versions also installed an audio
+    # device driver (component com.remotevisio.driver); Installer leaves the
+    # files of a component that a newer package no longer carries, so the
+    # app's postinstall removes that driver and forgets its receipt.
+    echo "==> building the component package"
     rm -rf "$STAGE"
-    mkdir -p "$STAGE/driver/Library/Audio/Plug-Ins/HAL" "$STAGE/app/Applications"
-    cp -R bin/RemoteVisio.driver "$STAGE/driver/Library/Audio/Plug-Ins/HAL/RemoteVisio.driver"
+    mkdir -p "$STAGE/app/Applications"
     cp -R "$app" "$STAGE/app/Applications/RemoteVisio.app"
-    chmod +x macos/pkg/driver-scripts/* macos/pkg/app-scripts/*
+    chmod +x macos/pkg/app-scripts/*
     # Finder info and quarantine flags go; macOS's own com.apple.provenance
     # tags cannot be removed and travel as ._ entries that Installer restores
     # as attributes, not files. Code signatures do not live in xattrs.
-    xattr -cr "$STAGE/driver" "$STAGE/app" 2>/dev/null || true
-    pkgbuild --root "$STAGE/driver" \
-        --identifier com.remotevisio.driver --version "$VERSION" \
-        --install-location / --scripts macos/pkg/driver-scripts \
-        "$STAGE/RemoteVisio-driver.pkg" >/dev/null
+    xattr -cr "$STAGE/app" 2>/dev/null || true
     # pkgbuild marks an app "relocatable" by default: Installer would then
     # update any other copy with the same bundle ID instead of /Applications.
     # Pin it, let an older version install over a newer one when asked to, and

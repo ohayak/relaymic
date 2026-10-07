@@ -1,0 +1,21 @@
+---
+import LegalPage from "@components/LegalPage.astro";
+---
+
+<LegalPage
+  slug="cookies"
+  seoTitle="Cookie policy | Remote Visio"
+  fallbackTitle="Cookie Policy"
+  fallbackDescription="The cookies remotevisio.com may set, Google Analytics only after you accept, and how to change your choice at any time."
+>
+  <section class="mx-auto mt-12 max-w-screen-lg px-4" aria-labelledby="choice-title">
+    <div class="max-w-prose rounded-box border border-base-300 bg-base-200 p-6">
+      <h2 id="choice-title" class="text-xl font-bold">Your choice on this device</h2>
+      <p class="mt-2 text-base-content/85" data-consent-status>Your choice is stored in this browser.</p>
+      <div class="mt-4 flex flex-wrap gap-2">
+        <button type="button" class="btn btn-outline" data-consent="decline">Decline analytics</button>
+        <button type="button" class="btn btn-outline" data-consent="accept">Accept analytics</button>
+      </div>
+    </div>
+  </section>
+</LegalPage>

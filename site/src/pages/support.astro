@@ -1,0 +1,188 @@
+---
+import Layout from "../Layout.astro";
+import { seo, publisher, links, requirements, product } from "@utils/config";
+import { breadcrumbs, webPage } from "@utils/jsonld";
+import Breadcrumbs from "@components/Breadcrumbs.astro";
+import Icon from "@components/Icon.astro";
+import Faq from "@components/Faq.astro";
+import { inlineText } from "@utils/inline";
+
+// The most common problems, from SETUP.md's troubleshooting table.
+const issues = [
+  {
+    question: "The sender page won't load on my device",
+    answer:
+      "Your device cannot reach port 7420 on the Mac. This is a network problem, not an audio one. Check that both devices are on the same local network, or both connected in Tailscale, and that you used the right address: the Remote Visio icon in the Mac's menu bar lists them. See [the Tailscale guide](/guides/tailscale-setup-for-remote-visio).",
+  },
+  {
+    question: "The page loads but stays on \"Connecting...\"",
+    answer:
+      "The page reaches the Mac, but the audio connection does not get through. That is rare inside Tailscale; across the open internet it needs a TURN relay. To see why, open the sender page with ?debug=1 (or tap Debug log at the bottom), press Start, wait 15 seconds and tap Copy, then send us the log. A network that drops UDP (a VPN, a firewall, Wi-Fi client isolation) is the usual cause.",
+  },
+  {
+    question: "The meeting hears nothing",
+    answer:
+      "Check in turn: the sender page is started, its microphone button is not red, and its meter moves when you talk; the meeting uses Remote Visio Microphone in its audio settings; the site is not listed as Blocked in the extension's button (remove it and it asks again); the meeting page was reloaded after the extension was installed or updated; and the meeting runs in a Chromium browser, not in the Zoom or Teams app, Safari or Firefox.",
+  },
+  {
+    question: "Remote Visio's devices are missing from the meeting's lists",
+    answer:
+      "The extension is not in this browser profile (check the extensions page in a window of the profile the meeting runs in), the page was open before the extension was installed (reload it), the window is private (turn on Allow in Incognito in the extension's details), or Offer Remote Visio's devices to websites is off in the extension's button.",
+  },
+  {
+    question: "I hear the meeting twice, or my own voice",
+    answer:
+      "Your remote desktop tool still forwards sound. Turn sound off in its settings: Remote Visio carries the meeting's sound now. See [Fix echo and double audio](/guides/fix-echo-remote-desktop-meetings).",
+  },
+  {
+    question: "People in the meeting hear an echo",
+    answer:
+      "The meeting's sound plays from your speakers and gets back into your microphone. Keep the sender page's speaker on (that turns your browser's echo cancellation on) and the remote tool's audio off, or wear headphones.",
+  },
+  {
+    question: "I hear nothing from the meeting",
+    answer:
+      "The sender page's speaker button must not be red. If its status says no meeting uses Remote Visio Speaker yet, choose Remote Visio Speaker in the meeting's settings. If it says Playing the meeting's sound, check the speaker's slider and your device's volume (on iPhone and iPad, the volume buttons).",
+  },
+  {
+    question: "The extension's button says Remote Visio is not running on this Mac",
+    answer:
+      "Start the Remote Visio app; the extension recovers within a few seconds. If the app runs, another program may hold port 7421: the log at ~/Library/Logs/RemoteVisio.log then says browser devices unavailable, address already in use. Quit the other program, then quit and reopen Remote Visio.",
+  },
+  {
+    question: "Two cameras are called \"Remote Visio Camera\"",
+    answer:
+      "That is normal when the optional camera system extension is active: web pages list both its camera and the browser extension's. Both show your remote camera.",
+  },
+  {
+    question: "The camera system extension is blocked on a managed Mac",
+    answer:
+      "The Mac's management policy only allows the system extensions its administrator lists. Ask them to allow team ID 99F33YCKX9, bundle com.remotevisio.app.camera. Web meetings can use the browser extension's camera meanwhile, which needs no approval. See [the camera guide](/guides/virtual-camera-chrome-extension-mac).",
+  },
+  {
+    question: "Choppy audio",
+    answer:
+      "Packets are lost between your device and the Mac. A direct path helps: with Tailscale, tailscale ping followed by the Mac's address says whether it is direct or relayed. The receiver's log records packets received and lost every 10 seconds while you talk.",
+  },
+];
+
+const jsonLd = [
+  webPage("/support", "Remote Visio support", seo.support.description, "ContactPage"),
+  breadcrumbs([
+    { name: "Home", path: "/" },
+    { name: "Support", path: "/support" },
+  ]),
+  {
+    "@type": "FAQPage",
+    mainEntity: issues.map((qa) => ({
+      "@type": "Question",
+      name: qa.question,
+      acceptedAnswer: { "@type": "Answer", text: inlineText(qa.answer) },
+    })),
+  },
+];
+---
+
+<Layout title={seo.support.title} description={seo.support.description} jsonLd={jsonLd}>
+  <div class="mx-auto max-w-screen-lg px-4 pb-6 pt-10 md:pt-16">
+    <Breadcrumbs items={[{ title: "Home", href: "/" }, { title: "Support" }]} />
+    <h1 class="mt-6 text-4xl font-extrabold leading-[1.05] tracking-tight md:text-6xl">Support</h1>
+    <p class="lede mt-5 max-w-2xl">
+      Most problems are one of the few below. If yours is not, write to us.
+    </p>
+  </div>
+
+  <section class="mx-auto max-w-screen-lg px-4" aria-labelledby="contact-title">
+    <h2 id="contact-title" class="sr-only">Contact</h2>
+    <div class="grid gap-4 md:grid-cols-3">
+      <a href={`mailto:${publisher.email}?subject=Remote%20Visio%20support`} class="group rounded-box bg-neutral p-6 text-neutral-content md:col-span-2">
+        <Icon name="mail" class="h-7 w-7" />
+        <p class="mt-4 text-sm text-neutral-content/80">Email {publisher.name}</p>
+        <p class="mt-1 break-all text-2xl font-extrabold tracking-tight group-hover:underline md:text-3xl">{publisher.email}</p>
+        <p class="mt-3 text-neutral-content/85">
+          Tell us your macOS version, your browser on the Mac, the device you send from, and what the sender page's statuses say. A copy of the
+          sender page's Debug log helps a lot.
+        </p>
+      </a>
+      <div class="card-surface flex flex-col p-6">
+        <Icon name="code" class="h-7 w-7" />
+        <p class="mt-4 font-bold">Found a bug?</p>
+        <p class="mt-1 flex-1 text-base-content/85">Report it on GitHub, where the source code lives.</p>
+        <a href={links.issuesUrl} rel="noopener" class="link mt-3 inline-flex items-center gap-1 font-semibold">GitHub issues <Icon name="external" class="h-4 w-4" /></a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="ts-title">
+    <div class="grid gap-10 md:grid-cols-[1fr_2fr]">
+      <div>
+        <h2 id="ts-title" class="section-title">Troubleshooting</h2>
+        <p class="mt-4 text-base-content/85">
+          Start from the sender page: each device's status is green when it gets through, amber while it is on its way, and red with what to fix.
+        </p>
+        <p class="mt-4 text-sm text-base-content/80">
+          More symptoms and their fixes are in the troubleshooting table of <a class="link" href={links.setupUrl} rel="noopener">SETUP.md</a>.
+        </p>
+      </div>
+      <Faq items={issues} />
+    </div>
+  </section>
+
+  <section class="bg-base-200" aria-labelledby="req-title">
+    <div class="section grid gap-10 md:grid-cols-2">
+      <div>
+        <h2 id="req-title" class="text-2xl font-extrabold tracking-tight md:text-3xl">System requirements</h2>
+        <ul class="mt-6 space-y-4">
+          {
+            requirements.map((r) => (
+              <li class="flex gap-3">
+                <Icon name="check" class="mt-1 h-5 w-5 shrink-0" />
+                <p><strong>{r.title}.</strong> <span class="text-base-content/85">{r.text}</span></p>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+      <div>
+        <h2 class="text-2xl font-extrabold tracking-tight md:text-3xl">Useful places on the Mac</h2>
+        <dl class="mt-6 space-y-4">
+          <div>
+            <dt class="font-bold">The app's log</dt>
+            <dd class="mt-1 text-base-content/85"><code class="kbd-url">~/Library/Logs/RemoteVisio.log</code>, recreated each time the app starts.</dd>
+          </div>
+          <div>
+            <dt class="font-bold">The monitor page</dt>
+            <dd class="mt-1 text-base-content/85">
+              <code class="kbd-url">https://&lt;your Mac&gt;:7420/monitor</code>: the connection, packets received and lost, and which page uses each
+              device.
+            </dd>
+          </div>
+          <div>
+            <dt class="font-bold">The extension's button</dt>
+            <dd class="mt-1 text-base-content/85">The state of the camera, microphone and speaker on the Mac, and the sites you allowed.</dd>
+          </div>
+          <div>
+            <dt class="font-bold">Uninstall</dt>
+            <dd class="mt-1 text-base-content/85">
+              <strong>Uninstall Remote Visio…</strong> in the menu-bar menu, then remove the extension from the browser. See
+              <a class="link" href="/download">Download</a> for details.
+            </dd>
+          </div>
+        </dl>
+        <p class="mt-6 text-sm text-base-content/80">
+          Remote Visio {product.version} for {product.minMacOS}. Free software under the {product.license}.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="guides-title">
+    <h2 id="guides-title" class="text-2xl font-extrabold tracking-tight md:text-3xl">Guides</h2>
+    <ul class="mt-6 grid gap-3 md:grid-cols-2">
+      <li><a class="link" href="/guides/use-microphone-on-remote-mac">How to use your microphone on a remote Mac</a></li>
+      <li><a class="link" href="/guides/tailscale-setup-for-remote-visio">Reach your Mac from anywhere with Tailscale</a></li>
+      <li><a class="link" href="/guides/join-zoom-teams-from-browser-on-mac">Join Zoom and Teams from the browser</a></li>
+      <li><a class="link" href="/guides/fix-echo-remote-desktop-meetings">Fix echo and double audio</a></li>
+    </ul>
+  </section>
+</Layout>

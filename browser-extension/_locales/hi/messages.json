@@ -3,7 +3,7 @@
     "message": "Remote Visio Camera"
   },
   "ext_description": {
-    "message": "वेब पेजों को Remote Visio Camera देता है: उस डिवाइस का कैमरा जो Remote Visio से इस Mac पर भेज रहा है।"
+    "message": "वेब पेजों को Remote Visio Camera, Microphone और Speaker देता है, जो Remote Visio से इस Mac पर भेजने वाले डिवाइस से जुड़े हैं।"
   },
   "slate_connecting": {
     "message": "Remote Visio से कनेक्ट हो रहा है…"
@@ -12,25 +12,25 @@
     "message": "दूर वाले कैमरे का इंतज़ार है"
   },
   "slate_waiting_hint": {
-    "message": "भेजने वाले डिवाइस पर “इस डिवाइस का कैमरा भेजें” चालू करें"
+    "message": "भेजने वाले डिवाइस पर कैमरा बटन से कैमरा चालू करें"
   },
   "slate_down": {
     "message": "इस Mac पर Remote Visio नहीं चल रहा है"
   },
   "slate_down_hint": {
-    "message": "पहले से चल रहा है? अगर उसके मेन्यू में “ब्राउज़र कैमरा” नहीं है, तो Remote Visio अपडेट करें।",
-    "description": "Slate, under slate_down. An older Remote Visio has no browser camera and reads as not running; quotes the menu item bcam_toggle of the menu-bar app."
+    "message": "पहले से चल रहा है? अगर उसके मेन्यू में ब्राउज़र एक्सटेंशन का कोई विकल्प नहीं है, तो Remote Visio अपडेट करें।",
+    "description": "Slate, under slate_down. An older Remote Visio has no browser camera and reads as not running; its menu has neither bcam_install nor bcam_reinstall of the menu-bar app."
   },
   "slate_refused": {
     "message": "Remote Visio एक्सटेंशन की इस कॉपी को स्वीकार नहीं करता",
     "description": "Slate: the receiver refused this extension's ID: a copy it does not know, such as one unpacked from the Chrome Web Store zip (no key, so an ID of its own)."
   },
   "slate_refused_hint": {
-    "message": "इसे ब्राउज़र के एक्सटेंशन पेज से हटाएँ, फिर Remote Visio मेन्यू में “ब्राउज़र कैमरा एक्सटेंशन इंस्टॉल करें…” चुनें।",
+    "message": "इसे ब्राउज़र के एक्सटेंशन पेज से हटाएँ, फिर Remote Visio मेन्यू में “ब्राउज़र एक्सटेंशन इंस्टॉल करें…” चुनें।",
     "description": "Under slate_refused. Quotes the menu item bcam_install of the menu-bar app."
   },
   "slate_off": {
-    "message": "Remote Visio मेन्यू में ब्राउज़र कैमरा बंद है"
+    "message": "Remote Visio में ब्राउज़र कैमरा बंद है"
   },
   "slate_busy": {
     "message": "कैमरा व्यस्त है: बहुत सारे पेज इसे इस्तेमाल कर रहे हैं"
@@ -59,29 +59,38 @@
   "popup_checking": {
     "message": "जाँच हो रही है…"
   },
+  "popup_device_camera": {
+    "message": "कैमरा"
+  },
+  "popup_device_microphone": {
+    "message": "माइक्रोफ़ोन"
+  },
+  "popup_device_speaker": {
+    "message": "स्पीकर"
+  },
   "popup_status_down": {
     "message": "इस Mac पर Remote Visio नहीं चल रहा है"
   },
   "popup_status_down_hint": {
-    "message": "पहले से चल रहा है? अगर उसके मेन्यू में “ब्राउज़र कैमरा” नहीं है, तो Remote Visio अपडेट करें।",
-    "description": "Popup, under popup_status_down. An older Remote Visio has no browser camera and reads as not running; quotes the menu item bcam_toggle of the menu-bar app."
+    "message": "पहले से चल रहा है? अगर उसके मेन्यू में ब्राउज़र एक्सटेंशन का कोई विकल्प नहीं है, तो Remote Visio अपडेट करें।",
+    "description": "Popup, under popup_status_down. An older Remote Visio has no browser camera and reads as not running; its menu has neither bcam_install nor bcam_reinstall of the menu-bar app."
   },
   "popup_status_refused": {
     "message": "Remote Visio एक्सटेंशन की इस कॉपी को स्वीकार नहीं करता",
     "description": "Popup status: the receiver refused this extension's ID: a copy it does not know, such as one unpacked from the Chrome Web Store zip (no key, so an ID of its own)."
   },
   "popup_status_refused_hint": {
-    "message": "इसे ब्राउज़र के एक्सटेंशन पेज से हटाएँ, फिर Remote Visio मेन्यू में “ब्राउज़र कैमरा एक्सटेंशन इंस्टॉल करें…” चुनें।",
+    "message": "इसे ब्राउज़र के एक्सटेंशन पेज से हटाएँ, फिर Remote Visio मेन्यू में “ब्राउज़र एक्सटेंशन इंस्टॉल करें…” चुनें।",
     "description": "Under popup_status_refused. Quotes the menu item bcam_install of the menu-bar app."
   },
   "popup_status_off": {
-    "message": "Remote Visio मेन्यू में ब्राउज़र कैमरा बंद है"
+    "message": "Remote Visio में ब्राउज़र कैमरा बंद है"
   },
   "popup_status_waiting": {
     "message": "दूर वाले कैमरे का इंतज़ार है"
   },
   "popup_status_waiting_hint": {
-    "message": "भेजने वाले डिवाइस पर “इस डिवाइस का कैमरा भेजें” चालू करें।"
+    "message": "भेजने वाले डिवाइस पर कैमरा बटन से कैमरा चालू करें।"
   },
   "popup_status_receiving": {
     "message": "दूर वाला कैमरा आ रहा है, $FPS$ fps",
@@ -91,6 +100,45 @@
         "example": "30"
       }
     }
+  },
+  "popup_update": {
+    "message": "इसे इस्तेमाल करने के लिए इस Mac पर Remote Visio अपडेट करें"
+  },
+  "popup_mic_receiving": {
+    "message": "भेजने वाले डिवाइस का माइक्रोफ़ोन मिल रहा है"
+  },
+  "popup_mic_waiting": {
+    "message": "भेजने वाले डिवाइस के माइक्रोफ़ोन का इंतज़ार"
+  },
+  "popup_mic_waiting_hint": {
+    "message": "भेजने वाले डिवाइस पर “शुरू करें” दबाएँ।"
+  },
+  "popup_mic_off": {
+    "message": "Remote Visio में बंद है"
+  },
+  "popup_speaker_sending": {
+    "message": "$SITE$ की आवाज़ भेजने वाले डिवाइस पर जा रही है",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "meet.google.com"
+      }
+    }
+  },
+  "popup_speaker_idle": {
+    "message": "कोई पेज अपनी आवाज़ नहीं भेज रहा है"
+  },
+  "popup_speaker_idle_hint": {
+    "message": "अपनी मीटिंग की वेबसाइट पर स्पीकर के रूप में “Remote Visio Speaker” चुनें।"
+  },
+  "popup_speaker_not_listening": {
+    "message": "भेजने वाला डिवाइस नहीं सुन रहा है"
+  },
+  "popup_speaker_not_listening_hint": {
+    "message": "भेजने वाले डिवाइस पर Remote Visio शुरू करें; इसी Mac से भेजने वाले पेज को आवाज़ वापस नहीं मिलती।"
+  },
+  "popup_speaker_off": {
+    "message": "Remote Visio में बंद है"
   },
   "popup_in_use": {
     "message": "$PAGES$ इस्तेमाल कर रहा है",
@@ -124,28 +172,31 @@
     }
   },
   "popup_enabled": {
-    "message": "वेबसाइटों को Remote Visio Camera दें"
+    "message": "वेबसाइटों को Remote Visio के डिवाइस दें"
   },
   "popup_enabled_hint": {
-    "message": "साइटें इसे अपने कैमरों के साथ दिखाती हैं। कोई साइट पहली बार इसे इस्तेमाल करे, उससे पहले आपसे पूछा जाता है।"
+    "message": "साइटें Remote Visio Camera, Microphone और Speaker को अपने डिवाइसों के साथ दिखाती हैं। कोई साइट पहली बार इन्हें इस्तेमाल करे, उससे पहले आपसे पूछा जाता है।"
   },
   "popup_prefer": {
-    "message": "जब कोई साइट कोई भी कैमरा माँगे, तो इसे इस्तेमाल करें"
+    "message": "डिफ़ॉल्ट रूप से Remote Visio इस्तेमाल करें"
   },
   "popup_prefer_hint": {
-    "message": "इस Mac के अपने कैमरे की जगह।"
+    "message": "जो साइटें कोई भी कैमरा या माइक्रोफ़ोन माँगती हैं, उन्हें Remote Visio के मिलते हैं, और Remote Visio चलते समय आपकी अनुमति वाली साइटें जो चलाती हैं, वह भेजने वाले डिवाइस पर जाता है।"
   },
   "popup_sites": {
     "message": "साइटें"
   },
   "popup_no_sites": {
-    "message": "अभी तक किसी साइट ने कैमरा नहीं माँगा है।"
+    "message": "अभी तक किसी साइट ने Remote Visio नहीं माँगा है।"
   },
   "popup_site_allowed": {
     "message": "अनुमति है"
   },
   "popup_site_blocked": {
     "message": "ब्लॉक है"
+  },
+  "popup_site_camera_only": {
+    "message": "सिर्फ़ कैमरा"
   },
   "popup_site_remove": {
     "message": "हटाएँ"
@@ -160,7 +211,7 @@
     }
   },
   "consent_question": {
-    "message": "क्या $ORIGIN$ को Remote Visio Camera इस्तेमाल करने दें?",
+    "message": "क्या $ORIGIN$ को Remote Visio का कैमरा, माइक्रोफ़ोन और स्पीकर इस्तेमाल करने दें?",
     "placeholders": {
       "origin": {
         "content": "$1",
@@ -178,7 +229,7 @@
     }
   },
   "consent_body": {
-    "message": "साइट दूर वाले डिवाइस का कैमरा देखेगी।"
+    "message": "साइट भेजने वाले डिवाइस का कैमरा देखेगी और उसका माइक्रोफ़ोन सुनेगी, और साइट की आवाज़ इस Mac की जगह उस डिवाइस पर जा सकती है।"
   },
   "consent_note": {
     "message": "आप इसे बाद में एक्सटेंशन मेन्यू (पज़ल के टुकड़े वाला आइकन) › Remote Visio Camera में बदल सकते हैं।"
@@ -191,5 +242,267 @@
   },
   "consent_invalid": {
     "message": "यह अनुरोध अब मान्य नहीं है।"
+  },
+  "slate_down_direct": {
+    "message": "No device is paired with this browser",
+    "description": "Slate in direct mode (no Remote Visio app; the extension connects to a paired device itself): no device is paired yet."
+  },
+  "slate_down_direct_hint": {
+    "message": "Click the Remote Visio icon in the toolbar, then Pair a device.",
+    "description": "Slate, under slate_down_direct. \"Pair a device\" is popup_pair."
+  },
+  "slate_waiting_hint_direct": {
+    "message": "Open remotevisio.com/send on your device and press Start.",
+    "description": "Slate in direct mode, under slate_waiting: the paired device sends no camera, or is not started. remotevisio.com/send is a web address, not translated."
+  },
+  "popup_connection": {
+    "message": "Connection",
+    "description": "Popup, Mac only: the label of the choice between the Remote Visio app and direct mode."
+  },
+  "popup_connection_auto": {
+    "message": "Automatic",
+    "description": "Popup, connection choice: use the app when it runs, otherwise a paired device."
+  },
+  "popup_connection_app": {
+    "message": "Remote Visio app on this Mac",
+    "description": "Popup, connection choice."
+  },
+  "popup_connection_direct": {
+    "message": "Direct (no app)",
+    "description": "Popup, connection choice: the extension connects to a paired device itself."
+  },
+  "popup_direct_title": {
+    "message": "Direct mode",
+    "description": "Popup, title of the card about paired devices (direct mode: no Remote Visio app needed)."
+  },
+  "popup_direct_connected": {
+    "message": "Connected: $DEVICE$",
+    "description": "Popup, direct mode: a paired device is connected. The device's name is shown in bold.",
+    "placeholders": {
+      "device": {
+        "content": "$1",
+        "example": "Safari on iPhone"
+      }
+    }
+  },
+  "popup_direct_waiting": {
+    "message": "Waiting for your device",
+    "description": "Popup, direct mode: a device is paired, none is connected."
+  },
+  "popup_direct_waiting_hint": {
+    "message": "Open remotevisio.com/send on it and press Start.",
+    "description": "Popup, under popup_direct_waiting. remotevisio.com/send is a web address, not translated."
+  },
+  "popup_direct_unpaired": {
+    "message": "No device paired yet",
+    "description": "Popup, direct mode: no device is paired with this browser."
+  },
+  "popup_direct_offline": {
+    "message": "Can't reach remotevisio.com, retrying",
+    "description": "Popup, direct mode: the connection to the website, which devices use to reach this browser, is down."
+  },
+  "popup_direct_app_chosen": {
+    "message": "Your paired devices cannot connect while the Remote Visio app is chosen above.",
+    "description": "Popup, direct card, when the user chose the Remote Visio app on this Mac: direct mode is off (the hub is closed)."
+  },
+  "popup_direct_or_pair": {
+    "message": "You can also pair a device and use this browser without the Remote Visio app.",
+    "description": "Popup, direct mode not set up yet (the app not chosen, running or not): direct mode needs only the extension and a paired device."
+  },
+  "popup_direct_failed": {
+    "message": "Remote Visio could not start in this browser",
+    "description": "Popup, direct mode: the extension's background page for direct mode did not start."
+  },
+  "popup_pair": {
+    "message": "Pair a device",
+    "description": "Popup button: starts pairing a phone, tablet or computer that will send its microphone and camera to this browser."
+  },
+  "popup_pair_scan": {
+    "message": "Scan this code with the device you will send from, or open the link on it.",
+    "description": "Popup, pairing: under the QR code."
+  },
+  "popup_pair_copy": {
+    "message": "Copy link",
+    "description": "Popup, pairing: copies the pairing link."
+  },
+  "popup_pair_copied": {
+    "message": "Copied",
+    "description": "Popup, pairing: the link was copied."
+  },
+  "popup_pair_expires": {
+    "message": "Expires in $TIME$",
+    "description": "Popup, pairing: the countdown of the pairing link. TIME is minutes and seconds, as 9:58.",
+    "placeholders": {
+      "time": {
+        "content": "$1",
+        "example": "9:58"
+      }
+    }
+  },
+  "popup_pair_cancel": {
+    "message": "Cancel",
+    "description": "Popup, pairing: ends the pairing."
+  },
+  "popup_pair_verifying": {
+    "message": "A device is pairing…",
+    "description": "Popup, pairing: a device opened the link, the pairing goes on."
+  },
+  "popup_pair_waiting_approval": {
+    "message": "Waiting for your approval…",
+    "description": "Popup, pairing: the approval window waits for the number shown on the device."
+  },
+  "popup_pair_review": {
+    "message": "Review",
+    "description": "Popup, pairing: brings the approval window to the front."
+  },
+  "popup_pair_confirming": {
+    "message": "Waiting for the device to confirm…",
+    "description": "Popup, pairing: approved here, the device's user still has to confirm."
+  },
+  "popup_pair_done": {
+    "message": "Paired with $DEVICE$",
+    "description": "Popup, pairing: done. The device's name is shown in bold.",
+    "placeholders": {
+      "device": {
+        "content": "$1",
+        "example": "Safari on iPhone"
+      }
+    }
+  },
+  "popup_pair_failed": {
+    "message": "The pairing did not finish. Pair again to try once more.",
+    "description": "Popup, pairing: refused, cancelled, or the device could not prove it had the link."
+  },
+  "popup_pair_expired": {
+    "message": "The pairing link expired.",
+    "description": "Popup, pairing: nobody used the link within 10 minutes."
+  },
+  "popup_pair_error": {
+    "message": "Could not start a pairing. Check the connection to remotevisio.com and try again.",
+    "description": "Popup, pairing: the pairing could not start."
+  },
+  "popup_pair_full": {
+    "message": "This browser already has 16 paired devices. Remove one to pair another.",
+    "description": "Popup, pairing: too many devices."
+  },
+  "popup_pair_larger": {
+    "message": "Show larger",
+    "description": "Popup, pairing: opens the QR code in a larger window, for scanning through a remote-desktop window."
+  },
+  "popup_devices": {
+    "message": "Paired devices",
+    "description": "Popup, direct mode: the list of paired devices."
+  },
+  "popup_device_last_used": {
+    "message": "Last used $DATE$",
+    "description": "Popup, a paired device.",
+    "placeholders": {
+      "date": {
+        "content": "$1",
+        "example": "Oct 4, 2026"
+      }
+    }
+  },
+  "popup_device_never_used": {
+    "message": "Not used yet",
+    "description": "Popup, a paired device that never connected."
+  },
+  "popup_device_expires": {
+    "message": "Removed on $DATE$ if unused",
+    "description": "Popup, a paired device: devices not used for 60 days are removed.",
+    "placeholders": {
+      "date": {
+        "content": "$1",
+        "example": "Dec 3, 2026"
+      }
+    }
+  },
+  "popup_device_remove": {
+    "message": "Remove",
+    "description": "Popup, a paired device: unpairs it; it can no longer connect."
+  },
+  "popup_device_connected": {
+    "message": "Connected",
+    "description": "Popup, a paired device that is connected now."
+  },
+  "popup_device_unnamed": {
+    "message": "Unnamed device",
+    "description": "Popup and approval window: a device that sent no name."
+  },
+  "popup_browser_name": {
+    "message": "This browser's name",
+    "description": "Popup, direct mode: the name paired devices show for this browser."
+  },
+  "popup_browser_name_hint": {
+    "message": "Your paired devices show this name.",
+    "description": "Popup, under popup_browser_name."
+  },
+  "popup_hint_no_address": {
+    "message": "This computer has no private network address that web pages can connect to.",
+    "description": "Popup, direct mode: web pages cannot reach the extension's connections."
+  },
+  "popup_hint_webrtc_blocked": {
+    "message": "Web pages cannot connect to Remote Visio here. A setting, an extension (for example a 'prevent WebRTC leak' option) or a policy may block local WebRTC connections.",
+    "description": "Popup, direct mode: pages failed to connect several times."
+  },
+  "popup_status_down_direct": {
+    "message": "No device is paired with this browser",
+    "description": "Popup status in direct mode: no device paired yet."
+  },
+  "popup_speaker_not_listening_hint_direct": {
+    "message": "Press Start in Remote Visio on your device.",
+    "description": "Popup, speaker row in direct mode: the paired device is not started."
+  },
+  "pair_title": {
+    "message": "A device wants to pair with this browser",
+    "description": "Approval window (pairing): the title."
+  },
+  "pair_body": {
+    "message": "Once paired, it can send its microphone and camera to the sites you allow here, and hear their sound.",
+    "description": "Approval window (pairing): what pairing allows."
+  },
+  "pair_type_number": {
+    "message": "Type the number shown on your device",
+    "description": "Approval window (pairing): above the 6-digit field. The number is never shown on this computer."
+  },
+  "pair_number_mismatch": {
+    "message": "That number doesn't match. Check the number on your device.",
+    "description": "Approval window (pairing): a wrong number was typed."
+  },
+  "pair_tries_left": {
+    "message": "Tries left: $COUNT$",
+    "description": "Approval window (pairing): after a wrong number.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "2"
+      }
+    }
+  },
+  "pair_from": {
+    "message": "from $COUNTRY$",
+    "description": "Approval window (pairing): the country the device connects from, as the relay saw it (a two-letter code).",
+    "placeholders": {
+      "country": {
+        "content": "$1",
+        "example": "FR"
+      }
+    }
+  },
+  "pair_allow": {
+    "message": "Allow",
+    "description": "Approval window: allows the pairing."
+  },
+  "pair_deny": {
+    "message": "Deny",
+    "description": "Approval window: refuses the pairing."
+  },
+  "pair_timeout": {
+    "message": "This pairing no longer waits for approval.",
+    "description": "Approval window: the pairing ended (timed out, cancelled or done)."
+  },
+  "pair_show_title": {
+    "message": "Pair a device",
+    "description": "The large QR code window: its title."
   }
 }

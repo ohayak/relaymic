@@ -8,7 +8,10 @@ import "errors"
 // runs; this lets the sender, which shares internal/audio, build elsewhere.
 type noMics struct{}
 
-var micDevices micBackend = noMics{}
+var (
+	micDevices     micBackend = noMics{}
+	speakerDevices micBackend = noMics{}
+)
 
 var errNoMics = errors.New("muting the microphones is only supported on macOS")
 

@@ -2,10 +2,10 @@
   "manifest_version": 3,
   "name": "__MSG_ext_name__",
   "description": "__MSG_ext_description__",
-  "version": "1.0.0",
+  "version": "2.1.0",
   "default_locale": "en",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv7mIDQb+XNtXnjz//6KrihkEWHO7XweJEILEkR9N4ILL5ydT5P43Yx9GEXX3YXcR9bdI5Tf3hmyBf0k7d1nalYRTUUo0N/cLA9HV2rau32QpK/o2g24MbctdXaLzWXdVVKAiZgUnkqK5fKkn35v94qUPqs0Zt2PgAFlPmtVvEdHEApdy0Bg0zaRWNskp+RSXcJQ4HhFx+AKA0FRnGmbIPaVGyinK4NtpTzDZ4Ge21+ebpT1jWahlHTcGvbhXtEll6nS0g8X23gJDnqmeY+4+f9brhKj4IyKORsCC0n4AeWs/+Bneihb66eotLKYWI6IInWgxlBZdB7Ev6iaIAKcR/wIDAQAB",
-  "minimum_chrome_version": "111",
+  "minimum_chrome_version": "116",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -23,8 +23,11 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["storage"],
+  "permissions": ["storage", "offscreen", "alarms", "unlimitedStorage"],
   "host_permissions": ["http://127.0.0.1/*"],
+  "externally_connectable": {
+    "ids": []
+  },
   "content_scripts": [
     {
       "matches": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],

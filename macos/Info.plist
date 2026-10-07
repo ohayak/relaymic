@@ -24,12 +24,8 @@
     <string>5</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.2</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Remote Visio relays audio and may need access to the microphone.</string>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>Remote Visio receives audio from other devices on your local network.</string>
-    <key>NSAudioCaptureUsageDescription</key>
-    <string>Remote Visio sends this Mac's system audio back to the device you are speaking from.</string>
+    <string>Remote Visio receives the microphone and camera of a device on your local network and sends the meeting's sound back to it.</string>
     <key>NSSystemExtensionUsageDescription</key>
     <string>Remote Visio adds a virtual camera that shows the remote device's camera in your video apps.</string>
     <key>NSCameraUsageDescription</key>

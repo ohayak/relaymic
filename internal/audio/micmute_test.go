@@ -187,7 +187,7 @@ func TestMuteMicsMutesAndRestores(t *testing.T) {
 			t.Errorf("a device without a switch is turned down to 0, element %d is %v", v.Element, v.Value)
 		}
 	}
-	if !strings.Contains(log.String(), "cannot mute Odd Mic: it has neither a mute switch nor an input volume") {
+	if !strings.Contains(log.String(), "cannot mute Odd Mic: it has neither a mute switch nor a volume") {
 		t.Errorf("the device that cannot be muted must be named in the log:\n%s", log.String())
 	}
 	if !strings.Contains(log.String(), "this Mac's microphones muted:") {
@@ -379,4 +379,33 @@ func readFile(t *testing.T, path string) string {
 		return ""
 	}
 	return string(raw)
+}
+
+// The speakers go through the same muter, with their own words in the log and
+// their own state file.
+func TestMuteSpeakersMutesAndRestores(t *testing.T) {
+	state := filepath.Join(t.TempDir(), "speaker-mute.json")
+	out := mic{UID: "BuiltInSpeakerDevice", Name: "MacBook Pro Speakers", HasMute: true, Volumes: []micVolume{{Element: 0, Value: 0.5}}}
+	hdmi := mic{UID: "hdmi", Name: "LG Display"} // no mute switch, no volume
+	f := newFakeMics(t, state, out, hdmi)
+	var log logBuf
+	m, err := startDevices(speakers, state, f, true, log.logf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !f.get("BuiltInSpeakerDevice").Muted {
+		t.Error("the speakers must be muted")
+	}
+	for _, want := range []string{"this Mac's speakers muted: MacBook Pro Speakers", "cannot mute LG Display: it has neither a mute switch nor a volume"} {
+		if !strings.Contains(log.String(), want) {
+			t.Errorf("log lacks %q:\n%s", want, log.String())
+		}
+	}
+	m.Close()
+	if f.get("BuiltInSpeakerDevice").Muted {
+		t.Error("Close must put the speakers back")
+	}
+	if !strings.Contains(log.String(), "this Mac's speakers restored: MacBook Pro Speakers") {
+		t.Errorf("no restore line:\n%s", log.String())
+	}
 }

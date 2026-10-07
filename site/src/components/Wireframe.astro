@@ -1,0 +1,58 @@
+---
+// A hand-drawn SVG wireframe from public/wireframes. Each drawing exists as
+//   <name>.svg              follows the system theme by itself
+//   light/<name>.svg, dark/<name>.svg   fixed themes, used here so the
+//                           drawing follows the site's theme switch
+//   <name>-narrow.svg       a taller layout for phones (some drawings)
+// The alt text comes from the drawing's own <title> and <desc>, so it always
+// describes what is drawn. Renders nothing while the file does not exist.
+// Both theme copies stay lazy, so the hidden one (display:none) is never
+// fetched; `eager` only raises the visible one's fetch priority.
+import { svgInfo } from "@utils/svg";
+interface Props {
+  name: "how-it-works" | "devices" | "network" | "setup-1" | "setup-2" | "setup-3";
+  alt?: string;
+  class?: string;
+  caption?: string;
+  eager?: boolean;
+}
+const { name, alt: altProp, class: className = "", caption, eager = false } = Astro.props;
+const base = svgInfo(`/wireframes/${name}.svg`);
+const alt = base.desc ? `${base.title ? `${base.title}. ` : ""}${base.desc}` : (altProp ?? base.title ?? "");
+
+const variant = (theme: "light" | "dark") => {
+  const wide = svgInfo(`/wireframes/${theme}/${name}.svg`);
+  const narrow = svgInfo(`/wireframes/${theme}/${name}-narrow.svg`);
+  return {
+    theme,
+    src: wide.exists ? `/wireframes/${theme}/${name}.svg` : `/wireframes/${name}.svg`,
+    w: wide.exists ? wide.w : base.w,
+    h: wide.exists ? wide.h : base.h,
+    narrow: narrow.exists ? { src: `/wireframes/${theme}/${name}-narrow.svg`, w: narrow.w, h: narrow.h } : undefined,
+  };
+};
+const variants = [variant("light"), variant("dark")];
+---
+
+{
+  base.exists && (
+    <figure class="m-0">
+      {variants.map((v) => (
+        <picture class={v.theme === "light" ? "only-light" : "only-dark"}>
+          {v.narrow && <source media="(max-width: 639px)" srcset={v.narrow.src} width={v.narrow.w} height={v.narrow.h} />}
+          <img
+            src={v.src}
+            width={v.w}
+            height={v.h}
+            alt={alt}
+            class={`h-auto w-full ${className}`}
+            loading="lazy"
+            fetchpriority={eager ? "high" : undefined}
+            decoding="async"
+          />
+        </picture>
+      ))}
+      {caption && <figcaption class="mt-3 text-center text-sm text-base-content/75">{caption}</figcaption>}
+    </figure>
+  )
+}

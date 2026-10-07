@@ -1,0 +1,102 @@
+{
+  // send.remotevisio.com on Cloudflare Workers: the direct-mode relay
+  // (/relay/v1/*, the RelayRoom Durable Object) and the sender app it serves,
+  // from ./dist (built by scripts/build-sender.mjs). A Worker of its own,
+  // apart from the site's (../site, "remotevisio-site"): the app and the
+  // relay share one origin by design, which no third-party script of the
+  // site ever reaches. The design is bin/e2e-harness/DESIGN-direct-mode.md,
+  // section 4. Build first (npm run build), then deploy with
+  // npx wrangler deploy (a human does it; see README.md).
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "remotevisio-relay",
+  "main": "./src/index.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "preview_urls": false,
+
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    // The Worker answers every request (the app's headers, the relay's
+    // routes): by default an asset is served before it runs.
+    "run_worker_first": true,
+    // dist/send/index.html is served at /send, which src/app.js asks for
+    // when it answers /.
+    "html_handling": "drop-trailing-slash"
+  },
+
+  // The custom domain belongs to this Worker only: if send.remotevisio.com
+  // was ever attached to remotevisio-site, remove it there first, or deploy
+  // will report the conflict. The zone must be in the same Cloudflare account.
+  "routes": [{ "pattern": "send.remotevisio.com", "custom_domain": true }],
+
+  // One RelayRoom per relay room (a hub's mailbox, or a one-time pair room).
+  // The SQLite backend is the only one the Free plan allows. The Budget class
+  // (the daily TURN budget) comes with the TURN routes, in a later migration.
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "RelayRoom" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RelayRoom"] }],
+
+  // Rate limits on WebSocket upgrades (section 4.7). The binding counts per
+  // Cloudflare location and is eventually consistent: damping, not a quota.
+  // RL_ROOM is keyed per room, role and IP prefix (a stranger who knows a
+  // room's id cannot use up its quota), RL_IP and RL_PAIR per IP prefix.
+  "ratelimits": [
+    { "name": "RL_ROOM", "namespace_id": "7601", "simple": { "limit": 30, "period": 60 } },
+    { "name": "RL_IP", "namespace_id": "7602", "simple": { "limit": 300, "period": 60 } },
+    { "name": "RL_PAIR", "namespace_id": "7603", "simple": { "limit": 10, "period": 60 } }
+  ],
+
+  // Production values. In development, .dev.vars (from .dev.vars.example)
+  // overrides them, and wrangler dev --var NAME:VALUE overrides both.
+  "vars": {
+    // The sender app's origin: the only one that may open sender sockets.
+    "APP_ORIGIN": "https://send.remotevisio.com",
+    // The store build and the unpacked build of the extension: the only
+    // origins that may open a hub socket.
+    "EXT_ORIGINS": "chrome-extension://bhijcffjnmjijifjiaeibbogmbohdmon,chrome-extension://jmiffhdbakchdlfbfdiaclkilcdhcgkf",
+    // The kill switch: anything but "1" answers every /relay/* route with 503.
+    "RELAY_ENABLED": "1"
+  },
+
+  // Relay room ids (a hub's mailbox, a pair room) travel in the query string:
+  // Workers Logs must not keep them (a reader of the logs would learn every
+  // mailbox's id), so query strings are removed from logged URLs, and no
+  // traces are kept. After a deploy, check that a relay request shows
+  // /relay/v1/mailbox without ?id= (bin/e2e-harness/DESIGN-direct-mode.md,
+  // section 4.3); if it does not, also set "logs": {"invocation_logs": false}.
+  "observability": {
+    "enabled": true,
+    "redact_query_string": true,
+    "traces": { "enabled": false }
+  },
+
+  "env": {
+    // Local development and the test suites only, never deployed:
+    //   npx wrangler dev --env dev --ip 127.0.0.1 --port 7660 ...
+    // Without routes: with one, wrangler dev would rewrite every request to
+    // its host (send.remotevisio.com), Origin and Host included, and the
+    // Worker could not tell a local request (send.localhost:7660, where the
+    // dev conditions of section 4.2 hold) from a production one. Bindings
+    // and vars are not inherited by an environment, so they are repeated
+    // here. DEV and the DEV_* variables come from .dev.vars (see
+    // .dev.vars.example) or --var.
+    "dev": {
+      "routes": [],
+      "durable_objects": {
+        "bindings": [{ "name": "ROOMS", "class_name": "RelayRoom" }]
+      },
+      "ratelimits": [
+        { "name": "RL_ROOM", "namespace_id": "7601", "simple": { "limit": 30, "period": 60 } },
+        { "name": "RL_IP", "namespace_id": "7602", "simple": { "limit": 300, "period": 60 } },
+        { "name": "RL_PAIR", "namespace_id": "7603", "simple": { "limit": 10, "period": 60 } }
+      ],
+      "vars": {
+        "APP_ORIGIN": "http://send.localhost:7660",
+        "EXT_ORIGINS": "chrome-extension://bhijcffjnmjijifjiaeibbogmbohdmon,chrome-extension://jmiffhdbakchdlfbfdiaclkilcdhcgkf",
+        "RELAY_ENABLED": "1"
+      }
+    }
+  }
+}

@@ -1,0 +1,35 @@
+# Cloudflare Workers static-assets redirects (applied by env.ASSETS.fetch on
+# remotevisio.com). Host redirects (relaymic.com, www.*) are in worker/index.js.
+# Never redirect /privacy itself: the Chrome Web Store listing points there.
+
+# Old and template paths of the legal pages
+/privacy-policy          /privacy   301
+/privacy.html            /privacy   301
+/terms-and-conditions    /terms     301
+/terms.html              /terms     301
+/cookies-policy          /cookies   301
+/cookie-policy           /cookies   301
+/cookies.html            /cookies   301
+/index.html              /          301
+
+# The old site's other files
+/sitemap.xml             /sitemap-index.xml  301
+/assets/og.png           /og-image.png       301
+
+# Retired translations: English only now
+/es                      /          301
+/es/                     /          301
+/es/index.html           /          301
+/es/privacy              /privacy   301
+/es/privacy.html         /privacy   301
+/es/terms                /terms     301
+/es/terms.html           /terms     301
+/zh                      /          301
+/zh/                     /          301
+/zh/index.html           /          301
+/zh/privacy              /privacy   301
+/zh/privacy.html         /privacy   301
+/zh/terms                /terms     301
+/zh/terms.html           /terms     301
+/es/*                    /:splat    301
+/zh/*                    /:splat    301

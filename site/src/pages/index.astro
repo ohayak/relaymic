@@ -1,0 +1,475 @@
+---
+import Layout from "../Layout.astro";
+import { seo, site, faq, comparison, requirements, links, product, publisher } from "@utils/config";
+import { alts } from "@utils/media";
+import { inlineText } from "@utils/inline";
+import { svgInfo } from "@utils/svg";
+import Icon from "@components/Icon.astro";
+import Shot from "@components/Shot.astro";
+import ThemedShot from "@components/ThemedShot.astro";
+import PhoneFrame from "@components/PhoneFrame.astro";
+import BrowserFrame from "@components/BrowserFrame.astro";
+import Wireframe from "@components/Wireframe.astro";
+import CtaButtons from "@components/CtaButtons.astro";
+import CtaBand from "@components/CtaBand.astro";
+import Faq from "@components/Faq.astro";
+import { softwareApplication } from "@utils/jsonld";
+
+const hasSetup1 = svgInfo("/wireframes/setup-1.svg").exists;
+
+const jsonLd = [
+  softwareApplication(),
+  {
+    "@type": "FAQPage",
+    "@id": `${site.url}/#faq`,
+    mainEntity: faq.map((qa) => ({
+      "@type": "Question",
+      name: qa.question,
+      acceptedAnswer: { "@type": "Answer", text: inlineText(qa.answer) },
+    })),
+  },
+];
+
+const devices = [
+  {
+    icon: "mic" as const,
+    name: "Remote Visio Microphone",
+    text: "Your voice, from any browser, in the meeting on the Mac. Noise and echo processing runs once, on your device: choose Denoise, Clean or Raw.",
+  },
+  {
+    icon: "speaker" as const,
+    name: "Remote Visio Speaker",
+    text: "The meeting's sound plays on your device, not in the room around the Mac. Turn audio off in your remote desktop tool and keep one low-latency connection.",
+  },
+  {
+    icon: "camera" as const,
+    name: "Remote Visio Camera",
+    text: "Your phone's or laptop's camera in web meetings on the Mac. Where macOS allows its optional system extension, video apps see it too.",
+  },
+];
+---
+
+<Layout title={seo.home.title} description={seo.home.description} jsonLd={jsonLd}>
+  <!-- Hero -->
+  <section class="relative overflow-hidden">
+    <div class="mx-auto grid max-w-screen-lg items-center gap-12 px-4 pb-16 pt-10 md:grid-cols-[1.1fr_1fr] md:pb-20 md:pt-14">
+      <div>
+        <p class="eyebrow flex items-center gap-2"><span class="dot dot-live"></span>For Macs you control over remote desktop</p>
+        <h1 class="mt-4 text-[2.5rem] font-extrabold leading-[1.03] tracking-tight 2xs:text-[2.75rem] md:text-5xl lg:text-[3.6rem]">
+          Your microphone, camera and speaker, on <span class="mark">the Mac you remote into.</span>
+        </h1>
+        <p class="lede mt-6 max-w-xl">
+          Remote desktop sends your screen, not your voice. Remote Visio turns the browser on your laptop, phone or tablet into the
+          microphone, camera and speaker of a remote Mac, for Google Meet, Teams and Zoom on the web.
+        </p>
+        <div class="mt-8"><CtaButtons /></div>
+        <ul class="mt-6 flex flex-wrap gap-x-4 gap-y-2 text-sm text-base-content/80">
+          <li class="flex items-center gap-1.5"><Icon name="check" class="h-4 w-4" />Free and open source</li>
+          <li class="flex items-center gap-1.5"><Icon name="check" class="h-4 w-4" />No account</li>
+          <li class="flex items-center gap-1.5"><Icon name="check" class="h-4 w-4" />{product.minMacOSShort}, {product.arch}</li>
+        </ul>
+      </div>
+      <figure class="m-0">
+        <div class="relative">
+          <BrowserFrame url="meeting.example" class="ml-auto w-[84%] sm:w-[70%] md:w-[88%]">
+            <Shot
+              name="meeting-demo-crop"
+              alt={alts["meeting-demo-crop"]}
+              eager
+              priority
+              sizes="(min-width: 1024px) 410px, (min-width: 768px) 40vw, 82vw"
+              class="block h-auto w-full"
+            />
+          </BrowserFrame>
+          <div class="absolute bottom-[-1.5rem] left-0 w-[34%] max-w-[170px] sm:max-w-[190px]">
+            <PhoneFrame name="sender-phone-live" alt={alts["sender-phone-live"]} sizes="(min-width: 768px) 170px, 34vw" />
+          </div>
+        </div>
+        <figcaption class="mt-10 text-sm text-base-content/75">
+          Left, the sender page on your phone. Right, a web meeting on the remote Mac (our demo page) with Remote Visio's three devices selected like
+          any others.
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- The gap -->
+  <section class="section" aria-labelledby="gap-title">
+    <div class="grid gap-10 md:grid-cols-[1fr_1.2fr] md:items-start">
+      <div class="reveal">
+        <p class="eyebrow">The gap</p>
+        <h2 id="gap-title" class="section-title mt-3">Remote desktop forwards your screen. Not your voice.</h2>
+        <p class="lede mt-5">
+          Windows has redirected the microphone over Remote Desktop for years. When the computer on the other end is a Mac, the usual tools
+          send its screen to you and stop there. You join the meeting on the remote Mac, and nobody hears you.
+        </p>
+        <p class="mt-4 text-base-content/85">
+          Remote Visio fills that gap for meetings held in the browser. It runs beside your remote desktop tool, which keeps doing the screen,
+          keyboard and mouse.
+        </p>
+      </div>
+      <div class="reveal overflow-x-auto rounded-box border border-base-300">
+        <table class="table table-sm sm:table-md">
+          <caption class="sr-only">Which remote desktop tools forward your microphone to a Mac</caption>
+          <thead>
+            <tr class="text-sm text-base-content/80">
+              <th scope="col">Tool, controlling a Mac</th>
+              <th scope="col" class="hidden lg:table-cell">Screen and input</th>
+              <th scope="col">Your microphone</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              comparison.map((row) => (
+                <tr>
+                  <th scope="row" class="font-medium">{row.tool}</th>
+                  <td class="hidden lg:table-cell">
+                    <span class="flex items-center gap-1.5"><span class="dot dot-live" aria-hidden="true"></span>{row.screen}</span>
+                  </td>
+                  <td>
+                    <span class="flex items-center gap-1.5">
+                      <span class={`dot ${row.micOk ? "dot-live" : "dot-peak"}`} aria-hidden="true"></span>
+                      {row.mic}
+                    </span>
+                    {row.note && <span class="mt-0.5 block text-xs text-base-content/75">{row.note}</span>}
+                  </td>
+                </tr>
+              ))
+            }
+            <tr class="bg-base-200">
+              <th scope="row" class="font-bold">Remote Visio</th>
+              <td class="hidden text-sm lg:table-cell">Leaves that to your remote tool</td>
+              <td>
+                <span class="flex items-center gap-1.5 font-semibold"><span class="dot dot-live" aria-hidden="true"></span>Yes</span>
+                <span class="mt-0.5 block text-xs text-base-content/75">for web meetings in Chromium browsers</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="border-t border-base-300 px-4 py-3 text-xs text-base-content/75">
+          How each tool behaves when the controlled computer is a Mac, as tested by Remote Visio's author. Tools change: if one has added it,
+          <a class="link" href={`mailto:${publisher.email}`}>tell us</a>.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section class="bg-base-200" aria-labelledby="how-title">
+    <div class="section">
+      <div class="max-w-2xl">
+        <p class="eyebrow">How it works</p>
+        <h2 id="how-title" class="section-title mt-3">Set up once. Then it's one address in a browser.</h2>
+      </div>
+      <ol class="mt-14 space-y-20 md:space-y-28">
+        <li class="reveal grid items-center gap-8 md:grid-cols-2">
+          <div>
+            <span class="font-mono text-6xl font-medium text-base-content/75 md:text-7xl" aria-hidden="true">01</span>
+            <h3 class="mt-2 text-2xl font-bold md:text-3xl">Install Remote Visio on the remote Mac</h3>
+            <p class="mt-3 text-lg text-base-content/85">
+              Run the installer. The app sits in the menu bar and starts at login. Choose <strong>Install Browser Extension…</strong> in its menu
+              and add Remote Visio to Chrome, Edge, Brave or Arc. No administrator is needed for the extension.
+            </p>
+          </div>
+          <div>
+            {
+              hasSetup1 ? (
+                <div class="overflow-hidden rounded-box border border-base-300 bg-base-100">
+                  <Wireframe name="setup-1" alt="Wireframe: the Remote Visio menu-bar app on the Mac, with Install Browser Extension in its menu, and the extension being added to the browser." />
+                </div>
+              ) : (
+                <div class="mx-auto max-w-xs">
+                  <ThemedShot base="extension-popup" alt={alts["extension-popup"]} class="h-auto w-full rounded-box border border-base-300" />
+                </div>
+              )
+            }
+          </div>
+        </li>
+        <li class="reveal grid items-center gap-8 md:grid-cols-2">
+          <div class="md:order-2">
+            <span class="font-mono text-6xl font-medium text-base-content/75 md:text-7xl" aria-hidden="true">02</span>
+            <h3 class="mt-2 text-2xl font-bold md:text-3xl">Open the Mac's address on the device in front of you</h3>
+            <p class="mt-3 text-lg text-base-content/85">
+              Over Tailscale or your local network, open <span class="kbd-url">https://&lt;your Mac&gt;:7420</span> in any browser. Accept the
+              self-signed certificate once, and press <strong>Start</strong>. Nothing to install on that device.
+            </p>
+          </div>
+          <div class="mx-auto w-56 md:order-1 md:w-64">
+            <PhoneFrame name="sender-phone-ready" alt={alts["sender-phone-ready"]} sizes="(min-width: 768px) 256px, 224px" />
+          </div>
+        </li>
+        <li class="reveal grid items-center gap-8 md:grid-cols-2">
+          <div>
+            <span class="font-mono text-6xl font-medium text-base-content/75 md:text-7xl" aria-hidden="true">03</span>
+            <h3 class="mt-2 text-2xl font-bold md:text-3xl">Pick Remote Visio in your meeting</h3>
+            <p class="mt-3 text-lg text-base-content/85">
+              In Google Meet, Teams or Zoom on the web, choose Remote Visio Microphone, Speaker and Camera, and allow the site once. With
+              <em>Use Remote Visio by default</em> on, most sites pick them by themselves.
+            </p>
+          </div>
+          <div class="relative">
+            <BrowserFrame url="meeting.example" label="Demo page">
+              <Shot name="meeting-demo" alt={alts["meeting-demo"]} class="block h-auto w-full" sizes="(min-width: 768px) 480px, 92vw" />
+            </BrowserFrame>
+            <div class="absolute -bottom-10 -right-2 w-[58%] max-w-[260px] overflow-hidden rounded-box border border-base-300 shadow-2xl">
+              <ThemedShot base="extension-consent" alt={alts["extension-consent"]} class="h-auto w-full" />
+            </div>
+          </div>
+        </li>
+      </ol>
+      <div class="reveal mt-24">
+        <Wireframe
+          name="how-it-works"
+          alt="Diagram: the device in front of you sends its microphone and camera over an encrypted peer-to-peer WebRTC connection to the Remote Visio app on the Mac, which hands them to the browser extension and the meeting page; the meeting's sound goes back the same way. The remote desktop tool carries the screen, keyboard and mouse separately."
+          class="rounded-box border border-base-300 bg-base-100"
+          caption="Two channels: your remote desktop tool carries the screen; Remote Visio carries your microphone, camera and the meeting's sound."
+        />
+        <p class="mt-6 text-center">
+          <a href="/how-it-works" class="btn btn-ghost rounded-full">See the whole path, step by step <Icon name="arrowRight" class="h-4 w-4" /></a>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Three devices -->
+  <section class="section" aria-labelledby="devices-title">
+    <div class="max-w-2xl">
+      <p class="eyebrow">What the Mac gets</p>
+      <h2 id="devices-title" class="section-title mt-3">Three devices, one connection</h2>
+      <p class="lede mt-5">
+        On the Mac, web meetings list three more devices next to the Mac's own. They come from the Remote Visio browser extension, and only
+        the sites you allow can use them.
+      </p>
+    </div>
+    <div class="reveal mt-10">
+      <Wireframe
+        name="devices"
+        alt="Wireframe: a web meeting's device settings on the Mac listing Remote Visio Microphone, Remote Visio Speaker and Remote Visio Camera next to the Mac's built-in devices."
+        class="rounded-box border border-base-300"
+      />
+    </div>
+    <ul class="mt-10 grid gap-4 md:grid-cols-3">
+      {
+        devices.map((d) => (
+          <li class="reveal card-surface p-6">
+            <span class="inline-flex h-11 w-11 items-center justify-center rounded-btn bg-neutral text-neutral-content">
+              <Icon name={d.icon} class="h-6 w-6" />
+            </span>
+            <h3 class="mt-4 text-xl font-bold">{d.name}</h3>
+            <p class="mt-2 text-base-content/85">{d.text}</p>
+          </li>
+        ))
+      }
+    </ul>
+    <p class="mt-6 flex items-start gap-2 text-sm text-base-content/80">
+      <Icon name="warning" class="mt-0.5 h-4 w-4 shrink-0" />
+      <span>
+        Web meetings only for the microphone and speaker: the Zoom, Teams and FaceTime apps, macOS dictation, Safari and Firefox cannot see them.
+        Join from the browser instead.
+      </span>
+    </p>
+  </section>
+
+  <!-- Features with real screenshots -->
+  <section class="bg-base-200" aria-labelledby="features-title">
+    <div class="section">
+      <div class="max-w-2xl">
+        <p class="eyebrow">In use</p>
+        <h2 id="features-title" class="section-title mt-3">Built like a meeting's waiting room</h2>
+        <p class="lede mt-5">Real screens from Remote Visio. Every status is a live value, the way you will see it.</p>
+      </div>
+      <div class="mt-12 grid gap-4 md:grid-cols-6">
+        <article class="reveal card-surface overflow-hidden md:col-span-4">
+          <div class="p-6 pb-4">
+            <h3 class="text-xl font-bold">Three buttons, three statuses</h3>
+            <p class="mt-2 text-base-content/85">
+              Turn the microphone, camera and speaker on and off without reconnecting. Each device shows green when it gets through, amber while
+              it is on its way, and red with what to fix.
+            </p>
+            <p class="mt-3 flex flex-wrap gap-4 text-sm">
+              <span class="flex items-center gap-1.5"><span class="dot dot-live"></span>Gets through</span>
+              <span class="flex items-center gap-1.5"><span class="dot dot-wait"></span>On its way</span>
+              <span class="flex items-center gap-1.5"><span class="dot dot-peak"></span>Needs you</span>
+            </p>
+          </div>
+          <!-- Phones get the phone capture, readable at that width; larger
+               screens the laptop capture cropped to the statuses. The hidden
+               one is lazy and display:none, so it is never fetched. -->
+          <div class="mx-auto w-52 translate-y-6 sm:hidden">
+            <PhoneFrame name="sender-phone-live" alt={alts["sender-phone-live"]} sizes="208px" />
+          </div>
+          <div class="hidden px-6 pb-0 sm:block">
+            <BrowserFrame url="https://192.0.2.10:7420" class="rounded-b-none border-b-0">
+              <Shot
+                name="sender-desktop-live-crop"
+                alt={alts["sender-desktop-live-crop"]}
+                class="block h-auto w-full"
+                sizes="(min-width: 1024px) 590px, (min-width: 768px) 62vw, 88vw"
+              />
+            </BrowserFrame>
+          </div>
+        </article>
+        <article class="reveal card-surface flex flex-col overflow-hidden md:col-span-2">
+          <div class="p-6 pb-4">
+            <h3 class="text-xl font-bold">Camera off, voice on</h3>
+            <p class="mt-2 text-base-content/85">Stop the camera and keep talking. The microphone and speaker carry on.</p>
+          </div>
+          <div class="mx-auto mt-auto w-48 translate-y-6">
+            <PhoneFrame name="sender-phone-camera-off" alt={alts["sender-phone-camera-off"]} sizes="192px" />
+          </div>
+        </article>
+        <article class="reveal card-surface overflow-hidden md:col-span-4">
+          <div class="p-6 pb-4">
+            <h3 class="text-xl font-bold">You decide which sites</h3>
+            <p class="mt-2 text-base-content/85">
+              Each site asks once before it can use Remote Visio's devices. Take a site back at any time from the extension's button.
+            </p>
+          </div>
+          <div class="px-6 pb-6">
+            <div class="mx-auto max-w-[440px]">
+              <ThemedShot base="extension-consent" alt={alts["extension-consent"]} class="h-auto w-full rounded-btn border border-base-300" sizes="(min-width: 480px) 440px, 88vw" />
+            </div>
+          </div>
+        </article>
+        <article class="reveal card-surface overflow-hidden md:col-span-2">
+          <div class="p-6 pb-4">
+            <h3 class="text-xl font-bold">At a glance on the Mac</h3>
+            <p class="mt-2 text-base-content/85">The extension's button shows each device and the site using it. No administrator needed.</p>
+          </div>
+          <div class="mx-auto max-w-[280px] px-6 pb-6">
+            <ThemedShot base="extension-popup" alt={alts["extension-popup"]} class="h-auto w-full rounded-btn border border-base-300" />
+          </div>
+        </article>
+        <article class="reveal card-surface p-6 md:col-span-6">
+          <ul class="grid gap-6 md:grid-cols-2">
+            <li class="flex gap-3">
+              <Icon name="monitor" class="mt-0.5 h-6 w-6 shrink-0" />
+              <div>
+                <h3 class="font-bold">Works beside your remote tool</h3>
+                <p class="text-base-content/85">Parsec, AnyDesk, TeamViewer, Screen Sharing, Jump Desktop: keep using it for the screen.</p>
+              </div>
+            </li>
+            <li class="flex gap-3">
+              <Icon name="globe" class="mt-0.5 h-6 w-6 shrink-0" />
+              <div>
+                <h3 class="font-bold">Any browser sends</h3>
+                <p class="text-base-content/85">Windows, Mac, Linux, iPad, iPhone, Android. Nothing to install on the device in front of you.</p>
+              </div>
+            </li>
+            <li class="flex gap-3">
+              <Icon name="volumeOff" class="mt-0.5 h-6 w-6 shrink-0" />
+              <div>
+                <h3 class="font-bold">Keeps the room quiet</h3>
+                <p class="text-base-content/85">
+                  Optional: mute the Mac's own microphones and speakers while Remote Visio runs, so the room around it stays out of the meeting.
+                </p>
+              </div>
+            </li>
+            <li class="flex gap-3">
+              <Icon name="lock" class="mt-0.5 h-6 w-6 shrink-0" />
+              <div>
+                <h3 class="font-bold">Peer-to-peer, no account</h3>
+                <p class="text-base-content/85">Encrypted WebRTC straight between your devices. No Remote Visio server, nothing recorded.</p>
+              </div>
+            </li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- Requirements -->
+  <section class="section" aria-labelledby="req-title">
+    <div class="grid gap-10 md:grid-cols-[1fr_1.4fr]">
+      <div>
+        <p class="eyebrow">Requirements</p>
+        <h2 id="req-title" class="section-title mt-3">What you need</h2>
+        <p class="lede mt-5">Five things, and you probably have four of them already.</p>
+        <a href="/download" class="btn btn-primary mt-6 rounded-full"><Icon name="download" class="h-4 w-4" />Download for Mac</a>
+      </div>
+      <ul class="divide-y divide-base-300 rounded-box border border-base-300">
+        {
+          requirements.map((r) => (
+            <li class="flex gap-4 p-5">
+              <Icon name="check" class="mt-1 h-5 w-5 shrink-0" />
+              <div>
+                <h3 class="font-bold">{r.title}</h3>
+                <p class="mt-1 text-base-content/85">{r.text}</p>
+              </div>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <!-- Privacy posture -->
+  <section class="mx-auto max-w-screen-lg px-4" aria-labelledby="privacy-title">
+    <div class="band rounded-box bg-neutral px-6 py-12 text-neutral-content md:px-12">
+      <div class="grid gap-10 md:grid-cols-[1.3fr_1fr]">
+        <div>
+          <p class="font-mono text-xs uppercase tracking-wider text-neutral-content/75">Privacy</p>
+          <h2 id="privacy-title" class="mt-3 text-3xl font-extrabold leading-tight tracking-tight md:text-5xl">
+            Your voice goes between your devices. Not to us.
+          </h2>
+          <p class="mt-5 text-lg text-neutral-content/85">
+            Audio and video travel over an encrypted peer-to-peer WebRTC connection between your device and your Mac. There is no Remote Visio
+            server in the path, no account and no recording. To find a direct path, the devices ask public STUN servers (Google, Cloudflare,
+            Xiaomi) for their public address; those servers see IP addresses, never your audio. If you configure your own TURN relay for hard
+            networks, encrypted media passes through it.
+          </p>
+          <a href="/privacy" class="btn mt-6 rounded-full border-0 bg-neutral-content text-neutral hover:bg-neutral-content/90">Read the privacy policy</a>
+        </div>
+        <div class="space-y-4">
+          <div class="rounded-box border border-neutral-content/15 p-5">
+            <h3 class="flex items-center gap-2 font-bold"><Icon name="lock" class="h-5 w-5" />On the Mac</h3>
+            <p class="mt-2 text-neutral-content/85">
+              The extension talks only to the Remote Visio app at 127.0.0.1, and a site gets the devices only after you allow it.
+            </p>
+          </div>
+          <div class="rounded-box border border-secondary/60 p-5">
+            <h3 class="flex items-center gap-2 font-bold"><span class="dot dot-wait"></span>Good to know</h3>
+            <p class="mt-2 text-neutral-content/85">
+              There is no password or pairing code in this version: any device that can reach port 7420 on your Mac, or a web page open on such a device, can connect as the sender. Use it
+              on networks you trust, such as your own Tailscale network, and don't expose that port to the internet.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Open source -->
+  <section class="section" aria-labelledby="oss-title">
+    <div class="grid items-center gap-8 md:grid-cols-[1.4fr_1fr]">
+      <div>
+        <p class="eyebrow">Open source</p>
+        <h2 id="oss-title" class="section-title mt-3">Free, and open to inspection</h2>
+        <p class="lede mt-5">
+          Remote Visio is free software under the {product.license}, started by {product.originalAuthor} and published by {publisher.name}. A tool
+          that handles your voice should be one you can check.
+        </p>
+      </div>
+      <div class="flex flex-col gap-3 md:items-end">
+        <a href={links.sourceUrl} rel="noopener" class="btn btn-outline btn-lg rounded-full"><Icon name="code" class="h-5 w-5" />View the source code</a>
+        <a href="/open-source" class="link text-sm">License and credits</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq" class="mx-auto max-w-screen-lg px-4 pb-20" aria-labelledby="faq-title">
+    <div class="grid gap-10 md:grid-cols-[1fr_2fr]">
+      <div>
+        <p class="eyebrow">FAQ</p>
+        <h2 id="faq-title" class="section-title mt-3">Questions</h2>
+        <p class="mt-4 text-base-content/85">
+          Something else? See <a class="link" href="/support">Support</a> or write to <a class="link" href={`mailto:${publisher.email}`}>{publisher.email}</a>.
+        </p>
+      </div>
+      <Faq items={faq} />
+    </div>
+  </section>
+
+  <CtaBand />
+</Layout>

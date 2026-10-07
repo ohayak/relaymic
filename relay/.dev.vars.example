@@ -1,0 +1,20 @@
+# Development values for wrangler dev. Copy this file to .dev.vars (which git
+# ignores) before npx wrangler dev --env dev --ip 127.0.0.1 --port 7660 (the
+# dev environment of wrangler.jsonc has no routes, so a request keeps the
+# hostname the client sent). The Worker honours DEV and every DEV_* variable
+# only when the request's hostname is 127.0.0.1, localhost or ends in
+# .localhost, so none of them can take effect on send.remotevisio.com.
+# See bin/e2e-harness/DESIGN-direct-mode.md, section 4.7.
+DEV=1
+APP_ORIGIN=http://send.localhost:7660
+# Pair rooms live 20 s instead of 10 minutes.
+DEV_FAST_EXPIRY=1
+# role=tap sockets get a copy of every frame a room routes (the test suites
+# play the malicious relay with it).
+DEV_TAP=1
+# TURN (phase B): the local Cloudflare API mock of section 11.2 stands in for
+# rtc.live.cloudflare.com. The TURN routes are not built yet.
+TURN_ENABLED=1
+TURN_KEY_ID=dev
+TURN_KEY_API_TOKEN=dev
+DEV_CF_API=http://127.0.0.1:7669

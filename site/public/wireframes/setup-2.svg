@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="rvw" viewBox="0 0 880 590" width="880" height="590" role="img" aria-labelledby="rvs2-title rvs2-desc">
+<title id="rvs2-title">Add the Remote Visio extension</title>
+<desc id="rvs2-desc">On its Chrome Web Store page, add Remote Visio Camera (Add to Chrome, or Get in Edge) and pin it to the toolbar so its button stays in view. The first time a meeting site wants Remote Visio's devices, the extension asks: Allow meeting.example to use Remote Visio's camera, microphone and speaker? Click Allow. Each site asks one time.</desc>
+<style>
+:where(svg.rvw){--rvw-bg:#f6f5f2;--rvw-panel:#ecebe6;--rvw-card:#ffffff;--rvw-ink:#131417;--rvw-muted:#55575e;--rvw-faint:#85878e;--rvw-accent:#9a5700;--rvw-soft:#ffe7b3;--rvw-live:#1b7f45;font-family:var(--rvw-font,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif)}
+@media (prefers-color-scheme:dark){:root:where(svg.rvw){--rvw-bg:#131417;--rvw-panel:#191a1f;--rvw-card:#202228;--rvw-ink:#eceae6;--rvw-muted:#a3a49d;--rvw-faint:#73757c;--rvw-accent:#ffb000;--rvw-soft:#3b2f12;--rvw-live:#57d08a}}
+@supports (color:light-dark(#000,#fff)){:where(svg.rvw){--rvw-bg:light-dark(#f6f5f2,#131417);--rvw-panel:light-dark(#ecebe6,#191a1f);--rvw-card:light-dark(#ffffff,#202228);--rvw-ink:light-dark(#131417,#eceae6);--rvw-muted:light-dark(#55575e,#a3a49d);--rvw-faint:light-dark(#85878e,#73757c);--rvw-accent:light-dark(#9a5700,#ffb000);--rvw-soft:light-dark(#ffe7b3,#3b2f12);--rvw-live:light-dark(#1b7f45,#57d08a)}}
+:root:where(svg.rvw){color-scheme:light dark}
+.rvw-l,.rvw-l2,.rvw-lm,.rvw-la,.rvw-a3,.rvw-ds,.rvw-dt,.rvw-sep,.rvw-bar,.rvw-i,.rvw-ia,.rvw-im{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.rvw-l{stroke:var(--rvw-ink);stroke-width:3}
+.rvw-l2{stroke:var(--rvw-ink);stroke-width:2}
+.rvw-lm{stroke:var(--rvw-muted);stroke-width:2}
+.rvw-la{stroke:var(--rvw-accent);stroke-width:4}
+.rvw-a3{stroke:var(--rvw-accent);stroke-width:3}
+.rvw-ds{stroke:var(--rvw-muted);stroke-width:2.5;stroke-dasharray:10 9}
+.rvw-dt{stroke:var(--rvw-muted);stroke-width:3;stroke-dasharray:.5 9}
+.rvw-sep{stroke:var(--rvw-faint);stroke-width:1.5}
+.rvw-bar{stroke:var(--rvw-faint);stroke-width:7}
+.rvw-i{stroke:var(--rvw-ink)}
+.rvw-ia{stroke:var(--rvw-accent)}
+.rvw-im{stroke:var(--rvw-muted)}
+.rvw-bg{fill:var(--rvw-bg)}
+.rvw-pn{fill:var(--rvw-panel)}
+.rvw-cd{fill:var(--rvw-card)}
+.rvw-sf{fill:var(--rvw-soft)}
+.rvw-ik{fill:var(--rvw-ink)}
+.rvw-lv{fill:var(--rvw-live)}
+.rvw-t{fill:var(--rvw-ink)}
+.rvw-tm{fill:var(--rvw-muted)}
+.rvw-ta{fill:var(--rvw-accent)}
+.rvw-tc{fill:var(--rvw-card)}
+.rvw-mono{font-family:var(--rvw-mono,ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace)}
+</style>
+<defs><symbol id="rvs2-glyph" viewBox="2 10 92 78"><path d="M7.5 22.5H31l4.4-7.2q1.1-1.8 3.2-1.8h18.8q2.1 0 3.2 1.8l4.4 7.2h23.5q3 0 3 3v56q0 3-3 3h-81q-3 0-3-3v-56q0-3 3-3z"/><path d="M13.5 22.5v-4q0-2 2-2h8q2 0 2 2v4M75 22.5a4 4 0 0 1 8 0"/><rect x="38" y="28.5" width="20" height="30" rx="10"/><path d="M31.75 46.5v3a16.25 16.25 0 0 0 32.5 0v-3M48 65.75V73M37.5 73h21M10 46.5v3M17.5 46.5v3M25 46.5v3M71 46.5v3M78.5 46.5v3M86 46.5v3"/></symbol></defs>
+<rect width="880" height="590" class="rvw-bg"/>
+<rect x="24" y="24" width="496" height="270" rx="14" class="rvw-cd rvw-l"/>
+<circle cx="48" cy="50" r="6" class="rvw-l2"/>
+<circle cx="68" cy="50" r="6" class="rvw-l2"/>
+<circle cx="88" cy="50" r="6" class="rvw-l2"/>
+<rect x="112" y="34" width="296" height="32" rx="16" class="rvw-l2"/>
+<text x="260" y="56" font-size="15" text-anchor="middle" class="rvw-tm rvw-mono">chromewebstore.google.com</text>
+<circle cx="468" cy="50" r="21" class="rvw-sf"/>
+<circle cx="468" cy="50" r="25" class="rvw-a3"/>
+<use href="#rvs2-glyph" x="450" y="35" width="36" height="30" class="rvw-i" stroke-width="5.7"/>
+<path d="M24 78H520" class="rvw-l2"/>
+<rect x="52" y="106" width="88" height="88" rx="20" class="rvw-l"/>
+<use href="#rvs2-glyph" x="64" y="124" width="64" height="54" class="rvw-i" stroke-width="3.8"/>
+<text x="164" y="138" font-size="26" font-weight="600" class="rvw-t">Remote Visio Camera</text>
+<text x="164" y="168" font-size="19" class="rvw-tm">Extension</text>
+<rect x="164" y="194" width="196" height="46" rx="23" class="rvw-sf rvw-la"/>
+<text x="262" y="224" font-size="20" font-weight="600" text-anchor="middle" class="rvw-t">Add to Chrome</text>
+<path d="M52 268H330" class="rvw-bar"/>
+<text x="566" y="56" font-size="22" font-weight="600" class="rvw-t">Pin it to the toolbar</text>
+<text x="566" y="82" font-size="19" class="rvw-tm">Its button stays in view</text>
+<path d="M496 50H548" class="rvw-a3"/>
+<circle cx="552" cy="50" r="4" class="rvw-a3"/>
+<text x="566" y="212" font-size="22" font-weight="600" class="rvw-t">Add the extension</text>
+<text x="566" y="238" font-size="19" class="rvw-tm">Add to Chrome, or Get in Edge</text>
+<path d="M364 217H548" class="rvw-a3"/>
+<circle cx="552" cy="217" r="4" class="rvw-a3"/>
+<rect x="24" y="316" width="576" height="250" rx="14" class="rvw-cd rvw-l"/>
+<use href="#rvs2-glyph" x="48" y="338" width="30" height="26" class="rvw-i" stroke-width="5.5"/>
+<text x="88" y="358" font-size="18" font-weight="600" class="rvw-t">Remote Visio Camera</text>
+<text x="48" y="400" font-size="22" font-weight="600" class="rvw-t">Allow meeting.example to use</text>
+<text x="48" y="428" font-size="22" font-weight="600" class="rvw-t">Remote Visio's camera, microphone</text>
+<text x="48" y="456" font-size="22" font-weight="600" class="rvw-t">and speaker?</text>
+<path d="M48 482H520" class="rvw-bar"/>
+<path d="M48 500H380" class="rvw-bar"/>
+<rect x="286" y="516" width="146" height="40" rx="12" class="rvw-l2"/>
+<text x="359" y="542" font-size="18" text-anchor="middle" class="rvw-t">Don't allow</text>
+<rect x="444" y="516" width="132" height="40" rx="12" class="rvw-ik"/>
+<text x="510" y="542" font-size="18" font-weight="600" text-anchor="middle" class="rvw-tc">Allow</text>
+<rect x="438" y="510" width="144" height="52" rx="16" class="rvw-a3"/>
+<text x="634" y="530" font-size="22" font-weight="600" class="rvw-t">Allow the site once</text>
+<text x="634" y="556" font-size="19" class="rvw-tm">Each site asks one time</text>
+<path d="M586 536H616" class="rvw-a3"/>
+<circle cx="620" cy="536" r="4" class="rvw-a3"/>
+</svg>

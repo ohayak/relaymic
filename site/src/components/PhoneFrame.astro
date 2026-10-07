@@ -1,0 +1,62 @@
+---
+// A plain CSS phone frame (no device bitmap) around a 390x844 screenshot of
+// the sender page. The bezel and the inner radius scale with the frame's
+// width (container query units), so a small frame does not clip the
+// screenshot's corners. `sizes` should match the frame's rendered width.
+import Shot from "./Shot.astro";
+import type { MediaName } from "@utils/media";
+interface Props {
+  name: MediaName;
+  alt: string;
+  class?: string;
+  eager?: boolean;
+  sizes?: string;
+}
+const { name, alt, class: className = "", eager = false, sizes = "(min-width: 768px) 260px, 60vw" } = Astro.props;
+---
+
+<div class={`phone-box ${className}`}>
+  <div class="phone-frame relative bg-[#0c0d0f] shadow-[0_30px_60px_-30px_rgba(19,20,23,.55)] ring-1 ring-black/40">
+    <div class="phone-screen relative overflow-hidden bg-[#131417]">
+      <Shot name={name} alt={alt} eager={eager} class="block h-auto w-full" sizes={sizes} />
+      <span aria-hidden="true" class="phone-notch absolute left-1/2 w-[30%] -translate-x-1/2 rounded-full bg-[#0c0d0f]"></span>
+    </div>
+  </div>
+</div>
+
+<style>
+  .phone-box {
+    container-type: inline-size;
+  }
+  .phone-frame {
+    /* Fallbacks for browsers without container query units. */
+    border-radius: 2.6rem;
+    padding: 9px;
+  }
+  .phone-screen {
+    border-radius: 2.05rem;
+  }
+  .phone-notch {
+    top: 0.5rem;
+    height: 18px;
+  }
+  @supports (width: 1cqi) {
+    .phone-frame {
+      border-radius: 15cqi;
+      padding: 3.4cqi;
+    }
+    /* The screenshot is inset from the screen's rounded corners, so the
+       radius never cuts into its text. */
+    .phone-screen {
+      border-radius: 11.5cqi;
+      padding: 5.5cqi 2.5cqi;
+    }
+    .phone-notch {
+      top: 1.4cqi;
+      height: 3.2cqi;
+    }
+  }
+  :global([data-theme="dark"]) .phone-frame {
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14), 0 30px 60px -30px rgb(0 0 0 / 0.7);
+  }
+</style>

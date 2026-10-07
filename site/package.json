@@ -1,12 +1,37 @@
 {
-  "name": "relaymic-site",
+  "name": "remotevisio-site",
+  "version": "1.0.0",
   "private": true,
-  "version": "0.1.0",
+  "description": "remotevisio.com, the marketing, documentation and legal site of Remote Visio",
+  "license": "AGPL-3.0-only",
+  "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "dev": "astro dev",
+    "start": "astro dev",
+    "check": "astro check",
+    "build": "astro build",
+    "preview": "astro preview",
+    "brand": "node scripts/build-og-image.mjs",
+    "test": "node --test worker/test/*.test.mjs",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.4",
+    "@astrojs/markdown-remark": "^5.3.0",
+    "@astrojs/sitemap": "3.2.1",
+    "@astrojs/tailwind": "^5.1.2",
+    "astro": "^4.16.7",
+    "typescript": "^5.4.5"
   },
   "devDependencies": {
-    "wrangler": "^4"
+    "@fontsource/archivo": "^5.1.0",
+    "@tailwindcss/typography": "^0.5.13",
+    "daisyui": "^4.12.8",
+    "opentype.js": "^2.0.0",
+    "prettier": "^3.2.5",
+    "prettier-plugin-astro": "^0.14.0",
+    "sharp": "^0.33.5",
+    "tailwindcss": "^3.4.1",
+    "wrangler": "^4.0.0"
   }
 }

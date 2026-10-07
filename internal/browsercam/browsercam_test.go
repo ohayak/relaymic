@@ -25,7 +25,7 @@ import (
 // one RTP stream whose sequence numbers go on by one and whose timestamps
 // keep moving forward, whatever numbering each new track starts from.
 func TestSequencerContinuity(t *testing.T) {
-	var s sequencer
+	s := newSequencer(clockRate, clockRate/30)
 	t0 := time.Unix(1000, 0)
 	var out []rtp.Packet
 	for i := uint16(0); i < 5; i++ {
@@ -303,7 +303,7 @@ func newPage(t *testing.T, f *Forwarder, origin string) *page {
 	if err := pc.SetLocalDescription(offer); err != nil {
 		t.Fatal(err)
 	}
-	answer, err := f.Offer(offer, origin)
+	answer, err := f.Offer(offer, origin, KindCamera)
 	if err != nil {
 		t.Fatalf("the forwarder refused the page: %v", err)
 	}
@@ -416,7 +416,7 @@ func TestRealChromeOffer(t *testing.T) {
 	for _, c := range []struct{ sender, want string }{{"42e01f", "42e01f"}, {"640c1f", "64001f"}, {"42e01f", "42e01f"}} {
 		_, end := f.StartTrack(webrtc.RTPCodecParameters{RTPCodecCapability: webrtc.RTPCodecCapability{
 			MimeType: webrtc.MimeTypeH264, ClockRate: clockRate, SDPFmtpLine: fmtpLine(c.sender)}}, func() {})
-		answer, err := f.Offer(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: sdp}, "https://meet.example")
+		answer, err := f.Offer(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: sdp}, "https://meet.example", KindCamera)
 		end()
 		if err != nil {
 			t.Fatalf("sender %s: %v", c.sender, err)
@@ -459,7 +459,7 @@ func TestPageReceivesCamera(t *testing.T) {
 	}
 	f.Logf = t.Logf
 	defer f.Close()
-	r := rtc.New(nil, nil)
+	r := rtc.New(nil)
 	r.SetICEServers(nil)
 	r.SetVideoForwarder(f)
 	defer r.Close()
@@ -528,7 +528,7 @@ func TestProfileChangeReconnectsPages(t *testing.T) {
 	}
 	f.Logf = t.Logf
 	defer f.Close()
-	r := rtc.New(nil, nil)
+	r := rtc.New(nil)
 	r.SetICEServers(nil)
 	r.SetVideoForwarder(f)
 	defer r.Close()
@@ -569,7 +569,7 @@ func TestOfferLimits(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer off.Close()
-	if _, err := off.Offer(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: "v=0\r\n"}, ""); err != ErrOff {
+	if _, err := off.Offer(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: "v=0\r\n"}, "", KindCamera); err != ErrOff {
 		t.Errorf("disabled forwarder: err %v, want ErrOff", err)
 	}
 	on, err := New(true, nil)
@@ -577,7 +577,7 @@ func TestOfferLimits(t *testing.T) {
 		t.Fatal(err)
 	}
 	on.Close()
-	if _, err := on.Offer(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: "v=0\r\n"}, ""); err != ErrClosed {
+	if _, err := on.Offer(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: "v=0\r\n"}, "", KindCamera); err != ErrClosed {
 		t.Errorf("closed forwarder: err %v, want ErrClosed", err)
 	}
 }
@@ -592,7 +592,7 @@ func TestRevoke(t *testing.T) {
 	}
 	f.Logf = t.Logf
 	defer f.Close()
-	r := rtc.New(nil, nil)
+	r := rtc.New(nil)
 	r.SetICEServers(nil)
 	r.SetVideoForwarder(f)
 	defer r.Close()
@@ -665,7 +665,7 @@ func TestStatusCountsConnectedPagesOnly(t *testing.T) {
 	}
 	offer, _ := pc.CreateOffer(nil)
 	_ = pc.SetLocalDescription(offer)
-	if _, err := f.Offer(offer, "https://blocked.example"); err != nil {
+	if _, err := f.Offer(offer, "https://blocked.example", KindCamera); err != nil {
 		t.Fatal(err)
 	}
 	// The page never applies the answer: no connectivity checks ever arrive.
@@ -702,8 +702,17 @@ func TestUnavailable(t *testing.T) {
 	if st := f.Status(); st.On || !strings.Contains(st.Unavailable, "address already in use") {
 		t.Errorf("status of an unavailable browser camera: %+v", st)
 	}
-	if _, err := f.Offer(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: "v=0\r\n"}, ""); err != ErrOff {
+	if _, err := f.Offer(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: "v=0\r\n"}, "", KindCamera); err != ErrOff {
 		t.Errorf("offer to an unavailable browser camera: %v, want ErrOff", err)
+	}
+	// Without their listener the microphone and the speaker cannot work either.
+	if st := f.Status(); st.Microphone.On || st.Speaker.On {
+		t.Errorf("status of the unavailable microphone and speaker: %+v %+v", st.Microphone, st.Speaker)
+	}
+	for _, kind := range []Kind{KindMicrophone, KindSpeaker} {
+		if _, err := f.Offer(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: "v=0\r\n"}, "", kind); !errors.Is(err, ErrOff) {
+			t.Errorf("offer to an unavailable %s: %v, want off", kind, err)
+		}
 	}
 }
 
@@ -742,7 +751,7 @@ func TestViewerCapUnderConcurrentOffers(t *testing.T) {
 			defer wg.Done()
 			offer, _ := pc.CreateOffer(nil)
 			_ = pc.SetLocalDescription(offer)
-			_, err := f.Offer(offer, "https://many.example")
+			_, err := f.Offer(offer, "https://many.example", KindCamera)
 			mu.Lock()
 			defer mu.Unlock()
 			switch err {

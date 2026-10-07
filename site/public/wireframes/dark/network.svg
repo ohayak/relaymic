@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="rvw" viewBox="0 0 1600 880" width="1600" height="880" role="img" aria-labelledby="rvnwd-title rvnwd-desc">
+<title id="rvnwd-title">How Remote Visio connects</title>
+<desc id="rvnwd-desc">Two ways to connect your device to the Mac. On the same local network, at home or in the office, your phone or laptop opens https://your-mac:7420 and connects to the Mac peer-to-peer, encrypted. Anywhere else, both devices join your Tailscale network, each with a 100.x address, and connect peer-to-peer inside it. Public STUN servers from Google, Cloudflare and Xiaomi only help each end find its public address: they see IP addresses, never sound or video. There is no Remote Visio server: no account, no relay of ours, nothing recorded. A TURN relay is used only if you set up your own, for networks that refuse a direct path.</desc>
+<style>
+:where(svg.rvw){--rvw-bg:#131417;--rvw-panel:#191a1f;--rvw-card:#202228;--rvw-ink:#eceae6;--rvw-muted:#a3a49d;--rvw-faint:#73757c;--rvw-accent:#ffb000;--rvw-soft:#3b2f12;--rvw-live:#57d08a;font-family:var(--rvw-font,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif)}
+.rvw-l,.rvw-l2,.rvw-lm,.rvw-la,.rvw-a3,.rvw-ds,.rvw-dt,.rvw-sep,.rvw-bar,.rvw-i,.rvw-ia,.rvw-im{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.rvw-l{stroke:var(--rvw-ink);stroke-width:3}
+.rvw-l2{stroke:var(--rvw-ink);stroke-width:2}
+.rvw-lm{stroke:var(--rvw-muted);stroke-width:2}
+.rvw-la{stroke:var(--rvw-accent);stroke-width:4}
+.rvw-a3{stroke:var(--rvw-accent);stroke-width:3}
+.rvw-ds{stroke:var(--rvw-muted);stroke-width:2.5;stroke-dasharray:10 9}
+.rvw-dt{stroke:var(--rvw-muted);stroke-width:3;stroke-dasharray:.5 9}
+.rvw-sep{stroke:var(--rvw-faint);stroke-width:1.5}
+.rvw-bar{stroke:var(--rvw-faint);stroke-width:7}
+.rvw-i{stroke:var(--rvw-ink)}
+.rvw-ia{stroke:var(--rvw-accent)}
+.rvw-im{stroke:var(--rvw-muted)}
+.rvw-bg{fill:var(--rvw-bg)}
+.rvw-pn{fill:var(--rvw-panel)}
+.rvw-cd{fill:var(--rvw-card)}
+.rvw-sf{fill:var(--rvw-soft)}
+.rvw-ik{fill:var(--rvw-ink)}
+.rvw-lv{fill:var(--rvw-live)}
+.rvw-t{fill:var(--rvw-ink)}
+.rvw-tm{fill:var(--rvw-muted)}
+.rvw-ta{fill:var(--rvw-accent)}
+.rvw-tc{fill:var(--rvw-card)}
+.rvw-mono{font-family:var(--rvw-mono,ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace)}
+</style>
+<defs><symbol id="rvnwd-glyph" viewBox="2 10 92 78"><path d="M7.5 22.5H31l4.4-7.2q1.1-1.8 3.2-1.8h18.8q2.1 0 3.2 1.8l4.4 7.2h23.5q3 0 3 3v56q0 3-3 3h-81q-3 0-3-3v-56q0-3 3-3z"/><path d="M13.5 22.5v-4q0-2 2-2h8q2 0 2 2v4M75 22.5a4 4 0 0 1 8 0"/><rect x="38" y="28.5" width="20" height="30" rx="10"/><path d="M31.75 46.5v3a16.25 16.25 0 0 0 32.5 0v-3M48 65.75V73M37.5 73h21M10 46.5v3M17.5 46.5v3M25 46.5v3M71 46.5v3M78.5 46.5v3M86 46.5v3"/></symbol><symbol id="rvnwd-server" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="7" rx="1.5"/><rect x="4" y="13" width="16" height="7" rx="1.5"/><path d="M7.5 7.5h.01M7.5 16.5h.01"/></symbol><symbol id="rvnwd-wifi" viewBox="0 0 24 24"><path d="M2.5 9.5a13.5 13.5 0 0 1 19 0M5.8 13a8.8 8.8 0 0 1 12.4 0M9.1 16.5a4.2 4.2 0 0 1 5.8 0M12 19.8v.1"/></symbol></defs>
+<rect width="1600" height="880" class="rvw-bg"/>
+<path d="M618 150C500 150 415 200 415 292" class="rvw-dt"/>
+<path d="M984 150C1100 150 1185 200 1185 292" class="rvw-dt"/>
+<g transform="translate(0 0)">
+<path d="M660 180H940A44 44 0 0 0 948 93A64 64 0 0 0 840 58A80 80 0 0 0 690 92A48 48 0 0 0 660 180Z" class="rvw-cd rvw-l"/>
+<text x="805" y="132" font-size="24" font-weight="600" text-anchor="middle" class="rvw-t">Public STUN servers</text>
+<text x="805" y="160" font-size="18" text-anchor="middle" class="rvw-tm">Google · Cloudflare · Xiaomi</text>
+</g>
+<text x="800" y="216" font-size="20" text-anchor="middle" class="rvw-tm">They help each end find its public address.</text>
+<text x="800" y="242" font-size="20" text-anchor="middle" class="rvw-tm">They see IP addresses, never your sound or video.</text>
+<rect x="40" y="300" width="750" height="420" rx="24" class="rvw-pn rvw-ds"/>
+<text x="72" y="348" font-size="26" font-weight="600" class="rvw-t">Same local network</text>
+<text x="72" y="380" font-size="20" class="rvw-tm">At home or in the office, on the same Wi-Fi or wired network</text>
+<use href="#rvnwd-wifi" x="722" y="318" width="40" height="40" class="rvw-im" stroke-width="1.6"/>
+<g transform="translate(110 432)">
+<rect x="0" y="0" width="90" height="170" rx="18" class="rvw-cd rvw-l"/>
+<rect x="8" y="18" width="74" height="134" rx="6" class="rvw-pn"/>
+<rect x="16" y="30" width="58" height="62" rx="6" class="rvw-l2"/>
+<circle cx="26" cy="112" r="7" class="rvw-l2"/>
+<circle cx="45" cy="112" r="7" class="rvw-l2"/>
+<circle cx="64" cy="112" r="7" class="rvw-l2"/>
+<path d="M36 10H54" class="rvw-l2"/>
+</g>
+<g transform="translate(530 440)">
+<rect x="0" y="0" width="200" height="130" rx="12" class="rvw-cd rvw-l"/>
+<rect x="10" y="10" width="180" height="110" rx="5" class="rvw-pn"/>
+<use href="#rvnwd-glyph" x="76" y="43" width="48" height="41" class="rvw-i" stroke-width="5"/>
+<path d="M84 130l-6 26h44l-6-26" class="rvw-l"/>
+<path d="M56 157H144" class="rvw-l"/>
+</g>
+<path d="M214 520H512" class="rvw-la"/>
+<path d="M499.3 527.9L512 520L499.3 512.1" class="rvw-la"/>
+<path d="M226.7 512.1L214 520L226.7 527.9" class="rvw-la"/>
+<text x="363" y="498" font-size="22" font-weight="600" text-anchor="middle" class="rvw-t">Peer-to-peer, encrypted</text>
+<text x="363" y="556" font-size="19" text-anchor="middle" class="rvw-tm">direct, on your network</text>
+<text x="155" y="650" font-size="20" font-weight="600" text-anchor="middle" class="rvw-t">Your phone or laptop</text>
+<text x="630" y="650" font-size="20" font-weight="600" text-anchor="middle" class="rvw-t">Your Mac</text>
+<text x="630" y="678" font-size="17" text-anchor="middle" class="rvw-tm rvw-mono">https://your-mac:7420</text>
+<rect x="810" y="300" width="750" height="420" rx="24" class="rvw-pn rvw-ds"/>
+<text x="842" y="348" font-size="26" font-weight="600" class="rvw-t">Anywhere, with Tailscale</text>
+<text x="842" y="380" font-size="20" class="rvw-tm">Both devices join your tailnet (free); each gets a 100.x address</text>
+<g transform="translate(864 456)">
+<rect x="0" y="0" width="170" height="112" rx="10" class="rvw-cd rvw-l"/>
+<rect x="10" y="10" width="150" height="92" rx="4" class="rvw-pn"/>
+<rect x="48" y="22" width="74" height="46" rx="5" class="rvw-l2"/>
+<circle cx="68" cy="84" r="6" class="rvw-l2"/>
+<circle cx="85" cy="84" r="6" class="rvw-l2"/>
+<circle cx="102" cy="84" r="6" class="rvw-l2"/>
+<path d="M-18 112h206l-10 16H-8z" class="rvw-cd rvw-l"/>
+</g>
+<g transform="translate(1336 440)">
+<rect x="0" y="0" width="200" height="130" rx="12" class="rvw-cd rvw-l"/>
+<rect x="10" y="10" width="180" height="110" rx="5" class="rvw-pn"/>
+<use href="#rvnwd-glyph" x="76" y="43" width="48" height="41" class="rvw-i" stroke-width="5"/>
+<path d="M84 130l-6 26h44l-6-26" class="rvw-l"/>
+<path d="M56 157H144" class="rvw-l"/>
+</g>
+<path d="M1064 520H1318" class="rvw-la"/>
+<path d="M1305.3 527.9L1318 520L1305.3 512.1" class="rvw-la"/>
+<path d="M1076.7 512.1L1064 520L1076.7 527.9" class="rvw-la"/>
+<text x="1191" y="498" font-size="22" font-weight="600" text-anchor="middle" class="rvw-t">Peer-to-peer, encrypted</text>
+<text x="1191" y="556" font-size="19" text-anchor="middle" class="rvw-tm">inside your tailnet</text>
+<text x="949" y="650" font-size="20" font-weight="600" text-anchor="middle" class="rvw-t">You, anywhere</text>
+<text x="949" y="678" font-size="17" text-anchor="middle" class="rvw-tm rvw-mono">100.x.y.z</text>
+<text x="1436" y="650" font-size="20" font-weight="600" text-anchor="middle" class="rvw-t">Your Mac, far away</text>
+<text x="1436" y="678" font-size="17" text-anchor="middle" class="rvw-tm rvw-mono">100.x.y.z</text>
+<use href="#rvnwd-server" x="56" y="760" width="52" height="52" class="rvw-im" stroke-width="1.3"/>
+<path d="M58 762L106 810" class="rvw-l"/>
+<text x="126" y="786" font-size="24" font-weight="600" class="rvw-t">No Remote Visio server</text>
+<text x="126" y="816" font-size="20" class="rvw-tm">No account, no relay of ours, nothing recorded</text>
+<use href="#rvnwd-server" x="826" y="760" width="52" height="52" class="rvw-im" stroke-width="1.3"/>
+<text x="896" y="786" font-size="24" font-weight="600" class="rvw-t">Optional: your own TURN relay</text>
+<text x="896" y="816" font-size="20" class="rvw-tm">Only if you set one up, for networks that refuse a direct path</text>
+</svg>

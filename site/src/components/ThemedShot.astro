@@ -1,0 +1,19 @@
+---
+// A screenshot that exists in a light and a dark capture: shows the one that
+// matches the page's theme. The hidden one is never downloaded, because both
+// stay lazy (a display:none lazy image is not fetched); `priority` raises the
+// visible one's fetch priority when it is the page's main image.
+import Shot from "./Shot.astro";
+import type { MediaName } from "@utils/media";
+interface Props {
+  base: "extension-consent" | "extension-popup";
+  alt: string;
+  class?: string;
+  sizes?: string;
+  priority?: boolean;
+}
+const { base, alt, class: className = "", sizes, priority = false } = Astro.props;
+---
+
+<Shot name={`${base}-light` as MediaName} alt={alt} class={`only-light ${className}`} sizes={sizes} priority={priority} />
+<Shot name={`${base}-dark` as MediaName} alt={alt} class={`only-dark ${className}`} sizes={sizes} priority={priority} />

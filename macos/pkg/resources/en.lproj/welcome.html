@@ -2,13 +2,13 @@
 <html lang="en">
 <head><meta charset="utf-8"><style>body{font-family:-apple-system,Helvetica,sans-serif;font-size:13px;line-height:1.5}</style></head>
 <body>
-<p>Remote Visio turns the microphone of any device's browser into a microphone on this Mac, and sends this Mac's sound back.</p>
+<p>Remote Visio turns the microphone and camera of any device's browser into a microphone and camera for this Mac's meetings, and sends the meeting's sound back to that device.</p>
 <p>This installer will:</p>
 <ul>
-  <li>Add the <b>Remote Visio</b> virtual audio device (a Core Audio driver in <code>/Library/Audio/Plug-Ins/HAL</code>) and restart the audio system, which pauses sound for about a second.</li>
   <li>Install <b>RemoteVisio.app</b> in Applications: a menu-bar app that runs the receiver, then start it and set it to open at login.</li>
   <li>Add a virtual camera, <b>Remote Visio Camera</b>, that shows the remote device's camera in this Mac's video apps.</li>
+  <li>Remove the <b>Remote Visio</b> virtual audio device that earlier versions installed, if this Mac has it, and then restart the audio system, which pauses sound for about a second.</li>
 </ul>
-<p>Nothing else is needed on this Mac. The app is self-contained.</p>
+<p>The microphone and speaker come from the Remote Visio browser extension, for meetings in Chrome, Edge, Brave, Arc and other Chromium browsers: the app's menu adds it once the installation is done. Nothing else is needed on this Mac.</p>
 </body>
 </html>

@@ -1,0 +1,26 @@
+---
+// Native <details> accordion: keyboard and screen-reader friendly, works
+// without JavaScript, and every answer is in the HTML for search engines.
+import type { Qa } from "@utils/config";
+import { inlineHtml } from "@utils/inline";
+import Icon from "./Icon.astro";
+interface Props {
+  items: Qa[];
+  headingLevel?: "h3" | "h4";
+}
+const { items } = Astro.props;
+---
+
+<div class="divide-y divide-base-300 rounded-box border border-base-300 bg-base-100">
+  {
+    items.map((qa, i) => (
+      <details class="group px-5 py-1" open={i === 0}>
+        <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 py-3 text-lg font-semibold [&::-webkit-details-marker]:hidden">
+          <span>{qa.question}</span>
+          <Icon name="arrowRight" class="h-5 w-5 shrink-0 rotate-90 transition-transform group-open:-rotate-90" />
+        </summary>
+        <p class="pb-5 pr-6 text-base-content/85" set:html={inlineHtml(qa.answer)} />
+      </details>
+    ))
+  }
+</div>

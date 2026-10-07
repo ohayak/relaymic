@@ -1,0 +1,78 @@
+---
+import Layout from "../Layout.astro";
+import { seo, links, product, publisher } from "@utils/config";
+import { breadcrumbs, webPage } from "@utils/jsonld";
+import Breadcrumbs from "@components/Breadcrumbs.astro";
+import Icon from "@components/Icon.astro";
+
+const jsonLd = [
+  webPage("/open-source", "Source code and license", seo.openSource.description),
+  breadcrumbs([
+    { name: "Home", path: "/" },
+    { name: "Open source", path: "/open-source" },
+  ]),
+];
+---
+
+<Layout title={seo.openSource.title} description={seo.openSource.description} jsonLd={jsonLd}>
+  <div class="mx-auto max-w-screen-lg px-4 pb-6 pt-10 md:pt-16">
+    <Breadcrumbs items={[{ title: "Home", href: "/" }, { title: "Open source" }]} />
+    <h1 class="mt-6 max-w-3xl text-4xl font-extrabold leading-[1.05] tracking-tight md:text-6xl">Source code and license</h1>
+    <p class="lede mt-5 max-w-2xl">
+      Remote Visio is free software. You can read every line that handles your voice, build it yourself, change it and share it, under the
+      {product.license}.
+    </p>
+    <div class="mt-8 flex flex-col gap-3 2xs:flex-row 2xs:flex-wrap">
+      <a href={links.sourceUrl} rel="noopener" class="btn btn-primary btn-lg rounded-full"><Icon name="code" class="h-5 w-5" />Get the source code</a>
+      <a href={product.licenseUrl} rel="noopener" class="btn btn-outline btn-lg rounded-full"><Icon name="book" class="h-5 w-5" />Read the license</a>
+    </div>
+  </div>
+
+  <section class="section grid gap-6 md:grid-cols-2" aria-label="License details">
+    <div class="card-surface p-6">
+      <h2 class="text-xl font-bold">Who made it</h2>
+      <p class="mt-2 text-base-content/85">
+        Remote Visio was originally written by {product.originalAuthor}, who built it for daily use and opened it up
+        (<a class="link" href={links.upstreamUrl} rel="noopener">{links.upstreamUrl.replace("https://", "")}</a>). {publisher.name} develops the
+        Mac app and the browser extension on top of it and publishes them: the signed and notarized Mac installer, the browser extension in the
+        Chrome Web Store, and this website.
+      </p>
+    </div>
+    <div class="card-surface p-6">
+      <h2 class="text-xl font-bold">What the license lets you do</h2>
+      <p class="mt-2 text-base-content/85">
+        Run it for any purpose, study how it works, change it, and share copies, modified or not, including commercially.
+      </p>
+    </div>
+    <div class="card-surface p-6">
+      <h2 class="text-xl font-bold">What it asks in return</h2>
+      <p class="mt-2 text-base-content/85">
+        If you distribute a modified version, or let people use one over a network, you must offer those people the complete source code of your
+        version, under the same license. Running a modified copy on a server counts, even without handing out a program.
+      </p>
+    </div>
+    <div class="card-surface p-6">
+      <h2 class="text-xl font-bold">No warranty</h2>
+      <p class="mt-2 text-base-content/85">
+        Like all software under this license, Remote Visio comes without warranty, to the extent the law allows. The <a class="link" href="/terms">terms of
+        use</a> say more.
+      </p>
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-screen-lg px-4 pb-16" aria-labelledby="source-title">
+    <div class="rounded-box border border-base-300 bg-base-200 p-6 md:p-10">
+      <h2 id="source-title" class="text-2xl font-extrabold tracking-tight md:text-3xl">The source of what you download</h2>
+      <p class="mt-3 max-w-2xl text-base-content/85">
+        The Mac app, the sender page it serves, and the browser extension are all built from the public repository at
+        <a class="link" href={links.sourceUrl} rel="noopener">{links.sourceUrl.replace("https://", "")}</a>. Its <code class="kbd-url">SETUP.md</code>
+        explains how to build them yourself, step by step, and its <code class="kbd-url">README.md</code> what each part does. For the source of a
+        specific build you received, write to <a class="link" href={`mailto:${publisher.email}`}>{publisher.email}</a>.
+      </p>
+      <p class="mt-4 text-sm text-base-content/80">
+        This website is built from the <code class="kbd-url">site/</code> folder of the same repository. Its page layout started from an open-source
+        Astro template published under the MIT license, whose notice is kept in <code class="kbd-url">site/LICENSE-TEMPLATE</code>.
+      </p>
+    </div>
+  </section>
+</Layout>

@@ -2,8 +2,8 @@
 #
 # The Makefile holds the dependency graph and the compile rules; the
 # multi-step procedures live in short scripts next to what they concern
-# (macos/*.sh, driver/*.sh), which the recipes call and which can be read or
-# run on their own. Works with the GNU Make 3.81 that macOS ships.
+# (macos/*.sh), which the recipes call and which can be read or run on their
+# own. Works with the GNU Make 3.81 that macOS ships.
 #
 # Building needs the Xcode Command Line Tools, Go, and Homebrew's opus and
 # pkg-config (the headers; the codec itself is built from source for the
@@ -12,8 +12,9 @@
 # the state and how to set it up. The virtual camera (a system extension,
 # `camext`) goes into the app only with a Developer ID signature and the
 # provisioning profile below; without them the app is built as before. The
-# browser camera (browser-extension/, a Chromium extension, and its
-# installer macos/browser-extension.sh) goes into every build.
+# browser extension (browser-extension/, a Chromium extension that gives web
+# pages the Remote Visio camera, microphone and speaker, and its installer
+# macos/browser-extension.sh) goes into every build.
 SHELL := /bin/bash
 .DELETE_ON_ERROR:
 .SUFFIXES:
@@ -29,15 +30,14 @@ SHELL := /bin/bash
 # and exported to the scripts the recipes run (they source signing.sh too and
 # skip the lookup with the identities in the environment). The file is
 # rewritten only when its content changes, so make -n and -q see real mtimes;
-# as a prerequisite of the driver and the app it re-signs them when the
-# identity or the mode changes. Goals that neither build nor sign skip all of
-# it. $(shell) does not see exported variables in make 3.81, hence the
-# explicit environment.
+# as a prerequisite of the app it re-signs it when the identity or the mode
+# changes. Goals that neither build nor sign skip all of it. $(shell) does
+# not see exported variables in make 3.81, hence the explicit environment.
 REMOTEVISIO_SIGN ?=
 REMOTEVISIO_RELEASE ?=
 export REMOTEVISIO_SIGN REMOTEVISIO_RELEASE
 SIGNING_INFO   := bin/.signing-info
-UNSIGNED_GOALS := help clean distclean test-go check check-extension extension-zip signing signing-request signing-install uninstall uninstall-driver
+UNSIGNED_GOALS := help clean distclean test test-go check check-extension extension-zip signing signing-request signing-install uninstall
 ifneq ($(filter-out $(UNSIGNED_GOALS),$(or $(MAKECMDGOALS),app)),)
 $(shell mkdir -p bin; REMOTEVISIO_SIGN='$(REMOTEVISIO_SIGN)' REMOTEVISIO_SIGN_ID='$(REMOTEVISIO_SIGN_ID)' \
 	REMOTEVISIO_PKG_SIGN_ID='$(REMOTEVISIO_PKG_SIGN_ID)' REMOTEVISIO_PKG_SIGN_COUNT='$(REMOTEVISIO_PKG_SIGN_COUNT)' \
@@ -71,8 +71,6 @@ export REMOTEVISIO_PROFILE
 # ---- products ---------------------------------------------------------------
 RECEIVER   := bin/remotevisio-receiver
 MENUBAR    := bin/remotevisio-menubar
-DRIVER     := bin/RemoteVisio.driver
-DRIVER_BIN := $(DRIVER)/Contents/MacOS/RemoteVisio
 # The assembled app lives in a hidden directory: macOS registers every
 # RemoteVisio.app it finds and shows each one in Launchpad. `make app` puts
 # a visible copy in bin/.
@@ -123,16 +121,22 @@ OPUS_PREFIX  := $(firstword $(wildcard /opt/homebrew/opt/opus /usr/local/opt/opu
 # output; CGO_LDFLAGS is part of its cache key.)
 STATICLIB    := bin/opus-static
 
-GO_SRC   := go.mod go.sum $(shell find cmd/receiver internal -type f \( -name '*.go' -o -name '*.h' -o -name '*.m' -o -name '*.html' -o -name '*.png' \))
-PKG_SRC  := macos/pkg/Distribution.xml $(wildcard macos/pkg/resources/* macos/pkg/resources/*/* macos/pkg/driver-scripts/* macos/pkg/app-scripts/*)
-# The browser extension as macos/assemble-app.sh bundles it (its README and
-# hidden files stay out). A file added or removed is noticed only once
+GO_SRC   := go.mod go.sum $(shell find cmd/receiver internal -type f \( -name '*.go' -o -name '*.c' -o -name '*.h' -o -name '*.m' -o -name '*.html' -o -name '*.js' -o -name '*.png' \))
+PKG_SRC  := macos/pkg/Distribution.xml $(wildcard macos/pkg/resources/* macos/pkg/resources/*/* macos/pkg/app-scripts/*)
+# The browser extension as a browser loads it, which macos/assemble-app.sh
+# bundles into the app and extension-zip into the Chrome Web Store zip: every
+# file of browser-extension/ but its README.md and hidden files, so direct/
+# (direct mode's hub) and vendor/ (the QR code generator, and the README with
+# its source and licence) go too. EXT_FILES are their paths inside it;
+# check-extension makes sure every file the manifest, the pages and the
+# scripts ask for is among them. A file added or removed is noticed only once
 # another one changes, as for GO_SRC.
-BROWSER_EXT_SRC := $(shell find browser-extension -type f ! -name '.*' ! -name README.md 2>/dev/null)
+EXT_FILES := $(shell cd browser-extension 2>/dev/null && find . -type f ! -path '*/.*' ! -path ./README.md | sed 's|^\./||' | LC_ALL=C sort)
+BROWSER_EXT_SRC := $(addprefix browser-extension/,$(EXT_FILES))
 
-.PHONY: all help app install receiver menubar camext driver opus pkg pkg-unsigned pkg-file \
-        test test-go test-driver check check-extension extension-zip signing signing-request signing-install \
-        install-driver uninstall-driver uninstall clean distclean
+.PHONY: all help app install receiver menubar camext opus pkg pkg-unsigned pkg-file \
+        test test-go check check-extension extension-zip signing signing-request signing-install \
+        uninstall clean distclean
 
 all: app
 
@@ -193,18 +197,6 @@ $(CAMEXT_BIN): macos/camera/main.swift macos/camera/Info.plist $(SIGNING_INFO)
 		-framework CoreGraphics -framework CoreText -framework Foundation -o $@ macos/camera/main.swift
 	@$(call check-minos,$@)
 
-# ---- driver -----------------------------------------------------------------
-# Warnings are not errors here on purpose: this compiles on end users' Macs
-# with whatever clang they have, and a new diagnostic must not block an
-# install. test-driver builds with -Werror.
-driver: $(DRIVER_BIN) ## the virtual audio device (a Core Audio HAL plug-in)
-$(DRIVER_BIN): driver/RemoteVisio.c driver/Info.plist macos/signing.sh $(SIGNING_INFO)
-	@echo "==> building the audio device driver"
-	@rm -rf $(DRIVER); mkdir -p $(dir $@); cp driver/Info.plist $(DRIVER)/Contents/Info.plist
-	clang -O2 -Wall -Wextra -std=c11 -mmacosx-version-min=$(MIN_MACOS) -bundle -fvisibility=hidden \
-		-framework CoreAudio -framework CoreFoundation -o $@ driver/RemoteVisio.c
-	@source macos/signing.sh; sign_code $(DRIVER) >/dev/null || { echo "!!  codesign failed for $(DRIVER)" >&2; exit 1; }
-
 # ---- app --------------------------------------------------------------------
 app: $(LOCAL_APP)/Contents/MacOS/RemoteVisio ## bin/RemoteVisio.app (the default)
 	@[[ ! -d $(INSTALLED) ]] || echo "note: $(INSTALLED) is also installed; Launchpad lists both until one is removed"
@@ -213,7 +205,7 @@ $(LOCAL_APP)/Contents/MacOS/RemoteVisio: $(APP_BIN)
 	@echo "==> built $(LOCAL_APP)"
 
 $(APP_BIN): $(RECEIVER) $(MENUBAR) macos/Info.plist macos/pkg/uninstall.sh \
-            macos/app.entitlements macos/receiver.entitlements macos/signing.sh macos/assemble-app.sh $(SIGNING_INFO) \
+            macos/signing.sh macos/assemble-app.sh $(SIGNING_INFO) \
             $(CAMERA_DEPS) $(BROWSER_EXT_SRC) macos/browser-extension.sh
 	@macos/assemble-app.sh $(APP) "$(OPUS_COPYING)"
 
@@ -237,40 +229,19 @@ pkg-unsigned: ## ...-unsigned.pkg for this Mac; no certificates needed
 	@$(MAKE) --no-print-directory pkg-file REMOTEVISIO_SIGN=adhoc
 
 pkg-file: $(PKG)
-$(PKG): $(DRIVER_BIN) $(APP_BIN) $(PKG_SRC) macos/signing.sh macos/build-pkg.sh
+$(PKG): $(APP_BIN) $(PKG_SRC) macos/signing.sh macos/build-pkg.sh
 	@macos/build-pkg.sh build $@ $(APP)
 
-# ---- driver install / uninstall ---------------------------------------------
-install-driver: ## build and install the audio device system-wide (asks for your admin password, restarts coreaudiod)
-	@driver/install.sh
-
-uninstall-driver: ## remove the audio device (asks for your admin password, restarts coreaudiod)
-	@driver/uninstall.sh
-
-uninstall: ## remove the installed app, the driver and the package receipts (asks for your admin password)
+# ---- uninstall --------------------------------------------------------------
+# It also removes the audio device driver of earlier versions (from before
+# the browser extension's microphone and speaker), if one is still there.
+uninstall: ## remove the installed app and the package receipts (asks for your admin password)
 	@macos/pkg/uninstall.sh
 
 # ---- tests ------------------------------------------------------------------
-# The harness runs twice: against a sanitizer-instrumented build of the driver
-# (so the driver's own memory accesses and arithmetic are checked, not just
-# the harness's), then against the release build that gets installed.
-SAN     := bin/RemoteVisio-san.driver
-SAN_BIN := $(SAN)/Contents/MacOS/RemoteVisio
-HARNESS := bin/remotevisio-driver-harness
-$(SAN_BIN): driver/RemoteVisio.c driver/Info.plist
-	@rm -rf $(SAN); mkdir -p $(dir $@); cp driver/Info.plist $(SAN)/Contents/Info.plist
-	clang -O1 -g -Wall -Wextra -Werror -std=c11 -fsanitize=address,undefined -fno-sanitize-recover=undefined \
-		-bundle -fvisibility=hidden -framework CoreAudio -framework CoreFoundation -o $@ driver/RemoteVisio.c
-$(HARNESS): driver/harness.c
-	@mkdir -p bin
-	clang -O1 -g -Wall -Wextra -std=c11 -fsanitize=address,undefined -framework CoreAudio -framework CoreFoundation -o $@ $<
-
-test: test-go test-driver ## go tests and the driver harness
+test: test-go ## the tests (test-go)
 test-go: ## go tests
 	go test -tags nolibopusfile ./...
-test-driver: $(DRIVER_BIN) $(SAN_BIN) $(HARNESS) ## the driver harness, no install and no admin rights
-	@echo "==> harness against the sanitized driver"; ASAN_OPTIONS=detect_leaks=0 $(HARNESS) $(SAN_BIN)
-	@echo "==> harness against the release driver"; ASAN_OPTIONS=detect_leaks=0 $(HARNESS) $(DRIVER_BIN)
 check: check-extension ## gofmt, go vet and check-extension
 	@test -z "$$(gofmt -l cmd internal)" || { echo "!!  gofmt:"; gofmt -l cmd internal; exit 1; }
 	go vet -tags nolibopusfile ./...
@@ -280,7 +251,63 @@ check: check-extension ## gofmt, go vet and check-extension
 # (the first 128 bits of the key's SHA-256, as letters a-p), and the
 # receiver lets that ID in (internal/browsercam, next to the Chrome Web
 # Store's), so a changed key would lock unpacked copies out.
-check-extension: ## the browser extension: JSON, JavaScript syntax (needs node), its ID against the receiver's
+#
+# EXT_REFS_PY checks that every file the extension asks a browser to load is
+# in the packaged set (EXT_FILES, its arguments after the folder): what the
+# manifest names (the service worker, the content scripts, the popup, the
+# icons, the default locale's strings), what each page (*.html) loads
+# (script src, link href, img src), what each script imports (ES modules,
+# from its own folder: offscreen.html's direct/hub.js and the modules it
+# imports), and the extension's own files a script names in a string (the
+# pages it opens, offscreen.html, pair.html, consent.html, and the scripts it
+# loads, vendor/qrcodegen.js). The package is what both the zip and the app's
+# copy contain: a reference missing from it is a broken extension there.
+define EXT_REFS_PY
+import json, os, re, sys
+root, files = sys.argv[1], set(sys.argv[2:])
+problems, checked = [], set()
+def norm(base, ref):
+    ref = ref.split('#')[0].split('?')[0]
+    path = ref[1:] if ref.startswith('/') else os.path.normpath(os.path.join(os.path.dirname(base), ref))
+    return path.replace(os.sep, '/')
+def need(path, by):
+    checked.add(path)
+    if path not in files:
+        problems.append('%s names %s, which is not in the packaged extension' % (by, path))
+m = json.load(open(os.path.join(root, 'manifest.json'), encoding='utf-8'))
+refs = []
+if m.get('background', {}).get('service_worker'): refs.append(m['background']['service_worker'])
+for cs in m.get('content_scripts', []): refs += cs.get('js', []) + cs.get('css', [])
+act = m.get('action', {})
+if act.get('default_popup'): refs.append(act['default_popup'])
+icon = act.get('default_icon', {})
+refs += [icon] if isinstance(icon, str) else list(icon.values())
+refs += list(m.get('icons', {}).values())
+for w in m.get('web_accessible_resources', []): refs += [r for r in w.get('resources', []) if '*' not in r]
+if m.get('options_page'): refs.append(m['options_page'])
+if m.get('default_locale'): refs.append('_locales/%s/messages.json' % m['default_locale'])
+for r in refs: need(norm('manifest.json', r), 'manifest.json')
+for f in sorted(files):
+    if not f.endswith(('.html', '.js')): continue
+    text = open(os.path.join(root, f), encoding='utf-8').read()
+    if f.endswith('.html'):
+        found = re.findall(r'''<(?:script|img)\b[^>]*?\ssrc=["']([^"']+)["']''', text)
+        found += re.findall(r'''<link\b[^>]*?\shref=["']([^"']+)["']''', text)
+        for r in found:
+            if not re.match(r'[a-z][a-z0-9+.-]*:', r): need(norm(f, r), f)
+        continue
+    found = re.findall(r'''\b(?:import|export)\b[^'";]*?\bfrom\s*["']([^"']+)["']''', text)
+    found += re.findall(r'''\bimport\s*\(?\s*["'](\.{1,2}/[^"']+)["']''', text)
+    for r in found: need(norm(f, r), f + ' (import)')
+    for r in re.findall(r'''["']/?((?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-][A-Za-z0-9_.-]*\.(?:html|js|css|png|json))(?:[?#][^"'\s]*)?["']''', text):
+        need(r, f)
+for p in problems: print('!!  ' + p, file=sys.stderr)
+if problems: sys.exit(1)
+print('==> browser extension: the %d files it loads are all in the package (%d files)' % (len(checked), len(files)))
+endef
+export EXT_REFS_PY
+
+check-extension: ## the browser extension: JSON, JavaScript syntax (needs node), what it loads is packaged, its ID against the receiver's
 	@test -f browser-extension/manifest.json || { echo "!!  browser-extension/manifest.json is missing" >&2; exit 1; }
 	@for f in $(filter %.json,$(BROWSER_EXT_SRC)); do \
 		python3 -m json.tool "$$f" >/dev/null || { echo "!!  $$f is not valid JSON" >&2; exit 1; }; \
@@ -288,6 +315,7 @@ check-extension: ## the browser extension: JSON, JavaScript syntax (needs node),
 	@if command -v node >/dev/null 2>&1; then \
 		for f in $(filter %.js,$(BROWSER_EXT_SRC)); do node --check "$$f" || { echo "!!  $$f: syntax error" >&2; exit 1; }; done; \
 	else echo "note: node not found; the extension's JavaScript was not checked"; fi
+	@python3 -c "$$EXT_REFS_PY" browser-extension $(EXT_FILES)
 	@bash -n macos/browser-extension.sh || { echo "!!  macos/browser-extension.sh: syntax error" >&2; exit 1; }
 	@id=$$(python3 -c 'import json, base64, hashlib; key = json.load(open("browser-extension/manifest.json"))["key"]; \
 		print("".join(chr(97 + int(c, 16)) for c in hashlib.sha256(base64.b64decode(key)).hexdigest()[:32]))' 2>/dev/null) \
@@ -299,8 +327,9 @@ check-extension: ## the browser extension: JSON, JavaScript syntax (needs node),
 
 # ---- Chrome Web Store package ----------------------------------------------
 # The extension as the Chrome Web Store takes it: a zip with the manifest at
-# its root and only the files a browser loads (as macos/assemble-app.sh
-# bundles them). Two changes from the source tree. The version is the app's
+# its root and the files a browser loads, EXT_FILES (as macos/assemble-app.sh
+# bundles them; check-extension runs first). Two changes from the source
+# tree. The version is the app's
 # (version.build from macos/Info.plist): the store wants a higher one for
 # every upload. The manifest's "key" goes: the store refuses it and signs the
 # item with its own key, which gives the store's copy its own ID
@@ -313,9 +342,9 @@ extension-zip: $(EXT_ZIP) ## bin/RemoteVisioCamera-<version>.zip, the extension 
 $(EXT_ZIP): $(BROWSER_EXT_SRC) macos/Info.plist | check-extension
 	@echo "==> packaging the browser extension $(EXT_VERSION) for the Chrome Web Store"
 	@rm -rf bin/.ext-zip $@; mkdir -p bin/.ext-zip
-	@cp -X browser-extension/manifest.json browser-extension/*.js browser-extension/*.html browser-extension/*.css bin/.ext-zip/
-	@cp -RX browser-extension/_locales browser-extension/icons bin/.ext-zip/
-	@find bin/.ext-zip -mindepth 1 -name '.*' -prune -exec rm -rf {} +
+	@for f in $(EXT_FILES); do \
+		mkdir -p "bin/.ext-zip/$$(dirname "$$f")" && cp -X "browser-extension/$$f" "bin/.ext-zip/$$f" || exit 1; \
+	done
 	@python3 -c 'import json, re, sys; \
 		v = sys.argv[2]; \
 		assert re.fullmatch(r"(0|[1-9][0-9]{0,4})(\.(0|[1-9][0-9]{0,4})){0,3}", v) and all(int(p) <= 65535 for p in v.split(".")), v + " is not an extension version"; \
@@ -338,7 +367,7 @@ signing-install: ## put the downloaded certificates in the keychain, a .provisio
 clean: ## remove build products (keeps the libopus build)
 	@macos/lib.sh forget $(abspath $(LOCAL_APP))
 	rm -rf bin/.build bin/.pkg-stage $(SIGNING_INFO) bin/opus-static \
-		$(RECEIVER) $(MENUBAR) $(CAMEXT) $(DRIVER) $(SAN) $(HARNESS) $(HARNESS).dSYM bin/RemoteVisio-*.pkg
+		$(RECEIVER) $(MENUBAR) $(CAMEXT) bin/RemoteVisio-*.pkg
 distclean: ## remove bin/ entirely, the libopus build included
 	@macos/lib.sh forget $(abspath $(LOCAL_APP))
 	rm -rf bin

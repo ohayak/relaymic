@@ -1,12 +1,18 @@
-// Core Audio side of muting this Mac's own microphones (see micmute.go).
+// Core Audio side of muting this Mac's own microphones or speakers (see
+// micmute.go): output is 0 for the input scope (microphones), 1 for the
+// output scope (speakers).
 #include "micmute_darwin.h"
 
 #include <CoreAudio/CoreAudio.h>
 #include <stdlib.h>
 #include <string.h>
 
-static int has_input_streams(AudioObjectID id) {
-	AudioObjectPropertyAddress a = {kAudioDevicePropertyStreams, kAudioObjectPropertyScopeInput, kAudioObjectPropertyElementMain};
+static AudioObjectPropertyScope scope_of(int output) {
+	return output ? kAudioObjectPropertyScopeOutput : kAudioObjectPropertyScopeInput;
+}
+
+static int has_streams(AudioObjectID id, int output) {
+	AudioObjectPropertyAddress a = {kAudioDevicePropertyStreams, scope_of(output), kAudioObjectPropertyElementMain};
 	UInt32 size = 0;
 	return AudioObjectGetPropertyDataSize(id, &a, 0, NULL, &size) == noErr && size > 0;
 }
@@ -28,8 +34,8 @@ static int get_string(AudioObjectID id, AudioObjectPropertySelector sel, char *o
 	return ok ? 0 : -1;
 }
 
-static int settable(AudioObjectID id, AudioObjectPropertySelector sel, UInt32 element) {
-	AudioObjectPropertyAddress a = {sel, kAudioObjectPropertyScopeInput, element};
+static int settable(AudioObjectID id, AudioObjectPropertySelector sel, UInt32 element, int output) {
+	AudioObjectPropertyAddress a = {sel, scope_of(output), element};
 	Boolean yes = false;
 	return AudioObjectHasProperty(id, &a) && AudioObjectIsPropertySettable(id, &a, &yes) == noErr && yes;
 }
@@ -50,14 +56,14 @@ static AudioObjectID *devices(UInt32 *n) {
 	return ids;
 }
 
-int micmute_list(micmute_dev *devs, int max) {
+int micmute_list(micmute_dev *devs, int max, int output) {
 	UInt32 n = 0;
 	AudioObjectID *ids = devices(&n);
 	if (ids == NULL) return -1;
 	int count = 0;
 	for (UInt32 i = 0; i < n && count < max; i++) {
 		AudioObjectID id = ids[i];
-		if (!has_input_streams(id)) continue;
+		if (!has_streams(id, output)) continue;
 		UInt32 transport = get_u32(id, kAudioDevicePropertyTransportType, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain);
 		if (transport == kAudioDeviceTransportTypeVirtual || transport == kAudioDeviceTransportTypeAggregate ||
 		    transport == kAudioDeviceTransportTypeAutoAggregate) continue;
@@ -65,17 +71,19 @@ int micmute_list(micmute_dev *devs, int max) {
 		micmute_dev *d = &devs[count];
 		memset(d, 0, sizeof *d);
 		if (get_string(id, kAudioDevicePropertyDeviceUID, d->uid, sizeof d->uid) != 0) continue;
-		// Remote Visio's own device reports itself as virtual; this holds whatever it reports.
+		// The audio device older Remote Visio versions installed (a Mac the
+		// installer has not cleaned up yet) reports itself as virtual; this
+		// holds whatever it reports.
 		if (strncmp(d->uid, "RemoteVisio", 11) == 0) continue;
 		if (get_string(id, kAudioObjectPropertyName, d->name, sizeof d->name) != 0) strcpy(d->name, d->uid);
-		if (settable(id, kAudioDevicePropertyMute, kAudioObjectPropertyElementMain)) {
+		if (settable(id, kAudioDevicePropertyMute, kAudioObjectPropertyElementMain, output)) {
 			d->has_mute = 1;
-			d->mute = get_u32(id, kAudioDevicePropertyMute, kAudioObjectPropertyScopeInput, kAudioObjectPropertyElementMain) != 0;
+			d->mute = get_u32(id, kAudioDevicePropertyMute, scope_of(output), kAudioObjectPropertyElementMain) != 0;
 		}
 		// The volumes: the main one, or else each channel's.
 		for (UInt32 el = 0; el <= MICMUTE_MAX_VOLUMES && d->nvol < MICMUTE_MAX_VOLUMES; el++) {
-			if (!settable(id, kAudioDevicePropertyVolumeScalar, el)) continue;
-			AudioObjectPropertyAddress a = {kAudioDevicePropertyVolumeScalar, kAudioObjectPropertyScopeInput, el};
+			if (!settable(id, kAudioDevicePropertyVolumeScalar, el, output)) continue;
+			AudioObjectPropertyAddress a = {kAudioDevicePropertyVolumeScalar, scope_of(output), el};
 			Float32 v = 0;
 			UInt32 size = sizeof v;
 			if (AudioObjectGetPropertyData(id, &a, 0, NULL, &size, &v) != noErr) continue;
@@ -106,18 +114,18 @@ static AudioObjectID find(const char *uid) {
 	return found;
 }
 
-int micmute_set_mute(const char *uid, int mute) {
+int micmute_set_mute(const char *uid, int mute, int output) {
 	AudioObjectID id = find(uid);
 	if (id == kAudioObjectUnknown) return -1;
-	AudioObjectPropertyAddress a = {kAudioDevicePropertyMute, kAudioObjectPropertyScopeInput, kAudioObjectPropertyElementMain};
+	AudioObjectPropertyAddress a = {kAudioDevicePropertyMute, scope_of(output), kAudioObjectPropertyElementMain};
 	UInt32 v = mute ? 1 : 0;
 	return (int)AudioObjectSetPropertyData(id, &a, 0, NULL, sizeof v, &v);
 }
 
-int micmute_set_volume(const char *uid, uint32_t element, float volume) {
+int micmute_set_volume(const char *uid, uint32_t element, float volume, int output) {
 	AudioObjectID id = find(uid);
 	if (id == kAudioObjectUnknown) return -1;
-	AudioObjectPropertyAddress a = {kAudioDevicePropertyVolumeScalar, kAudioObjectPropertyScopeInput, element};
+	AudioObjectPropertyAddress a = {kAudioDevicePropertyVolumeScalar, scope_of(output), element};
 	Float32 v = volume;
 	return (int)AudioObjectSetPropertyData(id, &a, 0, NULL, sizeof v, &v);
 }

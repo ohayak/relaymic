@@ -5,40 +5,51 @@ import SystemExtensions
 // Menu-bar wrapper for remotevisio-receiver: shows the app icon in the status
 // bar while the receiver runs, lists the current endpoints (click to copy),
 // offers a start-at-login toggle, and quits the receiver cleanly from the
-// menu. When this build carries the virtual camera (a system extension,
-// see macos/assemble-app.sh) it activates the extension at launch and shows
-// its state in the menu. The browser camera (the Remote Visio Camera
-// browser extension, for Macs where the system extension cannot be
-// activated) is set up from the menu, on the user's request only.
+// menu. The receiver takes the remote device's microphone and camera and
+// hands them to the Remote Visio browser extension, which gives web pages in
+// Chromium browsers three devices: Remote Visio Microphone, Remote Visio
+// Speaker (what a page plays into it goes back to the remote device) and
+// Remote Visio Camera. The extension (listed in the browser as "Remote Visio
+// Camera", its name from when it carried only the camera) is set up from
+// the menu, on the user's request only. When this build carries the virtual
+// camera (a system extension, see macos/assemble-app.sh) the receiver feeds
+// the remote camera into it as well, for native video apps; the app
+// activates the extension at launch and shows its state in the menu.
 
 // Remembers that the user switched start-at-login off, so a later launch
 // does not quietly switch it back on.
 private let loginItemOptOutKey = "loginItemOptOut"
-// When on, the receiver is started with -speaker-mute: the Mac's own
-// speakers stay silent while its sound is relayed to the sender.
-private let speakerMuteKey = "speakerMute"
 // When on, the receiver is started with -mic-mute: this Mac's own
-// microphones are muted while it runs, so apps hear only the remote voice.
-// The receiver writes their settings down first and puts them back when it
-// stops (or, after a crash, when it next starts).
+// microphones are muted while it runs, so the room around this Mac stays
+// out of the meeting (a page on Remote Visio Microphone hears the remote
+// voice; an app on the Mac's own microphones hears silence). The receiver
+// writes their settings down first and puts them back when it stops (or,
+// after a crash, when it next starts).
 private let micMuteKey = "micMute"
-// When on, the receiver is started with -camera=false: the remote device's
-// camera is not relayed into the virtual camera. Off by default (relay on).
-// It is the master switch for the browser camera too.
-private let cameraOffKey = "cameraOff"
-// When on, and the camera relay is not switched off, the receiver is
-// started with -browser-camera: the remote camera also goes to the Remote
-// Visio Camera browser extension. The install flow switches it on.
-private let browserCameraKey = "browserCamera"
-// Set once the browser camera's install flow has succeeded: from then on the
-// menu shows the Browser Camera switch, and every launch refreshes the
+// When on, the receiver is started with -speaker-mute: this Mac's own output
+// devices are muted while it runs, so nothing plays in the room around it.
+// What pages send to Remote Visio Speaker is taken before any output device
+// and still reaches the sending device. Put back the same way as the
+// microphones. (The key is the one the tap's speaker mute used, which kept
+// the Mac silent too, so that choice carries over.)
+private let speakerMuteKey = "speakerMute"
+// Earlier versions' camera switches: "cameraOff" (the receiver started with
+// -camera=false, no relay into the virtual camera) and "browserCamera" (with
+// -browser-camera, the camera for the browser extension). The receiver now
+// always serves the browser extension's camera, next to its microphone and
+// speaker, and relays into the virtual camera whenever that is installed,
+// so there is nothing left to switch: every launch removes them, and a
+// choice made back then neither lingers nor matters.
+private let retiredDefaultsKeys = ["cameraOff", "browserCamera"]
+// Set once the browser extension's install flow has succeeded: from then on
+// the menu offers to reinstall it, and every launch refreshes the
 // extension's installed copy from this app (browser-extension.sh sync).
 private let browserCameraInstalledKey = "browserCameraInstalled"
-// How the browser camera was installed: "store" (from its Chrome Web Store
-// page) or "unpacked" (a copy in the user's Application Support, loaded in
-// Developer mode). Missing for installs from before the store listing,
-// which were all unpacked. Only an unpacked copy has files this app keeps up
-// to date and can find gone.
+// How the browser extension was installed: "store" (from its Chrome Web
+// Store page) or "unpacked" (a copy in the user's Application Support,
+// loaded in Developer mode). Missing for installs from before the store
+// listing, which were all unpacked. Only an unpacked copy has files this app
+// keeps up to date and can find gone.
 private let browserCameraModeKey = "browserCameraMode"
 
 // UI strings follow the system language; anything not covered falls back to
@@ -52,10 +63,11 @@ private let strings: [String: [String: String]] = [
         "login": "Start at Login",
         "uninstall": "Uninstall Remote Visio…",
         "quit": "Quit Remote Visio",
-        "mute": "Mute This Mac's Speakers",
         "mic_mute": "Mute This Mac's Microphone",
+        "speaker_mute": "Mute This Mac's Speakers",
+        "controls": "Controls",
         "uninstall_q": "Uninstall Remote Visio?",
-        "uninstall_info": "This removes the Remote Visio audio device, the virtual camera, the app and its login item. You will be asked for your administrator password. Sound pauses for about a second while the audio system restarts. If you installed the browser camera, also remove \"Remote Visio Camera\" on your browser's extensions page.",
+        "uninstall_info": "This removes the virtual camera, the app and its login item. You will be asked for your administrator password. If you installed the browser extension, also remove \"Remote Visio Camera\" on your browser's extensions page.",
         "uninstall_btn": "Uninstall",
         "cancel": "Cancel",
         "uninstall_failed": "Uninstall failed",
@@ -64,7 +76,6 @@ private let strings: [String: [String: String]] = [
         "receiver_missing": "The receiver is missing from this copy of Remote Visio. Reinstall the app.",
         "exited": "remotevisio-receiver exited unexpectedly (status {n}). See ~/Library/Logs/RemoteVisio.log.",
         "start_failed": "Could not start remotevisio-receiver: {err}",
-        "camera_toggle": "Relay the Camera",
         "camera_active": "Camera: active",
         "camera_needs_approval": "Camera: needs approval in System Settings",
         "camera_missing": "Camera: not bundled in this build",
@@ -74,20 +85,19 @@ private let strings: [String: [String: String]] = [
         "camera_open_settings": "Open System Settings…",
         "camera_not_installed": "Camera: available once the app is in /Applications",
         "camera_deactivate_failed": "The virtual camera could not be removed ({err}). If System Settings still lists the Remote Visio camera extension after uninstalling, restart the Mac.",
-        "bcam_toggle": "Browser Camera",
-        "bcam_install": "Install Browser Camera Extension…",
-        "bcam_reinstall": "Reinstall Browser Camera Extension…",
+        "bcam_install": "Install Browser Extension…",
+        "bcam_reinstall": "Reinstall Browser Extension…",
         "bcam_done_title": "Almost done: add the extension to {browser}",
-        "bcam_done_steps": "1. In {browser}, on the extensions page that just opened ({url}), turn on \"Developer mode\" ({where}) and leave it on: the browser switches the extension off without it.\n\n2. Click \"Load unpacked\" and choose the folder \"Browser Camera Extension\": Finder shows it, and its path is on the clipboard (press Command-Shift-G in the dialog, then paste). Or drag that folder onto the extensions page.\n\n3. Pin the extension: click the Extensions button (the puzzle piece) in the toolbar, then the pin next to \"Remote Visio Camera\" (the eye in Edge). Its button then stays in the toolbar.\n\n4. On your meeting's website, choose \"Remote Visio Camera\" as the camera, and click Allow when asked. Reload meeting pages that were already open.",
+        "bcam_done_steps": "1. In {browser}, on the extensions page that just opened ({url}), turn on \"Developer mode\" ({where}) and leave it on: the browser switches the extension off without it.\n\n2. Click \"Load unpacked\" and choose the folder \"Browser Camera Extension\": Finder shows it, and its path is on the clipboard (press Command-Shift-G in the dialog, then paste). Or drag that folder onto the extensions page.\n\n3. Pin the extension: click the Extensions button (the puzzle piece) in the toolbar, then the pin next to \"Remote Visio Camera\" (the eye in Edge). Its button then stays in the toolbar.\n\n4. On your meeting's website, choose \"Remote Visio Microphone\", \"Remote Visio Speaker\" and \"Remote Visio Camera\" as the microphone, speaker and camera, and click Allow when asked. Reload meeting pages that were already open.",
         "bcam_devmode_topright": "top right",
         "bcam_devmode_left": "in the left column",
-        "bcam_done_edge": "At every start, Edge offers to turn off extensions in developer mode. Do not accept, or the camera disappears.",
+        "bcam_done_edge": "At every start, Edge offers to turn off extensions in developer mode. Do not accept, or the Remote Visio microphone, speaker and camera disappear.",
         "bcam_done_profiles": "The extension and Developer mode belong to one browser profile, and the extensions page opened in the profile you used last. Load the extension in each profile you use for meetings. It works in Chrome, Edge, Brave, Arc and other Chromium browsers.",
         "bcam_not_chromium_title": "{browser} cannot use the Remote Visio Camera extension",
         "bcam_not_chromium": "It works in Chromium browsers. Install it in:",
         "bcam_no_chromium_title": "No Chromium browser on this Mac",
-        "bcam_no_chromium": "The Remote Visio Camera extension works only in Chromium browsers, such as Chrome, Edge, Brave or Arc, and {browser} is not one of them. Install one of those browsers, then choose \"Install Browser Camera Extension…\" again.",
-        "bcam_failed": "The browser camera extension could not be installed",
+        "bcam_no_chromium": "The Remote Visio Camera extension works only in Chromium browsers, such as Chrome, Edge, Brave or Arc, and {browser} is not one of them. Install one of those browsers, then choose \"Install Browser Extension…\" again.",
+        "bcam_failed": "The browser extension could not be installed",
         "bcam_policy_title": "{browser} does not allow this extension",
         "bcam_policy": "{browser} is managed by your organization, and its policy does not let you load extensions this way. Ask your IT department to allow the extension with the ID {id} and Developer mode.",
         "bcam_policy_devmode": "{browser} is managed by your organization, and its policy turns off Developer mode, which this extension needs. Ask your IT department to set the ExtensionDeveloperModeSettings policy to 0 (allow); that is enough, DeveloperToolsAvailability can stay as it is.",
@@ -95,10 +105,10 @@ private let strings: [String: [String: String]] = [
         "bcam_policy_blocklist_all": "{browser} is managed by your organization, and its policy blocks all extensions by default (\"*\"). Allowing this extension's ID does not help: while that block is on, the browser loads no unpacked extension (one loaded from a folder, like this one). Ask your IT department to lift the block (\"*\" in ExtensionInstallBlocklist or ExtensionSettings, or CloudExtensionRequestEnabled).",
         "bcam_policy_types": "{browser} is managed by your organization, and its policy allows only some types of extensions. Ask your IT department to add \"extension\" to the allowed types (ExtensionAllowedTypes, or allowed_types in ExtensionSettings).",
         "bcam_policy_other": "Or install it in another browser:",
-        "bcam_missing": "The browser camera extension is missing from this copy of Remote Visio. Reinstall the app.",
+        "bcam_missing": "The browser extension is missing from this copy of Remote Visio. Reinstall the app.",
         "bcam_store_remove_unpacked": "Remote Visio Camera is also loaded unpacked in this browser (from before). Once the store's copy is added, remove the old one on the extensions page (the card with the ID jmiffhdbakchdlfbfdiaclkilcdhcgkf), or the camera is listed twice.",
         "bcam_unpacked_remove_store": "If you added Remote Visio Camera from the Chrome Web Store before, remove that copy on the extensions page (the card with the ID bhijcffjnmjijifjiaeibbogmbohdmon), or the camera is listed twice.",
-        "bcam_store_steps": "1. In {browser}, on the Chrome Web Store page that just opened, click \"Add to Chrome\" (\"Get\" in Edge), then \"Add extension\".\n\n2. Pin the extension: click the Extensions button (the puzzle piece) in the toolbar, then the pin next to \"Remote Visio Camera\" (the eye in Edge). Its button then stays in the toolbar.\n\n3. On your meeting's website, choose \"Remote Visio Camera\" as the camera, and click Allow when asked. Reload meeting pages that were already open.",
+        "bcam_store_steps": "1. In {browser}, on the Chrome Web Store page that just opened, click \"Add to Chrome\" (\"Get\" in Edge), then \"Add extension\".\n\n2. Pin the extension: click the Extensions button (the puzzle piece) in the toolbar, then the pin next to \"Remote Visio Camera\" (the eye in Edge). Its button then stays in the toolbar.\n\n3. On your meeting's website, choose \"Remote Visio Microphone\", \"Remote Visio Speaker\" and \"Remote Visio Camera\" as the microphone, speaker and camera, and click Allow when asked. Reload meeting pages that were already open.",
         "bcam_store_edge": "Edge may first ask you to allow extensions from other stores. Allow it, then click \"Get\".",
         "bcam_store_profiles": "The extension belongs to one browser profile, and the store page opened in the profile you used last. Add it in each profile you use for meetings. If the store page does not work, choose \"Load Unpacked Instead…\" (it needs Developer mode).",
         "bcam_unpacked_button": "Load Unpacked Instead…",
@@ -113,10 +123,11 @@ private let strings: [String: [String: String]] = [
         "login": "Abrir al iniciar sesión",
         "uninstall": "Desinstalar Remote Visio…",
         "quit": "Salir de Remote Visio",
-        "mute": "Silenciar los altavoces de este Mac",
         "mic_mute": "Silenciar el micrófono de este Mac",
+        "speaker_mute": "Silenciar los altavoces de este Mac",
+        "controls": "Controles",
         "uninstall_q": "¿Desinstalar Remote Visio?",
-        "uninstall_info": "Se eliminarán el dispositivo de audio Remote Visio, la cámara virtual, la app y su elemento de inicio. Se te pedirá la contraseña de administrador. El sonido se detiene un segundo mientras el sistema de audio se reinicia. Si instalaste la cámara del navegador, quita también «Remote Visio Camera» en la página de extensiones de tu navegador.",
+        "uninstall_info": "Se eliminarán la cámara virtual, la app y su elemento de inicio. Se te pedirá la contraseña de administrador. Si instalaste la extensión del navegador, quita también «Remote Visio Camera» en la página de extensiones de tu navegador.",
         "uninstall_btn": "Desinstalar",
         "cancel": "Cancelar",
         "uninstall_failed": "La desinstalación falló",
@@ -125,7 +136,6 @@ private let strings: [String: [String: String]] = [
         "receiver_missing": "Falta el receptor en esta copia de Remote Visio. Reinstala la app.",
         "exited": "remotevisio-receiver terminó inesperadamente (estado {n}). Consulta ~/Library/Logs/RemoteVisio.log.",
         "start_failed": "No se pudo iniciar remotevisio-receiver: {err}",
-        "camera_toggle": "Retransmitir la cámara",
         "camera_active": "Cámara: activa",
         "camera_needs_approval": "Cámara: requiere aprobación en Ajustes del Sistema",
         "camera_missing": "Cámara: no incluida en esta compilación",
@@ -135,20 +145,19 @@ private let strings: [String: [String: String]] = [
         "camera_open_settings": "Abrir Ajustes del Sistema…",
         "camera_not_installed": "Cámara: disponible cuando la app esté en /Applications",
         "camera_deactivate_failed": "No se pudo quitar la cámara virtual ({err}). Si Ajustes del Sistema sigue mostrando la extensión de cámara de Remote Visio después de desinstalar, reinicia el Mac.",
-        "bcam_toggle": "Cámara del navegador",
-        "bcam_install": "Instalar la extensión de cámara del navegador…",
-        "bcam_reinstall": "Reinstalar la extensión de cámara del navegador…",
+        "bcam_install": "Instalar la extensión del navegador…",
+        "bcam_reinstall": "Reinstalar la extensión del navegador…",
         "bcam_done_title": "Casi listo: añade la extensión a {browser}",
-        "bcam_done_steps": "1. En {browser}, en la página de extensiones que se acaba de abrir ({url}), activa «Modo Desarrollador» ({where}) y déjalo activado: sin él, el navegador desactiva la extensión.\n\n2. Haz clic en «Cargar descomprimida» y elige la carpeta «Browser Camera Extension»: el Finder la muestra y su ruta está en el portapapeles (pulsa Comando-Mayúsculas-G en el cuadro de diálogo y pégala). También puedes arrastrar esa carpeta a la página de extensiones.\n\n3. Fija la extensión: haz clic en el botón Extensiones (la pieza de puzle) de la barra de herramientas y luego en la chincheta junto a «Remote Visio Camera» (el ojo en Edge). Así su botón se queda en la barra de herramientas.\n\n4. En la web de tu reunión, elige «Remote Visio Camera» como cámara y haz clic en Permitir cuando se te pregunte. Vuelve a cargar las páginas de reunión que ya estaban abiertas.",
+        "bcam_done_steps": "1. En {browser}, en la página de extensiones que se acaba de abrir ({url}), activa «Modo Desarrollador» ({where}) y déjalo activado: sin él, el navegador desactiva la extensión.\n\n2. Haz clic en «Cargar descomprimida» y elige la carpeta «Browser Camera Extension»: el Finder la muestra y su ruta está en el portapapeles (pulsa Comando-Mayúsculas-G en el cuadro de diálogo y pégala). También puedes arrastrar esa carpeta a la página de extensiones.\n\n3. Fija la extensión: haz clic en el botón Extensiones (la pieza de puzle) de la barra de herramientas y luego en la chincheta junto a «Remote Visio Camera» (el ojo en Edge). Así su botón se queda en la barra de herramientas.\n\n4. En la web de tu reunión, elige «Remote Visio Microphone», «Remote Visio Speaker» y «Remote Visio Camera» como micrófono, altavoz y cámara, y haz clic en Permitir cuando se te pregunte. Vuelve a cargar las páginas de reunión que ya estaban abiertas.",
         "bcam_devmode_topright": "arriba a la derecha",
         "bcam_devmode_left": "en la columna de la izquierda",
-        "bcam_done_edge": "Cada vez que se inicia, Edge ofrece desactivar las extensiones en modo desarrollador. No aceptes, o la cámara desaparecerá.",
+        "bcam_done_edge": "Cada vez que se inicia, Edge ofrece desactivar las extensiones en modo desarrollador. No aceptes, o desaparecerán el micrófono, el altavoz y la cámara de Remote Visio.",
         "bcam_done_profiles": "La extensión y el modo desarrollador pertenecen a un solo perfil del navegador, y la página de extensiones se abrió en el último perfil que usaste. Carga la extensión en cada perfil que uses para reuniones. Funciona en Chrome, Edge, Brave, Arc y otros navegadores Chromium.",
         "bcam_not_chromium_title": "{browser} no puede usar la extensión Remote Visio Camera",
         "bcam_not_chromium": "Funciona en navegadores Chromium. Instálala en:",
         "bcam_no_chromium_title": "No hay ningún navegador Chromium en este Mac",
-        "bcam_no_chromium": "La extensión Remote Visio Camera solo funciona en navegadores Chromium, como Chrome, Edge, Brave o Arc, y {browser} no es uno de ellos. Instala uno de esos navegadores y vuelve a elegir «Instalar la extensión de cámara del navegador…».",
-        "bcam_failed": "No se pudo instalar la extensión de cámara del navegador",
+        "bcam_no_chromium": "La extensión Remote Visio Camera solo funciona en navegadores Chromium, como Chrome, Edge, Brave o Arc, y {browser} no es uno de ellos. Instala uno de esos navegadores y vuelve a elegir «Instalar la extensión del navegador…».",
+        "bcam_failed": "No se pudo instalar la extensión del navegador",
         "bcam_policy_title": "{browser} no permite esta extensión",
         "bcam_policy": "{browser} está administrado por tu organización y su política no te deja cargar extensiones de esta forma. Pide a tu departamento de TI que permita la extensión con el ID {id} y el modo desarrollador.",
         "bcam_policy_devmode": "{browser} está administrado por tu organización y su política desactiva el modo desarrollador, que esta extensión necesita. Pide a tu departamento de TI que ponga la política ExtensionDeveloperModeSettings en 0 (permitir); con eso basta, DeveloperToolsAvailability puede quedarse como está.",
@@ -156,10 +165,10 @@ private let strings: [String: [String: String]] = [
         "bcam_policy_blocklist_all": "{browser} está administrado por tu organización y su política bloquea todas las extensiones por defecto («*»). Permitir el ID de esta extensión no sirve: mientras ese bloqueo siga activo, el navegador no carga ninguna extensión descomprimida (cargada desde una carpeta, como esta). Pide a tu departamento de TI que quite el bloqueo («*» en ExtensionInstallBlocklist o ExtensionSettings, o CloudExtensionRequestEnabled).",
         "bcam_policy_types": "{browser} está administrado por tu organización y su política solo permite algunos tipos de extensiones. Pide a tu departamento de TI que añada «extension» a los tipos permitidos (ExtensionAllowedTypes, o allowed_types en ExtensionSettings).",
         "bcam_policy_other": "O instálala en otro navegador:",
-        "bcam_missing": "Falta la extensión de cámara del navegador en esta copia de Remote Visio. Reinstala la app.",
+        "bcam_missing": "Falta la extensión del navegador en esta copia de Remote Visio. Reinstala la app.",
         "bcam_store_remove_unpacked": "Remote Visio Camera también está cargada descomprimida en este navegador (de antes). Cuando hayas añadido la copia de la tienda, quita la antigua en la página de extensiones (la tarjeta con el ID jmiffhdbakchdlfbfdiaclkilcdhcgkf); si no, la cámara aparece dos veces.",
         "bcam_unpacked_remove_store": "Si antes añadiste Remote Visio Camera desde Chrome Web Store, quita esa copia en la página de extensiones (la tarjeta con el ID bhijcffjnmjijifjiaeibbogmbohdmon); si no, la cámara aparece dos veces.",
-        "bcam_store_steps": "1. En {browser}, en la página de Chrome Web Store que se acaba de abrir, haz clic en «Añadir a Chrome» («Obtener» en Edge) y luego en «Añadir extensión».\n\n2. Fija la extensión: haz clic en el botón Extensiones (la pieza de puzle) de la barra de herramientas y luego en la chincheta junto a «Remote Visio Camera» (el ojo en Edge). Así su botón se queda en la barra de herramientas.\n\n3. En la web de tu reunión, elige «Remote Visio Camera» como cámara y haz clic en Permitir cuando se te pregunte. Vuelve a cargar las páginas de reunión que ya estaban abiertas.",
+        "bcam_store_steps": "1. En {browser}, en la página de Chrome Web Store que se acaba de abrir, haz clic en «Añadir a Chrome» («Obtener» en Edge) y luego en «Añadir extensión».\n\n2. Fija la extensión: haz clic en el botón Extensiones (la pieza de puzle) de la barra de herramientas y luego en la chincheta junto a «Remote Visio Camera» (el ojo en Edge). Así su botón se queda en la barra de herramientas.\n\n3. En la web de tu reunión, elige «Remote Visio Microphone», «Remote Visio Speaker» y «Remote Visio Camera» como micrófono, altavoz y cámara, y haz clic en Permitir cuando se te pregunte. Vuelve a cargar las páginas de reunión que ya estaban abiertas.",
         "bcam_store_edge": "Puede que Edge te pida primero permitir extensiones de otras tiendas. Permítelo y luego haz clic en «Obtener».",
         "bcam_store_profiles": "La extensión pertenece a un solo perfil del navegador, y la página de la tienda se abrió en el último perfil que usaste. Añádela en cada perfil que uses para reuniones. Si la página de la tienda no funciona, elige «Cargar descomprimida en su lugar…» (necesita el modo desarrollador).",
         "bcam_unpacked_button": "Cargar descomprimida en su lugar…",
@@ -174,10 +183,11 @@ private let strings: [String: [String: String]] = [
         "login": "Ouvrir à la connexion",
         "uninstall": "Désinstaller Remote Visio…",
         "quit": "Quitter Remote Visio",
-        "mute": "Couper les haut-parleurs de ce Mac",
         "mic_mute": "Couper le micro de ce Mac",
+        "speaker_mute": "Couper les haut-parleurs de ce Mac",
+        "controls": "Commandes",
         "uninstall_q": "Désinstaller Remote Visio ?",
-        "uninstall_info": "Cela supprime le périphérique audio Remote Visio, la caméra virtuelle, l'app et son élément de connexion. Votre mot de passe administrateur sera demandé. Le son est coupé environ une seconde pendant le redémarrage du système audio. Si vous avez installé la caméra du navigateur, retirez aussi « Remote Visio Camera » de la page des extensions de votre navigateur.",
+        "uninstall_info": "Cela supprime la caméra virtuelle, l'app et son élément de connexion. Votre mot de passe administrateur sera demandé. Si vous avez installé l'extension de navigateur, retirez aussi « Remote Visio Camera » de la page des extensions de votre navigateur.",
         "uninstall_btn": "Désinstaller",
         "cancel": "Annuler",
         "uninstall_failed": "Échec de la désinstallation",
@@ -186,7 +196,6 @@ private let strings: [String: [String: String]] = [
         "receiver_missing": "Le récepteur manque dans cette copie de Remote Visio. Réinstallez l'app.",
         "exited": "remotevisio-receiver s'est arrêté de façon inattendue (état {n}). Voir ~/Library/Logs/RemoteVisio.log.",
         "start_failed": "Impossible de démarrer remotevisio-receiver : {err}",
-        "camera_toggle": "Relayer la caméra",
         "camera_active": "Caméra : active",
         "camera_needs_approval": "Caméra : à approuver dans Réglages Système",
         "camera_missing": "Caméra : absente de cette version",
@@ -196,20 +205,19 @@ private let strings: [String: [String: String]] = [
         "camera_open_settings": "Ouvrir Réglages Système…",
         "camera_not_installed": "Caméra : disponible une fois l'app dans /Applications",
         "camera_deactivate_failed": "La caméra virtuelle n'a pas pu être retirée ({err}). Si Réglages Système affiche encore l'extension caméra de Remote Visio après la désinstallation, redémarrez le Mac.",
-        "bcam_toggle": "Caméra du navigateur",
-        "bcam_install": "Installer l'extension Caméra du navigateur…",
-        "bcam_reinstall": "Réinstaller l'extension Caméra du navigateur…",
+        "bcam_install": "Installer l'extension de navigateur…",
+        "bcam_reinstall": "Réinstaller l'extension de navigateur…",
         "bcam_done_title": "Presque fini : ajoutez l'extension à {browser}",
-        "bcam_done_steps": "1. Dans {browser}, sur la page des extensions qui vient de s'ouvrir ({url}), activez « Mode développeur » ({where}) et laissez-le activé : sans lui, le navigateur désactive l'extension.\n\n2. Cliquez sur « Charger l'extension non empaquetée » et choisissez le dossier « Browser Camera Extension » : le Finder l'affiche, et son chemin est dans le presse-papiers (appuyez sur Commande-Maj-G dans la fenêtre de sélection, puis collez). Vous pouvez aussi faire glisser ce dossier sur la page des extensions.\n\n3. Épinglez l'extension : cliquez sur le bouton Extensions (la pièce de puzzle) dans la barre d'outils, puis sur l'épingle à côté de « Remote Visio Camera » (l'œil dans Edge). Son bouton reste alors dans la barre d'outils.\n\n4. Sur le site de votre réunion, choisissez « Remote Visio Camera » comme caméra, puis cliquez sur Autoriser quand c'est demandé. Rechargez les pages de réunion déjà ouvertes.",
+        "bcam_done_steps": "1. Dans {browser}, sur la page des extensions qui vient de s'ouvrir ({url}), activez « Mode développeur » ({where}) et laissez-le activé : sans lui, le navigateur désactive l'extension.\n\n2. Cliquez sur « Charger l'extension non empaquetée » et choisissez le dossier « Browser Camera Extension » : le Finder l'affiche, et son chemin est dans le presse-papiers (appuyez sur Commande-Maj-G dans la fenêtre de sélection, puis collez). Vous pouvez aussi faire glisser ce dossier sur la page des extensions.\n\n3. Épinglez l'extension : cliquez sur le bouton Extensions (la pièce de puzzle) dans la barre d'outils, puis sur l'épingle à côté de « Remote Visio Camera » (l'œil dans Edge). Son bouton reste alors dans la barre d'outils.\n\n4. Sur le site de votre réunion, choisissez « Remote Visio Microphone », « Remote Visio Speaker » et « Remote Visio Camera » comme micro, haut-parleur et caméra, puis cliquez sur Autoriser quand c'est demandé. Rechargez les pages de réunion déjà ouvertes.",
         "bcam_devmode_topright": "en haut à droite",
         "bcam_devmode_left": "dans la colonne de gauche",
-        "bcam_done_edge": "À chaque démarrage, Edge propose de désactiver les extensions en mode développeur. Refusez, sinon la caméra disparaît.",
+        "bcam_done_edge": "À chaque démarrage, Edge propose de désactiver les extensions en mode développeur. Refusez, sinon le micro, le haut-parleur et la caméra Remote Visio disparaissent.",
         "bcam_done_profiles": "L'extension et le mode développeur appartiennent à un seul profil du navigateur, et la page des extensions s'est ouverte dans le dernier profil utilisé. Chargez l'extension dans chaque profil qui vous sert pour les réunions. Elle fonctionne dans Chrome, Edge, Brave, Arc et les autres navigateurs Chromium.",
         "bcam_not_chromium_title": "{browser} ne peut pas utiliser l'extension Remote Visio Camera",
         "bcam_not_chromium": "Elle fonctionne dans les navigateurs Chromium. L'installer dans :",
         "bcam_no_chromium_title": "Aucun navigateur Chromium sur ce Mac",
-        "bcam_no_chromium": "L'extension Remote Visio Camera ne fonctionne que dans les navigateurs Chromium, comme Chrome, Edge, Brave ou Arc, et {browser} n'en fait pas partie. Installez l'un de ces navigateurs, puis choisissez à nouveau « Installer l'extension Caméra du navigateur… ».",
-        "bcam_failed": "L'extension Caméra du navigateur n'a pas pu être installée",
+        "bcam_no_chromium": "L'extension Remote Visio Camera ne fonctionne que dans les navigateurs Chromium, comme Chrome, Edge, Brave ou Arc, et {browser} n'en fait pas partie. Installez l'un de ces navigateurs, puis choisissez à nouveau « Installer l'extension de navigateur… ».",
+        "bcam_failed": "L'extension de navigateur n'a pas pu être installée",
         "bcam_policy_title": "{browser} n'autorise pas cette extension",
         "bcam_policy": "{browser} est géré par votre organisation, et sa politique ne vous permet pas de charger des extensions de cette façon. Demandez à votre service informatique d'autoriser l'extension dont l'ID est {id} ainsi que le mode développeur.",
         "bcam_policy_devmode": "{browser} est géré par votre organisation, et sa politique désactive le mode développeur, dont cette extension a besoin. Demandez à votre service informatique de mettre la règle ExtensionDeveloperModeSettings à 0 (autoriser) ; cela suffit, DeveloperToolsAvailability peut rester tel quel.",
@@ -217,10 +225,10 @@ private let strings: [String: [String: String]] = [
         "bcam_policy_blocklist_all": "{browser} est géré par votre organisation, et sa politique bloque toutes les extensions par défaut (« * »). Autoriser l'ID de cette extension n'y change rien : tant que ce blocage est actif, le navigateur ne charge aucune extension non empaquetée (chargée depuis un dossier, comme celle-ci). Demandez à votre service informatique de lever ce blocage (« * » dans ExtensionInstallBlocklist ou ExtensionSettings, ou CloudExtensionRequestEnabled).",
         "bcam_policy_types": "{browser} est géré par votre organisation, et sa politique n'autorise que certains types d'extensions. Demandez à votre service informatique d'ajouter « extension » aux types autorisés (ExtensionAllowedTypes, ou allowed_types dans ExtensionSettings).",
         "bcam_policy_other": "Ou installez-la dans un autre navigateur :",
-        "bcam_missing": "L'extension Caméra du navigateur manque dans cette copie de Remote Visio. Réinstallez l'app.",
+        "bcam_missing": "L'extension de navigateur manque dans cette copie de Remote Visio. Réinstallez l'app.",
         "bcam_store_remove_unpacked": "Remote Visio Camera est aussi chargée non empaquetée dans ce navigateur (depuis avant). Une fois la copie de la boutique ajoutée, retirez l'ancienne sur la page des extensions (la carte avec l'ID jmiffhdbakchdlfbfdiaclkilcdhcgkf), sinon la caméra apparaît deux fois.",
         "bcam_unpacked_remove_store": "Si vous aviez ajouté Remote Visio Camera depuis le Chrome Web Store, retirez cette copie sur la page des extensions (la carte avec l'ID bhijcffjnmjijifjiaeibbogmbohdmon), sinon la caméra apparaît deux fois.",
-        "bcam_store_steps": "1. Dans {browser}, sur la page du Chrome Web Store qui vient de s'ouvrir, cliquez sur « Ajouter à Chrome » (« Obtenir » dans Edge), puis sur « Ajouter l'extension ».\n\n2. Épinglez l'extension : cliquez sur le bouton Extensions (la pièce de puzzle) dans la barre d'outils, puis sur l'épingle à côté de « Remote Visio Camera » (l'œil dans Edge). Son bouton reste alors dans la barre d'outils.\n\n3. Sur le site de votre réunion, choisissez « Remote Visio Camera » comme caméra, puis cliquez sur Autoriser quand c'est demandé. Rechargez les pages de réunion déjà ouvertes.",
+        "bcam_store_steps": "1. Dans {browser}, sur la page du Chrome Web Store qui vient de s'ouvrir, cliquez sur « Ajouter à Chrome » (« Obtenir » dans Edge), puis sur « Ajouter l'extension ».\n\n2. Épinglez l'extension : cliquez sur le bouton Extensions (la pièce de puzzle) dans la barre d'outils, puis sur l'épingle à côté de « Remote Visio Camera » (l'œil dans Edge). Son bouton reste alors dans la barre d'outils.\n\n3. Sur le site de votre réunion, choisissez « Remote Visio Microphone », « Remote Visio Speaker » et « Remote Visio Camera » comme micro, haut-parleur et caméra, puis cliquez sur Autoriser quand c'est demandé. Rechargez les pages de réunion déjà ouvertes.",
         "bcam_store_edge": "Edge peut d'abord vous demander d'autoriser les extensions d'autres boutiques. Autorisez-les, puis cliquez sur « Obtenir ».",
         "bcam_store_profiles": "L'extension appartient à un seul profil du navigateur, et la page de la boutique s'est ouverte dans le dernier profil utilisé. Ajoutez-la dans chaque profil qui vous sert pour les réunions. Si la page de la boutique ne fonctionne pas, choisissez « Charger non empaquetée à la place… » (il faut le mode développeur).",
         "bcam_unpacked_button": "Charger non empaquetée à la place…",
@@ -235,10 +243,11 @@ private let strings: [String: [String: String]] = [
         "login": "登录时启动",
         "uninstall": "卸载 Remote Visio…",
         "quit": "退出 Remote Visio",
-        "mute": "静音这台 Mac 的扬声器",
         "mic_mute": "静音这台 Mac 的麦克风",
+        "speaker_mute": "静音这台 Mac 的扬声器",
+        "controls": "控制",
         "uninstall_q": "要卸载 Remote Visio 吗？",
-        "uninstall_info": "这会删除 Remote Visio 音频设备、虚拟摄像头、这个 App 和它的登录项。系统会要求输入管理员密码。音频系统重启时声音会中断大约一秒。如果安装过浏览器摄像头，也请在浏览器的扩展程序页面里移除「Remote Visio Camera」。",
+        "uninstall_info": "这会删除虚拟摄像头、这个 App 和它的登录项。系统会要求输入管理员密码。如果安装过浏览器扩展，也请在浏览器的扩展程序页面里移除「Remote Visio Camera」。",
         "uninstall_btn": "卸载",
         "cancel": "取消",
         "uninstall_failed": "卸载失败",
@@ -247,7 +256,6 @@ private let strings: [String: [String: String]] = [
         "receiver_missing": "这份 Remote Visio 里缺少接收端。请重新安装这个 App。",
         "exited": "remotevisio-receiver 意外退出（状态 {n}）。见 ~/Library/Logs/RemoteVisio.log。",
         "start_failed": "无法启动 remotevisio-receiver：{err}",
-        "camera_toggle": "转发摄像头",
         "camera_active": "摄像头：已启用",
         "camera_needs_approval": "摄像头：需要在「系统设置」里允许",
         "camera_missing": "摄像头：这个版本没有包含",
@@ -257,20 +265,19 @@ private let strings: [String: [String: String]] = [
         "camera_open_settings": "打开系统设置…",
         "camera_not_installed": "摄像头：把 App 放进 /Applications 后可用",
         "camera_deactivate_failed": "无法移除虚拟摄像头（{err}）。卸载后如果「系统设置」里仍列出 Remote Visio 的摄像头扩展，请重启 Mac。",
-        "bcam_toggle": "浏览器摄像头",
-        "bcam_install": "安装浏览器摄像头扩展…",
-        "bcam_reinstall": "重新安装浏览器摄像头扩展…",
+        "bcam_install": "安装浏览器扩展…",
+        "bcam_reinstall": "重新安装浏览器扩展…",
         "bcam_done_title": "快完成了：把扩展添加到 {browser}",
-        "bcam_done_steps": "1. 在 {browser} 刚打开的扩展程序页面（{url}）上，打开{where}的「开发者模式」，并保持打开：关掉后浏览器会停用这个扩展。\n\n2. 点击「加载未打包的扩展程序」，选择「Browser Camera Extension」文件夹：访达已经显示了它，它的路径也已复制到剪贴板（在对话框里按 Command-Shift-G，然后粘贴）。也可以把这个文件夹直接拖到扩展程序页面上。\n\n3. 固定这个扩展：点击工具栏里的「扩展程序」按钮（拼图图标），再点击「Remote Visio Camera」旁边的图钉（在 Edge 里是眼睛图标）。这样它的按钮就会一直留在工具栏上。\n\n4. 在会议网站上把摄像头选为「Remote Visio Camera」，询问时点击「允许」。已经打开的会议页面需要重新加载。",
+        "bcam_done_steps": "1. 在 {browser} 刚打开的扩展程序页面（{url}）上，打开{where}的「开发者模式」，并保持打开：关掉后浏览器会停用这个扩展。\n\n2. 点击「加载未打包的扩展程序」，选择「Browser Camera Extension」文件夹：访达已经显示了它，它的路径也已复制到剪贴板（在对话框里按 Command-Shift-G，然后粘贴）。也可以把这个文件夹直接拖到扩展程序页面上。\n\n3. 固定这个扩展：点击工具栏里的「扩展程序」按钮（拼图图标），再点击「Remote Visio Camera」旁边的图钉（在 Edge 里是眼睛图标）。这样它的按钮就会一直留在工具栏上。\n\n4. 在会议网站上把麦克风、扬声器和摄像头分别选为「Remote Visio Microphone」「Remote Visio Speaker」和「Remote Visio Camera」，询问时点击「允许」。已经打开的会议页面需要重新加载。",
         "bcam_devmode_topright": "右上角",
         "bcam_devmode_left": "左侧栏中",
-        "bcam_done_edge": "Edge 每次启动时都会提议关闭开发者模式下的扩展。不要接受，否则摄像头会消失。",
+        "bcam_done_edge": "Edge 每次启动时都会提议关闭开发者模式下的扩展。不要接受，否则 Remote Visio 的麦克风、扬声器和摄像头会消失。",
         "bcam_done_profiles": "扩展和开发者模式只属于一个浏览器个人资料，刚才的扩展程序页面是在你上次使用的个人资料里打开的。请在每个用来开会的个人资料里都加载这个扩展。它适用于 Chrome、Edge、Brave、Arc 和其他 Chromium 浏览器。",
         "bcam_not_chromium_title": "{browser} 无法使用 Remote Visio Camera 扩展",
         "bcam_not_chromium": "它适用于 Chromium 浏览器。安装到：",
         "bcam_no_chromium_title": "这台 Mac 上没有 Chromium 浏览器",
-        "bcam_no_chromium": "Remote Visio Camera 扩展只能在 Chromium 浏览器（例如 Chrome、Edge、Brave 或 Arc）中使用，而 {browser} 不是。请先安装其中一个浏览器，然后再次选择「安装浏览器摄像头扩展…」。",
-        "bcam_failed": "无法安装浏览器摄像头扩展",
+        "bcam_no_chromium": "Remote Visio Camera 扩展只能在 Chromium 浏览器（例如 Chrome、Edge、Brave 或 Arc）中使用，而 {browser} 不是。请先安装其中一个浏览器，然后再次选择「安装浏览器扩展…」。",
+        "bcam_failed": "无法安装浏览器扩展",
         "bcam_policy_title": "{browser} 不允许这个扩展",
         "bcam_policy": "{browser} 由你所在的机构管理，它的策略不允许用这种方式加载扩展。请让 IT 部门允许 ID 为 {id} 的扩展以及开发者模式。",
         "bcam_policy_devmode": "{browser} 由你所在的机构管理，它的策略关闭了这个扩展需要的开发者模式。请让 IT 部门把 ExtensionDeveloperModeSettings 策略设为 0（允许）；这样就够了，DeveloperToolsAvailability 可以保持不变。",
@@ -278,10 +285,10 @@ private let strings: [String: [String: String]] = [
         "bcam_policy_blocklist_all": "{browser} 由你所在的机构管理，它的策略默认拦截所有扩展（「*」）。允许这个扩展的 ID 没有用：只要这个拦截还在，浏览器就不会加载任何未打包的扩展（像这个扩展一样从文件夹加载的扩展）。请让 IT 部门取消这个拦截（ExtensionInstallBlocklist 或 ExtensionSettings 中的「*」，或 CloudExtensionRequestEnabled）。",
         "bcam_policy_types": "{browser} 由你所在的机构管理，它的策略只允许某些类型的扩展。请让 IT 部门把「extension」加到允许的类型里（ExtensionAllowedTypes，或 ExtensionSettings 中的 allowed_types）。",
         "bcam_policy_other": "或者把它装到另一个浏览器里：",
-        "bcam_missing": "这份 Remote Visio 里缺少浏览器摄像头扩展。请重新安装这个 App。",
+        "bcam_missing": "这份 Remote Visio 里缺少浏览器扩展。请重新安装这个 App。",
         "bcam_store_remove_unpacked": "这个浏览器里还有以前以未打包方式加载的 Remote Visio Camera。添加商店版之后，请在扩展程序页面上移除旧的那个（ID 为 jmiffhdbakchdlfbfdiaclkilcdhcgkf 的卡片），否则摄像头会出现两次。",
         "bcam_unpacked_remove_store": "如果你以前从 Chrome 应用商店添加过 Remote Visio Camera，请在扩展程序页面上移除那一份（ID 为 bhijcffjnmjijifjiaeibbogmbohdmon 的卡片），否则摄像头会出现两次。",
-        "bcam_store_steps": "1. 在 {browser} 刚打开的 Chrome 应用商店页面上，点击「添加至 Chrome」（在 Edge 里是「获取」），然后点击「添加扩展程序」。\n\n2. 固定这个扩展：点击工具栏里的「扩展程序」按钮（拼图图标），再点击「Remote Visio Camera」旁边的图钉（在 Edge 里是眼睛图标）。这样它的按钮就会一直留在工具栏上。\n\n3. 在会议网站上把摄像头选为「Remote Visio Camera」，询问时点击「允许」。已经打开的会议页面需要重新加载。",
+        "bcam_store_steps": "1. 在 {browser} 刚打开的 Chrome 应用商店页面上，点击「添加至 Chrome」（在 Edge 里是「获取」），然后点击「添加扩展程序」。\n\n2. 固定这个扩展：点击工具栏里的「扩展程序」按钮（拼图图标），再点击「Remote Visio Camera」旁边的图钉（在 Edge 里是眼睛图标）。这样它的按钮就会一直留在工具栏上。\n\n3. 在会议网站上把麦克风、扬声器和摄像头分别选为「Remote Visio Microphone」「Remote Visio Speaker」和「Remote Visio Camera」，询问时点击「允许」。已经打开的会议页面需要重新加载。",
         "bcam_store_edge": "Edge 可能会先请你允许来自其他应用商店的扩展。请允许，然后点击「获取」。",
         "bcam_store_profiles": "扩展只属于一个浏览器个人资料，刚才的商店页面是在你上次使用的个人资料里打开的。请在每个用来开会的个人资料里都添加它。如果商店页面用不了，请选「改为加载未打包的扩展…」（需要开发者模式）。",
         "bcam_unpacked_button": "改为加载未打包的扩展…",
@@ -296,10 +303,11 @@ private let strings: [String: [String: String]] = [
         "login": "Bei der Anmeldung starten",
         "uninstall": "Remote Visio deinstallieren…",
         "quit": "Remote Visio beenden",
-        "mute": "Lautsprecher dieses Macs stummschalten",
         "mic_mute": "Mikrofon dieses Macs stummschalten",
+        "speaker_mute": "Lautsprecher dieses Macs stummschalten",
+        "controls": "Steuerung",
         "uninstall_q": "Remote Visio deinstallieren?",
-        "uninstall_info": "Das entfernt das Remote Visio-Audiogerät, die virtuelle Kamera, die App und ihr Anmeldeobjekt. Sie werden nach Ihrem Administrator-Passwort gefragt. Der Ton setzt etwa eine Sekunde aus, während das Audiosystem neu startet. Wenn Sie die Browser-Kamera installiert haben, entfernen Sie „Remote Visio Camera“ auch auf der Erweiterungsseite Ihres Browsers.",
+        "uninstall_info": "Das entfernt die virtuelle Kamera, die App und ihr Anmeldeobjekt. Sie werden nach Ihrem Administrator-Passwort gefragt. Wenn Sie die Browser-Erweiterung installiert haben, entfernen Sie „Remote Visio Camera“ auch auf der Erweiterungsseite Ihres Browsers.",
         "uninstall_btn": "Deinstallieren",
         "cancel": "Abbrechen",
         "uninstall_failed": "Deinstallation fehlgeschlagen",
@@ -308,7 +316,6 @@ private let strings: [String: [String: String]] = [
         "receiver_missing": "In dieser Kopie von Remote Visio fehlt der Empfänger. Installieren Sie die App neu.",
         "exited": "remotevisio-receiver wurde unerwartet beendet (Status {n}). Siehe ~/Library/Logs/RemoteVisio.log.",
         "start_failed": "remotevisio-receiver konnte nicht gestartet werden: {err}",
-        "camera_toggle": "Kamera weiterleiten",
         "camera_active": "Kamera: aktiv",
         "camera_needs_approval": "Kamera: in den Systemeinstellungen erlauben",
         "camera_missing": "Kamera: in diesem Build nicht enthalten",
@@ -318,20 +325,19 @@ private let strings: [String: [String: String]] = [
         "camera_open_settings": "Systemeinstellungen öffnen…",
         "camera_not_installed": "Kamera: verfügbar, sobald die App in /Applications liegt",
         "camera_deactivate_failed": "Die virtuelle Kamera konnte nicht entfernt werden ({err}). Wenn die Systemeinstellungen die Kameraerweiterung von Remote Visio nach der Deinstallation noch anzeigen, starten Sie den Mac neu.",
-        "bcam_toggle": "Browser-Kamera",
-        "bcam_install": "Browser-Kamera-Erweiterung installieren…",
-        "bcam_reinstall": "Browser-Kamera-Erweiterung neu installieren…",
+        "bcam_install": "Browser-Erweiterung installieren…",
+        "bcam_reinstall": "Browser-Erweiterung neu installieren…",
         "bcam_done_title": "Fast fertig: Fügen Sie die Erweiterung zu {browser} hinzu",
-        "bcam_done_steps": "1. Schalten Sie in {browser} auf der gerade geöffneten Erweiterungsseite ({url}) den „Entwicklermodus“ ein ({where}) und lassen Sie ihn eingeschaltet: Ohne ihn schaltet der Browser die Erweiterung ab.\n\n2. Klicken Sie auf „Entpackte Erweiterung laden“ und wählen Sie den Ordner „Browser Camera Extension“: Der Finder zeigt ihn an, und sein Pfad ist in der Zwischenablage (drücken Sie im Dialog Befehl-Umschalt-G und fügen Sie ihn ein). Sie können den Ordner auch auf die Erweiterungsseite ziehen.\n\n3. Heften Sie die Erweiterung an: Klicken Sie in der Symbolleiste auf die Schaltfläche „Erweiterungen“ (das Puzzleteil) und dann auf die Stecknadel neben „Remote Visio Camera“ (in Edge auf das Auge). Dann bleibt ihre Schaltfläche in der Symbolleiste.\n\n4. Wählen Sie auf der Website Ihres Meetings „Remote Visio Camera“ als Kamera und klicken Sie auf „Erlauben“, wenn Sie gefragt werden. Laden Sie bereits geöffnete Meeting-Seiten neu.",
+        "bcam_done_steps": "1. Schalten Sie in {browser} auf der gerade geöffneten Erweiterungsseite ({url}) den „Entwicklermodus“ ein ({where}) und lassen Sie ihn eingeschaltet: Ohne ihn schaltet der Browser die Erweiterung ab.\n\n2. Klicken Sie auf „Entpackte Erweiterung laden“ und wählen Sie den Ordner „Browser Camera Extension“: Der Finder zeigt ihn an, und sein Pfad ist in der Zwischenablage (drücken Sie im Dialog Befehl-Umschalt-G und fügen Sie ihn ein). Sie können den Ordner auch auf die Erweiterungsseite ziehen.\n\n3. Heften Sie die Erweiterung an: Klicken Sie in der Symbolleiste auf die Schaltfläche „Erweiterungen“ (das Puzzleteil) und dann auf die Stecknadel neben „Remote Visio Camera“ (in Edge auf das Auge). Dann bleibt ihre Schaltfläche in der Symbolleiste.\n\n4. Wählen Sie auf der Website Ihres Meetings „Remote Visio Microphone“, „Remote Visio Speaker“ und „Remote Visio Camera“ als Mikrofon, Lautsprecher und Kamera und klicken Sie auf „Erlauben“, wenn Sie gefragt werden. Laden Sie bereits geöffnete Meeting-Seiten neu.",
         "bcam_devmode_topright": "oben rechts",
         "bcam_devmode_left": "in der linken Spalte",
-        "bcam_done_edge": "Edge bietet bei jedem Start an, Erweiterungen im Entwicklermodus zu deaktivieren. Lehnen Sie ab, sonst verschwindet die Kamera.",
+        "bcam_done_edge": "Edge bietet bei jedem Start an, Erweiterungen im Entwicklermodus zu deaktivieren. Lehnen Sie ab, sonst verschwinden Mikrofon, Lautsprecher und Kamera von Remote Visio.",
         "bcam_done_profiles": "Die Erweiterung und der Entwicklermodus gehören zu einem einzigen Browserprofil, und die Erweiterungsseite hat sich im zuletzt verwendeten Profil geöffnet. Laden Sie die Erweiterung in jedem Profil, das Sie für Meetings nutzen. Sie funktioniert in Chrome, Edge, Brave, Arc und anderen Chromium-Browsern.",
         "bcam_not_chromium_title": "{browser} kann die Erweiterung Remote Visio Camera nicht verwenden",
         "bcam_not_chromium": "Sie funktioniert in Chromium-Browsern. Installieren in:",
         "bcam_no_chromium_title": "Kein Chromium-Browser auf diesem Mac",
-        "bcam_no_chromium": "Die Erweiterung Remote Visio Camera funktioniert nur in Chromium-Browsern wie Chrome, Edge, Brave oder Arc, und {browser} gehört nicht dazu. Installieren Sie einen dieser Browser und wählen Sie dann erneut „Browser-Kamera-Erweiterung installieren…“.",
-        "bcam_failed": "Die Browser-Kamera-Erweiterung konnte nicht installiert werden",
+        "bcam_no_chromium": "Die Erweiterung Remote Visio Camera funktioniert nur in Chromium-Browsern wie Chrome, Edge, Brave oder Arc, und {browser} gehört nicht dazu. Installieren Sie einen dieser Browser und wählen Sie dann erneut „Browser-Erweiterung installieren…“.",
+        "bcam_failed": "Die Browser-Erweiterung konnte nicht installiert werden",
         "bcam_policy_title": "{browser} lässt diese Erweiterung nicht zu",
         "bcam_policy": "{browser} wird von Ihrer Organisation verwaltet, und deren Richtlinie erlaubt es nicht, Erweiterungen auf diese Weise zu laden. Bitten Sie Ihre IT-Abteilung, die Erweiterung mit der ID {id} und den Entwicklermodus zuzulassen.",
         "bcam_policy_devmode": "{browser} wird von Ihrer Organisation verwaltet, und deren Richtlinie schaltet den Entwicklermodus ab, den diese Erweiterung braucht. Bitten Sie Ihre IT-Abteilung, die Richtlinie ExtensionDeveloperModeSettings auf 0 (zulassen) zu setzen; das genügt, DeveloperToolsAvailability kann bleiben, wie es ist.",
@@ -339,10 +345,10 @@ private let strings: [String: [String: String]] = [
         "bcam_policy_blocklist_all": "{browser} wird von Ihrer Organisation verwaltet, und deren Richtlinie blockiert standardmäßig alle Erweiterungen („*“). Die ID dieser Erweiterung zuzulassen, hilft nicht: Solange diese Sperre gilt, lädt der Browser keine entpackte Erweiterung (eine aus einem Ordner geladene wie diese). Bitten Sie Ihre IT-Abteilung, die Sperre aufzuheben („*“ in ExtensionInstallBlocklist oder ExtensionSettings, oder CloudExtensionRequestEnabled).",
         "bcam_policy_types": "{browser} wird von Ihrer Organisation verwaltet, und deren Richtlinie lässt nur bestimmte Arten von Erweiterungen zu. Bitten Sie Ihre IT-Abteilung, „extension“ zu den zugelassenen Typen hinzuzufügen (ExtensionAllowedTypes oder allowed_types in ExtensionSettings).",
         "bcam_policy_other": "Oder installieren Sie sie in einem anderen Browser:",
-        "bcam_missing": "In dieser Kopie von Remote Visio fehlt die Browser-Kamera-Erweiterung. Installieren Sie die App neu.",
+        "bcam_missing": "In dieser Kopie von Remote Visio fehlt die Browser-Erweiterung. Installieren Sie die App neu.",
         "bcam_store_remove_unpacked": "Remote Visio Camera ist in diesem Browser außerdem entpackt geladen (von früher). Sobald die Store-Version hinzugefügt ist, entfernen Sie die alte auf der Erweiterungsseite (die Karte mit der ID jmiffhdbakchdlfbfdiaclkilcdhcgkf), sonst erscheint die Kamera doppelt.",
         "bcam_unpacked_remove_store": "Wenn Sie Remote Visio Camera früher aus dem Chrome Web Store hinzugefügt haben, entfernen Sie diese Version auf der Erweiterungsseite (die Karte mit der ID bhijcffjnmjijifjiaeibbogmbohdmon), sonst erscheint die Kamera doppelt.",
-        "bcam_store_steps": "1. Klicken Sie in {browser} auf der gerade geöffneten Seite des Chrome Web Store auf „Hinzufügen“ („Abrufen“ in Edge) und dann auf „Erweiterung hinzufügen“.\n\n2. Heften Sie die Erweiterung an: Klicken Sie in der Symbolleiste auf die Schaltfläche „Erweiterungen“ (das Puzzleteil) und dann auf die Stecknadel neben „Remote Visio Camera“ (in Edge auf das Auge). Dann bleibt ihre Schaltfläche in der Symbolleiste.\n\n3. Wählen Sie auf der Website Ihres Meetings „Remote Visio Camera“ als Kamera und klicken Sie auf „Erlauben“, wenn Sie gefragt werden. Laden Sie bereits geöffnete Meeting-Seiten neu.",
+        "bcam_store_steps": "1. Klicken Sie in {browser} auf der gerade geöffneten Seite des Chrome Web Store auf „Hinzufügen“ („Abrufen“ in Edge) und dann auf „Erweiterung hinzufügen“.\n\n2. Heften Sie die Erweiterung an: Klicken Sie in der Symbolleiste auf die Schaltfläche „Erweiterungen“ (das Puzzleteil) und dann auf die Stecknadel neben „Remote Visio Camera“ (in Edge auf das Auge). Dann bleibt ihre Schaltfläche in der Symbolleiste.\n\n3. Wählen Sie auf der Website Ihres Meetings „Remote Visio Microphone“, „Remote Visio Speaker“ und „Remote Visio Camera“ als Mikrofon, Lautsprecher und Kamera und klicken Sie auf „Erlauben“, wenn Sie gefragt werden. Laden Sie bereits geöffnete Meeting-Seiten neu.",
         "bcam_store_edge": "Edge fragt vielleicht zuerst, ob Erweiterungen aus anderen Stores erlaubt werden sollen. Erlauben Sie es und klicken Sie dann auf „Abrufen“.",
         "bcam_store_profiles": "Die Erweiterung gehört zu einem einzigen Browserprofil, und die Store-Seite hat sich im zuletzt verwendeten Profil geöffnet. Fügen Sie sie in jedem Profil hinzu, das Sie für Meetings nutzen. Wenn die Store-Seite nicht funktioniert, wählen Sie „Stattdessen entpackt laden…“ (das braucht den Entwicklermodus).",
         "bcam_unpacked_button": "Stattdessen entpackt laden…",
@@ -357,10 +363,11 @@ private let strings: [String: [String: String]] = [
         "login": "Apri al login",
         "uninstall": "Disinstalla Remote Visio…",
         "quit": "Esci da Remote Visio",
-        "mute": "Silenzia gli altoparlanti di questo Mac",
         "mic_mute": "Silenzia il microfono di questo Mac",
+        "speaker_mute": "Silenzia gli altoparlanti di questo Mac",
+        "controls": "Controlli",
         "uninstall_q": "Disinstallare Remote Visio?",
-        "uninstall_info": "Verranno rimossi il dispositivo audio Remote Visio, la fotocamera virtuale, l'app e il suo elemento di login. Ti verrà chiesta la password di amministratore. L'audio si interrompe per circa un secondo mentre il sistema audio si riavvia. Se hai installato la fotocamera del browser, rimuovi anche «Remote Visio Camera» dalla pagina delle estensioni del browser.",
+        "uninstall_info": "Verranno rimossi la fotocamera virtuale, l'app e il suo elemento di login. Ti verrà chiesta la password di amministratore. Se hai installato l'estensione del browser, rimuovi anche «Remote Visio Camera» dalla pagina delle estensioni del browser.",
         "uninstall_btn": "Disinstalla",
         "cancel": "Annulla",
         "uninstall_failed": "Disinstallazione non riuscita",
@@ -369,7 +376,6 @@ private let strings: [String: [String: String]] = [
         "receiver_missing": "In questa copia di Remote Visio manca il ricevitore. Reinstalla l'app.",
         "exited": "remotevisio-receiver si è chiuso in modo imprevisto (stato {n}). Vedi ~/Library/Logs/RemoteVisio.log.",
         "start_failed": "Impossibile avviare remotevisio-receiver: {err}",
-        "camera_toggle": "Inoltra la fotocamera",
         "camera_active": "Fotocamera: attiva",
         "camera_needs_approval": "Fotocamera: da approvare in Impostazioni di Sistema",
         "camera_missing": "Fotocamera: non inclusa in questa build",
@@ -379,20 +385,19 @@ private let strings: [String: [String: String]] = [
         "camera_open_settings": "Apri Impostazioni di Sistema…",
         "camera_not_installed": "Fotocamera: disponibile quando l'app è in /Applications",
         "camera_deactivate_failed": "Non è stato possibile rimuovere la fotocamera virtuale ({err}). Se dopo la disinstallazione Impostazioni di Sistema elenca ancora l'estensione fotocamera di Remote Visio, riavvia il Mac.",
-        "bcam_toggle": "Fotocamera del browser",
-        "bcam_install": "Installa l'estensione fotocamera del browser…",
-        "bcam_reinstall": "Reinstalla l'estensione fotocamera del browser…",
+        "bcam_install": "Installa l'estensione del browser…",
+        "bcam_reinstall": "Reinstalla l'estensione del browser…",
         "bcam_done_title": "Quasi fatto: aggiungi l'estensione a {browser}",
-        "bcam_done_steps": "1. In {browser}, nella pagina delle estensioni appena aperta ({url}), attiva «Modalità sviluppatore» ({where}) e lasciala attiva: senza di essa il browser disattiva l'estensione.\n\n2. Fai clic su «Carica estensione non pacchettizzata» e scegli la cartella «Browser Camera Extension»: il Finder la mostra e il suo percorso è negli appunti (premi Comando-Maiuscole-G nella finestra di dialogo, poi incolla). In alternativa, trascina la cartella sulla pagina delle estensioni.\n\n3. Fissa l'estensione: fai clic sul pulsante Estensioni (il pezzo di puzzle) nella barra degli strumenti, poi sulla puntina accanto a «Remote Visio Camera» (l'occhio in Edge). Così il suo pulsante resta nella barra degli strumenti.\n\n4. Nel sito della riunione, scegli «Remote Visio Camera» come fotocamera e fai clic su Consenti quando richiesto. Ricarica le pagine delle riunioni già aperte.",
+        "bcam_done_steps": "1. In {browser}, nella pagina delle estensioni appena aperta ({url}), attiva «Modalità sviluppatore» ({where}) e lasciala attiva: senza di essa il browser disattiva l'estensione.\n\n2. Fai clic su «Carica estensione non pacchettizzata» e scegli la cartella «Browser Camera Extension»: il Finder la mostra e il suo percorso è negli appunti (premi Comando-Maiuscole-G nella finestra di dialogo, poi incolla). In alternativa, trascina la cartella sulla pagina delle estensioni.\n\n3. Fissa l'estensione: fai clic sul pulsante Estensioni (il pezzo di puzzle) nella barra degli strumenti, poi sulla puntina accanto a «Remote Visio Camera» (l'occhio in Edge). Così il suo pulsante resta nella barra degli strumenti.\n\n4. Nel sito della riunione, scegli «Remote Visio Microphone», «Remote Visio Speaker» e «Remote Visio Camera» come microfono, altoparlante e fotocamera e fai clic su Consenti quando richiesto. Ricarica le pagine delle riunioni già aperte.",
         "bcam_devmode_topright": "in alto a destra",
         "bcam_devmode_left": "nella colonna di sinistra",
-        "bcam_done_edge": "A ogni avvio, Edge propone di disattivare le estensioni in modalità sviluppatore. Non accettare, o la fotocamera sparisce.",
+        "bcam_done_edge": "A ogni avvio, Edge propone di disattivare le estensioni in modalità sviluppatore. Non accettare, o il microfono, l'altoparlante e la fotocamera di Remote Visio spariscono.",
         "bcam_done_profiles": "L'estensione e la modalità sviluppatore appartengono a un solo profilo del browser, e la pagina delle estensioni si è aperta nell'ultimo profilo usato. Carica l'estensione in ogni profilo che usi per le riunioni. Funziona in Chrome, Edge, Brave, Arc e negli altri browser Chromium.",
         "bcam_not_chromium_title": "{browser} non può usare l'estensione Remote Visio Camera",
         "bcam_not_chromium": "Funziona nei browser Chromium. Installala in:",
         "bcam_no_chromium_title": "Nessun browser Chromium su questo Mac",
-        "bcam_no_chromium": "L'estensione Remote Visio Camera funziona solo nei browser Chromium, come Chrome, Edge, Brave o Arc, e {browser} non è tra questi. Installa uno di questi browser, poi scegli di nuovo «Installa l'estensione fotocamera del browser…».",
-        "bcam_failed": "Impossibile installare l'estensione fotocamera del browser",
+        "bcam_no_chromium": "L'estensione Remote Visio Camera funziona solo nei browser Chromium, come Chrome, Edge, Brave o Arc, e {browser} non è tra questi. Installa uno di questi browser, poi scegli di nuovo «Installa l'estensione del browser…».",
+        "bcam_failed": "Impossibile installare l'estensione del browser",
         "bcam_policy_title": "{browser} non consente questa estensione",
         "bcam_policy": "{browser} è gestito dalla tua organizzazione e i suoi criteri non ti consentono di caricare estensioni in questo modo. Chiedi al reparto IT di consentire l'estensione con ID {id} e la modalità sviluppatore.",
         "bcam_policy_devmode": "{browser} è gestito dalla tua organizzazione e i suoi criteri disattivano la modalità sviluppatore, che serve a questa estensione. Chiedi al reparto IT di impostare il criterio ExtensionDeveloperModeSettings a 0 (consenti); basta questo, DeveloperToolsAvailability può restare com'è.",
@@ -400,10 +405,10 @@ private let strings: [String: [String: String]] = [
         "bcam_policy_blocklist_all": "{browser} è gestito dalla tua organizzazione e i suoi criteri bloccano tutte le estensioni per impostazione predefinita («*»). Consentire l'ID di questa estensione non serve: finché il blocco resta, il browser non carica nessuna estensione non pacchettizzata (caricata da una cartella, come questa). Chiedi al reparto IT di togliere il blocco («*» in ExtensionInstallBlocklist o ExtensionSettings, oppure CloudExtensionRequestEnabled).",
         "bcam_policy_types": "{browser} è gestito dalla tua organizzazione e i suoi criteri consentono solo alcuni tipi di estensioni. Chiedi al reparto IT di aggiungere «extension» ai tipi consentiti (ExtensionAllowedTypes, o allowed_types in ExtensionSettings).",
         "bcam_policy_other": "Oppure installala in un altro browser:",
-        "bcam_missing": "In questa copia di Remote Visio manca l'estensione fotocamera del browser. Reinstalla l'app.",
+        "bcam_missing": "In questa copia di Remote Visio manca l'estensione del browser. Reinstalla l'app.",
         "bcam_store_remove_unpacked": "Remote Visio Camera è anche caricata non pacchettizzata in questo browser (da prima). Dopo aver aggiunto la copia dello store, rimuovi quella vecchia nella pagina delle estensioni (la scheda con l'ID jmiffhdbakchdlfbfdiaclkilcdhcgkf), altrimenti la fotocamera compare due volte.",
         "bcam_unpacked_remove_store": "Se in precedenza hai aggiunto Remote Visio Camera dal Chrome Web Store, rimuovi quella copia nella pagina delle estensioni (la scheda con l'ID bhijcffjnmjijifjiaeibbogmbohdmon), altrimenti la fotocamera compare due volte.",
-        "bcam_store_steps": "1. In {browser}, nella pagina del Chrome Web Store appena aperta, fai clic su «Aggiungi» («Ottieni» in Edge), poi su «Aggiungi estensione».\n\n2. Fissa l'estensione: fai clic sul pulsante Estensioni (il pezzo di puzzle) nella barra degli strumenti, poi sulla puntina accanto a «Remote Visio Camera» (l'occhio in Edge). Così il suo pulsante resta nella barra degli strumenti.\n\n3. Nel sito della riunione, scegli «Remote Visio Camera» come fotocamera e fai clic su Consenti quando richiesto. Ricarica le pagine delle riunioni già aperte.",
+        "bcam_store_steps": "1. In {browser}, nella pagina del Chrome Web Store appena aperta, fai clic su «Aggiungi» («Ottieni» in Edge), poi su «Aggiungi estensione».\n\n2. Fissa l'estensione: fai clic sul pulsante Estensioni (il pezzo di puzzle) nella barra degli strumenti, poi sulla puntina accanto a «Remote Visio Camera» (l'occhio in Edge). Così il suo pulsante resta nella barra degli strumenti.\n\n3. Nel sito della riunione, scegli «Remote Visio Microphone», «Remote Visio Speaker» e «Remote Visio Camera» come microfono, altoparlante e fotocamera e fai clic su Consenti quando richiesto. Ricarica le pagine delle riunioni già aperte.",
         "bcam_store_edge": "Edge potrebbe prima chiederti di consentire le estensioni di altri store. Consentilo, poi fai clic su «Ottieni».",
         "bcam_store_profiles": "L'estensione appartiene a un solo profilo del browser, e la pagina dello store si è aperta nell'ultimo profilo usato. Aggiungila in ogni profilo che usi per le riunioni. Se la pagina dello store non funziona, scegli «Carica non pacchettizzata…» (serve la modalità sviluppatore).",
         "bcam_unpacked_button": "Carica non pacchettizzata…",
@@ -418,10 +423,11 @@ private let strings: [String: [String: String]] = [
         "login": "लॉगिन पर शुरू करें",
         "uninstall": "Remote Visio हटाएँ…",
         "quit": "Remote Visio बंद करें",
-        "mute": "इस Mac के स्पीकर म्यूट करें",
         "mic_mute": "इस Mac का माइक्रोफ़ोन म्यूट करें",
+        "speaker_mute": "इस Mac के स्पीकर म्यूट करें",
+        "controls": "नियंत्रण",
         "uninstall_q": "Remote Visio हटाएँ?",
-        "uninstall_info": "इससे Remote Visio ऑडियो डिवाइस, वर्चुअल कैमरा, यह ऐप और इसका लॉगिन आइटम हट जाएँगे। आपसे व्यवस्थापक पासवर्ड माँगा जाएगा। ऑडियो सिस्टम के रीस्टार्ट होने के दौरान आवाज़ लगभग एक सेकंड के लिए रुकेगी। अगर आपने ब्राउज़र कैमरा इंस्टॉल किया था, तो अपने ब्राउज़र के एक्सटेंशन पेज से \"Remote Visio Camera\" भी हटाएँ।",
+        "uninstall_info": "इससे वर्चुअल कैमरा, यह ऐप और इसका लॉगिन आइटम हट जाएँगे। आपसे व्यवस्थापक पासवर्ड माँगा जाएगा। अगर आपने ब्राउज़र एक्सटेंशन इंस्टॉल किया था, तो अपने ब्राउज़र के एक्सटेंशन पेज से \"Remote Visio Camera\" भी हटाएँ।",
         "uninstall_btn": "हटाएँ",
         "cancel": "रद्द करें",
         "uninstall_failed": "हटाना विफल रहा",
@@ -430,7 +436,6 @@ private let strings: [String: [String: String]] = [
         "receiver_missing": "Remote Visio की इस कॉपी में रिसीवर नहीं है। ऐप को दोबारा इंस्टॉल करें।",
         "exited": "remotevisio-receiver अप्रत्याशित रूप से बंद हो गया (स्थिति {n})। ~/Library/Logs/RemoteVisio.log देखें।",
         "start_failed": "remotevisio-receiver शुरू नहीं हो सका: {err}",
-        "camera_toggle": "कैमरा रिले करें",
         "camera_active": "कैमरा: चालू",
         "camera_needs_approval": "कैमरा: System Settings में अनुमति चाहिए",
         "camera_missing": "कैमरा: इस बिल्ड में शामिल नहीं",
@@ -440,20 +445,19 @@ private let strings: [String: [String: String]] = [
         "camera_open_settings": "System Settings खोलें…",
         "camera_not_installed": "कैमरा: ऐप /Applications में होने पर उपलब्ध",
         "camera_deactivate_failed": "वर्चुअल कैमरा हटाया नहीं जा सका ({err})। अगर हटाने के बाद भी System Settings में Remote Visio का कैमरा एक्सटेंशन दिखे, तो Mac रीस्टार्ट करें।",
-        "bcam_toggle": "ब्राउज़र कैमरा",
-        "bcam_install": "ब्राउज़र कैमरा एक्सटेंशन इंस्टॉल करें…",
-        "bcam_reinstall": "ब्राउज़र कैमरा एक्सटेंशन दोबारा इंस्टॉल करें…",
+        "bcam_install": "ब्राउज़र एक्सटेंशन इंस्टॉल करें…",
+        "bcam_reinstall": "ब्राउज़र एक्सटेंशन दोबारा इंस्टॉल करें…",
         "bcam_done_title": "लगभग हो गया: एक्सटेंशन को {browser} में जोड़ें",
-        "bcam_done_steps": "1. {browser} में अभी खुले एक्सटेंशन पेज ({url}) पर \"डेवलपर मोड\" चालू करें ({where}) और इसे चालू ही रहने दें: इसके बिना ब्राउज़र एक्सटेंशन बंद कर देता है।\n\n2. \"पैक नहीं किया गया एक्सटेंशन लोड करें\" पर क्लिक करें और \"Browser Camera Extension\" फ़ोल्डर चुनें: Finder उसे दिखा रहा है, और उसका पाथ क्लिपबोर्ड पर है (डायलॉग में Command-Shift-G दबाएँ, फिर पेस्ट करें)। या उस फ़ोल्डर को खींचकर एक्सटेंशन पेज पर छोड़ दें।\n\n3. एक्सटेंशन को पिन करें: टूलबार में एक्सटेंशन बटन (पहेली के टुकड़े वाला आइकन) पर क्लिक करें, फिर \"Remote Visio Camera\" के पास वाले पिन पर (Edge में आँख वाले आइकन पर)। तब इसका बटन टूलबार में बना रहता है।\n\n4. अपनी मीटिंग की वेबसाइट पर कैमरे के रूप में \"Remote Visio Camera\" चुनें, और पूछे जाने पर \"अनुमति दें\" पर क्लिक करें। जो मीटिंग पेज पहले से खुले थे, उन्हें फिर से लोड करें।",
+        "bcam_done_steps": "1. {browser} में अभी खुले एक्सटेंशन पेज ({url}) पर \"डेवलपर मोड\" चालू करें ({where}) और इसे चालू ही रहने दें: इसके बिना ब्राउज़र एक्सटेंशन बंद कर देता है।\n\n2. \"पैक नहीं किया गया एक्सटेंशन लोड करें\" पर क्लिक करें और \"Browser Camera Extension\" फ़ोल्डर चुनें: Finder उसे दिखा रहा है, और उसका पाथ क्लिपबोर्ड पर है (डायलॉग में Command-Shift-G दबाएँ, फिर पेस्ट करें)। या उस फ़ोल्डर को खींचकर एक्सटेंशन पेज पर छोड़ दें।\n\n3. एक्सटेंशन को पिन करें: टूलबार में एक्सटेंशन बटन (पहेली के टुकड़े वाला आइकन) पर क्लिक करें, फिर \"Remote Visio Camera\" के पास वाले पिन पर (Edge में आँख वाले आइकन पर)। तब इसका बटन टूलबार में बना रहता है।\n\n4. अपनी मीटिंग की वेबसाइट पर माइक्रोफ़ोन, स्पीकर और कैमरे के रूप में \"Remote Visio Microphone\", \"Remote Visio Speaker\" और \"Remote Visio Camera\" चुनें, और पूछे जाने पर \"अनुमति दें\" पर क्लिक करें। जो मीटिंग पेज पहले से खुले थे, उन्हें फिर से लोड करें।",
         "bcam_devmode_topright": "ऊपर दाईं ओर",
         "bcam_devmode_left": "बाएँ कॉलम में",
-        "bcam_done_edge": "Edge हर बार शुरू होने पर डेवलपर मोड वाले एक्सटेंशन बंद करने का सुझाव देता है। इसे स्वीकार न करें, वरना कैमरा गायब हो जाएगा।",
+        "bcam_done_edge": "Edge हर बार शुरू होने पर डेवलपर मोड वाले एक्सटेंशन बंद करने का सुझाव देता है। इसे स्वीकार न करें, वरना Remote Visio का माइक्रोफ़ोन, स्पीकर और कैमरा गायब हो जाएँगे।",
         "bcam_done_profiles": "एक्सटेंशन और डेवलपर मोड एक ही ब्राउज़र प्रोफ़ाइल के होते हैं, और एक्सटेंशन पेज उस प्रोफ़ाइल में खुला है जिसे आपने पिछली बार इस्तेमाल किया था। मीटिंग के लिए इस्तेमाल होने वाली हर प्रोफ़ाइल में एक्सटेंशन लोड करें। यह एक्सटेंशन Chrome, Edge, Brave, Arc और दूसरे Chromium ब्राउज़र में काम करता है।",
         "bcam_not_chromium_title": "{browser} में Remote Visio Camera एक्सटेंशन काम नहीं करता",
         "bcam_not_chromium": "यह Chromium ब्राउज़र में काम करता है। इसमें इंस्टॉल करें:",
         "bcam_no_chromium_title": "इस Mac पर कोई Chromium ब्राउज़र नहीं है",
-        "bcam_no_chromium": "Remote Visio Camera एक्सटेंशन सिर्फ़ Chromium ब्राउज़र में काम करता है, जैसे Chrome, Edge, Brave या Arc, और {browser} उनमें से नहीं है। इनमें से कोई ब्राउज़र इंस्टॉल करें, फिर \"ब्राउज़र कैमरा एक्सटेंशन इंस्टॉल करें…\" दोबारा चुनें।",
-        "bcam_failed": "ब्राउज़र कैमरा एक्सटेंशन इंस्टॉल नहीं हो सका",
+        "bcam_no_chromium": "Remote Visio Camera एक्सटेंशन सिर्फ़ Chromium ब्राउज़र में काम करता है, जैसे Chrome, Edge, Brave या Arc, और {browser} उनमें से नहीं है। इनमें से कोई ब्राउज़र इंस्टॉल करें, फिर \"ब्राउज़र एक्सटेंशन इंस्टॉल करें…\" दोबारा चुनें।",
+        "bcam_failed": "ब्राउज़र एक्सटेंशन इंस्टॉल नहीं हो सका",
         "bcam_policy_title": "{browser} इस एक्सटेंशन की अनुमति नहीं देता",
         "bcam_policy": "{browser} को आपका संगठन प्रबंधित करता है, और उसकी नीति इस तरह एक्सटेंशन लोड करने की अनुमति नहीं देती। अपने IT विभाग से ID {id} वाले एक्सटेंशन और डेवलपर मोड की अनुमति देने को कहें।",
         "bcam_policy_devmode": "{browser} को आपका संगठन प्रबंधित करता है, और उसकी नीति डेवलपर मोड बंद कर देती है, जिसकी इस एक्सटेंशन को ज़रूरत है। अपने IT विभाग से ExtensionDeveloperModeSettings नीति को 0 (अनुमति दें) पर सेट करने को कहें; इतना काफ़ी है, DeveloperToolsAvailability जैसी है वैसी रह सकती है।",
@@ -461,10 +465,10 @@ private let strings: [String: [String: String]] = [
         "bcam_policy_blocklist_all": "{browser} को आपका संगठन प्रबंधित करता है, और उसकी नीति डिफ़ॉल्ट रूप से सभी एक्सटेंशन रोकती है (\"*\")। इस एक्सटेंशन की ID को अनुमति देने से कुछ नहीं होगा: जब तक यह रोक लगी है, ब्राउज़र कोई भी पैक न किया गया एक्सटेंशन (इसकी तरह किसी फ़ोल्डर से लोड किया गया) लोड नहीं करता। अपने IT विभाग से यह रोक हटाने को कहें (ExtensionInstallBlocklist या ExtensionSettings में \"*\", या CloudExtensionRequestEnabled)।",
         "bcam_policy_types": "{browser} को आपका संगठन प्रबंधित करता है, और उसकी नीति सिर्फ़ कुछ तरह के एक्सटेंशन की अनुमति देती है। अपने IT विभाग से अनुमति वाले प्रकारों में \"extension\" जोड़ने को कहें (ExtensionAllowedTypes, या ExtensionSettings में allowed_types)।",
         "bcam_policy_other": "या इसे किसी दूसरे ब्राउज़र में इंस्टॉल करें:",
-        "bcam_missing": "Remote Visio की इस कॉपी में ब्राउज़र कैमरा एक्सटेंशन नहीं है। ऐप को दोबारा इंस्टॉल करें।",
+        "bcam_missing": "Remote Visio की इस कॉपी में ब्राउज़र एक्सटेंशन नहीं है। ऐप को दोबारा इंस्टॉल करें।",
         "bcam_store_remove_unpacked": "इस ब्राउज़र में Remote Visio Camera पहले से अनपैक्ड रूप में भी लोड है। स्टोर वाली कॉपी जोड़ने के बाद, एक्सटेंशन पेज पर पुरानी कॉपी हटाएँ (ID jmiffhdbakchdlfbfdiaclkilcdhcgkf वाला कार्ड), वरना कैमरा दो बार दिखेगा।",
         "bcam_unpacked_remove_store": "अगर आपने पहले Chrome Web Store से Remote Visio Camera जोड़ा था, तो एक्सटेंशन पेज पर वह कॉपी हटाएँ (ID bhijcffjnmjijifjiaeibbogmbohdmon वाला कार्ड), वरना कैमरा दो बार दिखेगा।",
-        "bcam_store_steps": "1. {browser} में अभी खुले Chrome Web Store पेज पर \"Chrome में जोड़ें\" (Edge में \"पाएँ\") पर क्लिक करें, फिर \"एक्सटेंशन जोड़ें\" पर।\n\n2. एक्सटेंशन को पिन करें: टूलबार में एक्सटेंशन बटन (पहेली के टुकड़े वाला आइकन) पर क्लिक करें, फिर \"Remote Visio Camera\" के पास वाले पिन पर (Edge में आँख वाले आइकन पर)। तब इसका बटन टूलबार में बना रहता है।\n\n3. अपनी मीटिंग की वेबसाइट पर कैमरे के रूप में \"Remote Visio Camera\" चुनें, और पूछे जाने पर \"अनुमति दें\" पर क्लिक करें। जो मीटिंग पेज पहले से खुले थे, उन्हें फिर से लोड करें।",
+        "bcam_store_steps": "1. {browser} में अभी खुले Chrome Web Store पेज पर \"Chrome में जोड़ें\" (Edge में \"पाएँ\") पर क्लिक करें, फिर \"एक्सटेंशन जोड़ें\" पर।\n\n2. एक्सटेंशन को पिन करें: टूलबार में एक्सटेंशन बटन (पहेली के टुकड़े वाला आइकन) पर क्लिक करें, फिर \"Remote Visio Camera\" के पास वाले पिन पर (Edge में आँख वाले आइकन पर)। तब इसका बटन टूलबार में बना रहता है।\n\n3. अपनी मीटिंग की वेबसाइट पर माइक्रोफ़ोन, स्पीकर और कैमरे के रूप में \"Remote Visio Microphone\", \"Remote Visio Speaker\" और \"Remote Visio Camera\" चुनें, और पूछे जाने पर \"अनुमति दें\" पर क्लिक करें। जो मीटिंग पेज पहले से खुले थे, उन्हें फिर से लोड करें।",
         "bcam_store_edge": "Edge पहले दूसरे स्टोर के एक्सटेंशन की अनुमति माँग सकता है। अनुमति दें, फिर \"पाएँ\" पर क्लिक करें।",
         "bcam_store_profiles": "एक्सटेंशन एक ही ब्राउज़र प्रोफ़ाइल का होता है, और स्टोर पेज उस प्रोफ़ाइल में खुला है जिसे आपने पिछली बार इस्तेमाल किया था। मीटिंग के लिए इस्तेमाल होने वाली हर प्रोफ़ाइल में इसे जोड़ें। अगर स्टोर पेज काम न करे, तो \"इसके बजाय अनपैक्ड लोड करें…\" चुनें (इसके लिए डेवलपर मोड चाहिए)।",
         "bcam_unpacked_button": "इसके बजाय अनपैक्ड लोड करें…",
@@ -513,7 +517,7 @@ private let cameraSettingsURL: String = {
     return "x-apple.systempreferences:com.apple.preference.security"
 }()
 
-// The browser camera's installer, which macos/assemble-app.sh puts in
+// The browser extension's installer, which macos/assemble-app.sh puts in
 // Contents/Resources next to the extension files it copies
 // (BrowserExtension/). It does the file work and the browser detection; the
 // app runs it and talks to the user.
@@ -683,7 +687,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var signalSources: [DispatchSourceSignal] = []
     private var cameraState: CameraState = cameraExtensionBundled ? .requesting : .missing
     private var cameraRequest: CameraExtensionRequest?
-    // An install of the browser camera is running (the script, in the
+    // An install of the browser extension is running (the script, in the
     // background): the menu item waits for it.
     private var browserExtensionBusy = false
 
@@ -704,6 +708,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        // An earlier version's camera switches, while still in the settings,
+        // go (see retiredDefaultsKeys): nothing reads them any more.
+        for key in retiredDefaultsKeys {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+
         // Before the receiver starts: macOS registers (or replaces) the
         // extension while the rest comes up, and the receiver finds it.
         activateCameraExtensionIfInstalled()
@@ -713,12 +723,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // restart). In the background, and whatever the outcome: the launch
         // never waits for it, and a failure only leaves the old copy.
         // Unless that copy is gone (deleted by hand, or by the uninstaller
-        // run from Terminal before this install): then the browser camera
+        // run from Terminal before this install): then the browser extension
         // is not installed any more, sync would not bring it back, and the
-        // menu offers to install it again. This comes before the receiver
-        // starts, so that it starts without -browser-camera. A symbolic
-        // link counts as there even when broken: a developer's, which sync
-        // leaves alone.
+        // menu offers to install it again. A symbolic link counts as there
+        // even when broken: a developer's, which sync leaves alone.
         // An extension installed from the store has no such copy (the store
         // keeps it up to date), so a missing folder means nothing then; an
         // unpacked copy left from before, which the browser may still load,
@@ -730,7 +738,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                !FileManager.default.fileExists(atPath: folder),
                (try? FileManager.default.destinationOfSymbolicLink(atPath: folder)) == nil {
                 UserDefaults.standard.removeObject(forKey: browserCameraInstalledKey)
-                UserDefaults.standard.removeObject(forKey: browserCameraKey)
                 UserDefaults.standard.removeObject(forKey: browserCameraModeKey)
             } else {
                 DispatchQueue.global(qos: .utility).async {
@@ -787,17 +794,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // The receiver reads -speaker-mute at startup, so flipping it means a
-    // restart. Its own teardown releases the device cleanly first.
-    @objc private func toggleSpeakerMute() {
-        let on = !UserDefaults.standard.bool(forKey: speakerMuteKey)
-        UserDefaults.standard.set(on, forKey: speakerMuteKey)
-        stopReceiver()
-        launchReceiver(fresh: false)
-    }
-
-    // Same for -mic-mute: the stopping receiver puts the microphones back,
-    // the new one mutes them again, or not.
+    // The receiver reads -mic-mute at startup, so flipping it means a
+    // restart: the stopping receiver puts the microphones back, the new one
+    // mutes them again, or not.
     @objc private func toggleMicMute() {
         let on = !UserDefaults.standard.bool(forKey: micMuteKey)
         UserDefaults.standard.set(on, forKey: micMuteKey)
@@ -805,44 +804,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launchReceiver(fresh: false)
     }
 
-    // Same for -camera, and for -browser-camera, which it switches as well.
-    @objc private func toggleCameraRelay() {
-        let off = !UserDefaults.standard.bool(forKey: cameraOffKey)
-        UserDefaults.standard.set(off, forKey: cameraOffKey)
+    // Same for -speaker-mute.
+    @objc private func toggleSpeakerMute() {
+        let on = !UserDefaults.standard.bool(forKey: speakerMuteKey)
+        UserDefaults.standard.set(on, forKey: speakerMuteKey)
         stopReceiver()
         launchReceiver(fresh: false)
     }
 
-    // Same for -browser-camera. The menu offers it only while the camera
-    // relay is on, so this always changes what the receiver does. It is
-    // always in the menu: the extension may come straight from the store,
-    // without this app's install step.
-    @objc private func toggleBrowserCamera() {
-        let on = !UserDefaults.standard.bool(forKey: browserCameraKey)
-        UserDefaults.standard.set(on, forKey: browserCameraKey)
-        stopReceiver()
-        launchReceiver(fresh: false)
-    }
-
-    // "Install Browser Camera Extension…": the user asked for it, and only
-    // they can finish it. The script finds the default browser and, when it
-    // is a Chromium browser its organization lets install the extension,
-    // opens the extension's Chrome Web Store page there; this then switches
-    // the browser camera on and explains the steps left ("Add to Chrome",
-    // which a browser lets no program click). The unpacked way stays as the
-    // way out when the store cannot be used: the script copies the extension
-    // to a folder in the user's home, opens the browser's extensions page,
-    // shows the folder in Finder and puts its path on the clipboard, for
-    // Developer mode and "Load unpacked". A default browser that cannot run
-    // the extension, or whose management policy does not let the user
-    // install it, gets a choice of the other Chromium browsers installed.
-    @objc private func installBrowserCamera() {
-        startBrowserCameraInstall(browser: nil, unpacked: false)
+    // "Install Browser Extension…": the user asked for it, and only they can
+    // finish it. The script finds the default browser and, when it is a
+    // Chromium browser its organization lets install the extension, opens
+    // the extension's Chrome Web Store page there; this then explains the
+    // steps left ("Add to Chrome", which a browser lets no program click).
+    // The receiver needs no change for it: it serves the extension's
+    // microphone, speaker and camera whether one is installed or not, so an
+    // extension added straight from the store works as it is. The unpacked
+    // way stays as the way out when the store cannot be used: the script
+    // copies the extension to a folder in the user's home, opens the
+    // browser's extensions page, shows the folder in Finder and puts its
+    // path on the clipboard, for Developer mode and "Load unpacked". A
+    // default browser that cannot run the extension, or whose management
+    // policy does not let the user install it, gets a choice of the other
+    // Chromium browsers installed.
+    @objc private func installBrowserExtension() {
+        startBrowserExtensionInstall(browser: nil, unpacked: false)
     }
 
     // The script runs on a background queue (opening the browser can take a
     // few seconds when it has to start), the answer comes back here.
-    private func startBrowserCameraInstall(browser: String?, unpacked: Bool) {
+    private func startBrowserExtensionInstall(browser: String?, unpacked: Bool) {
         guard !browserExtensionBusy else { return }
         guard browserExtensionScript != nil else {
             showAlert(style: .critical, title: "Remote Visio", text: L("bcam_missing"))
@@ -856,19 +847,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let run = runBrowserExtensionScript(arguments)
             DispatchQueue.main.async {
                 self.browserExtensionBusy = false
-                self.browserCameraInstallFinished(run, unpacked: unpacked)
+                self.browserExtensionInstallFinished(run, unpacked: unpacked)
             }
         }
     }
 
-    private func browserCameraInstallFinished(_ run: BrowserExtensionRun, unpacked: Bool) {
+    private func browserExtensionInstallFinished(_ run: BrowserExtensionRun, unpacked: Bool) {
         let browserName = run.values["browser_name"] ?? run.values["default_name"] ?? ""
         switch run.status {
         case 0:
-            // Switch it on, restarting the receiver when that changes its
-            // arguments (not when the camera relay is off: that stays the
-            // user's choice).
-            let before = receiverArguments()
             // The other way's copy may be in the browser already (an
             // unpacked one from before the store, or the store's when the
             // user now loads it unpacked): two copies list the camera twice,
@@ -883,12 +870,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 otherCopy = hadInstall && previousMode == "store"
             }
             UserDefaults.standard.set(true, forKey: browserCameraInstalledKey)
-            UserDefaults.standard.set(true, forKey: browserCameraKey)
             UserDefaults.standard.set(unpacked ? "unpacked" : "store", forKey: browserCameraModeKey)
-            if receiverArguments() != before {
-                stopReceiver()
-                launchReceiver(fresh: false)
-            }
             if !unpacked {
                 // The store's page is open: "Add to Chrome" is left, and
                 // Edge may first ask to allow other stores. A store page
@@ -908,7 +890,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 alert.addButton(withTitle: L("bcam_unpacked_button"))
                 NSApp.activate(ignoringOtherApps: true)
                 if alert.runModal() == .alertSecondButtonReturn {
-                    startBrowserCameraInstall(browser: run.values["browser_bundle"], unpacked: true)
+                    startBrowserExtensionInstall(browser: run.values["browser_bundle"], unpacked: true)
                 }
                 return
             }
@@ -1014,9 +996,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         let index = alert.runModal().rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
         if index >= 0 && index < choices.count {
-            startBrowserCameraInstall(browser: choices[index].id, unpacked: unpacked)
+            startBrowserExtensionInstall(browser: choices[index].id, unpacked: unpacked)
         } else if index == choices.count, let browser = unpackedIn {
-            startBrowserCameraInstall(browser: browser, unpacked: true)
+            startBrowserExtensionInstall(browser: browser, unpacked: true)
         }
     }
 
@@ -1080,27 +1062,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // The receiver's switches, from the menu's settings. "Relay the Camera"
-    // off is the master switch: neither the virtual camera nor the browser
-    // camera then.
+    // The receiver's switches, from the menu's settings: this Mac's own
+    // microphones and speakers, muted while it runs or not. The cameras take
+    // none: by its defaults the receiver relays into the virtual camera
+    // whenever that is installed, and serves the browser extension's camera
+    // with its microphone and speaker.
     private func receiverArguments() -> [String] {
         let defaults = UserDefaults.standard
         var arguments: [String] = []
-        if defaults.bool(forKey: speakerMuteKey) { arguments.append("-speaker-mute") }
         if defaults.bool(forKey: micMuteKey) { arguments.append("-mic-mute") }
-        if defaults.bool(forKey: cameraOffKey) {
-            arguments.append("-camera=false")
-        } else if defaults.bool(forKey: browserCameraKey) {
-            arguments.append("-browser-camera")
-        }
+        if defaults.bool(forKey: speakerMuteKey) { arguments.append("-speaker-mute") }
         return arguments
     }
 
-    // Start the bundled receiver. It exits with status 3 when its audio device
-    // stops responding (coreaudiod restarted, e.g. after a driver reinstall);
-    // that is a request to be started again, not a failure. The log is
-    // truncated once per app launch and appended to on relaunches, so the line
-    // explaining why the previous instance exited survives.
+    // Start the bundled receiver. The log is truncated once per app launch
+    // (fresh) and appended to when the receiver is restarted (a changed
+    // setting, a cancelled uninstall), so what the previous instance said
+    // survives. A receiver that exits by itself takes the app with it:
+    // quietly after a clean exit (it was stopped from outside), with an alert
+    // otherwise. Stopping it from here (stopReceiver) replaces this handler.
     private func launchReceiver(fresh: Bool) {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: receiverPath)
@@ -1117,7 +1097,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if let log = FileHandle(forWritingAtPath: logPath) {
             log.seekToEndOfFile()
-            if !fresh, let note = "--- relaunching remotevisio-receiver after it exited with status 3 ---\n".data(using: .utf8) {
+            if !fresh, let note = "--- restarting remotevisio-receiver ---\n".data(using: .utf8) {
                 log.write(note)
             }
             proc.standardOutput = log
@@ -1127,9 +1107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         proc.terminationHandler = { p in
             DispatchQueue.main.async {
                 self.receiver = nil
-                if p.terminationStatus == 3 {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self.launchReceiver(fresh: false) }
-                } else if p.terminationStatus != 0 {
+                if p.terminationStatus != 0 {
                     self.fail(L("exited", ["n": String(p.terminationStatus)]))
                 } else {
                     NSApp.terminate(nil)
@@ -1190,9 +1168,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         stopReceiver()
     }
 
-    // Stop the receiver and wait for it. Give it time to release its audio
-    // devices and the system audio tap; a SIGKILL mid-teardown is what leaves
-    // coreaudiod wedged.
+    // Stop the receiver and wait for it. Give it time to put back the
+    // microphones "Mute This Mac's Microphone" muted and to let go of the
+    // virtual camera; a SIGKILL leaves the microphones muted until the next
+    // start of a receiver.
     private func stopReceiver() {
         guard let proc = receiver, proc.isRunning else { return }
         receiver = nil
@@ -1205,14 +1184,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // Put back the microphones a crashed -mic-mute run left muted. Each start
-    // of the receiver does it, but after the uninstall there is none; the
-    // stopped receiver has already put back its own.
-    private func restoreMicrophones() {
+    // Put back the microphones and speakers a crashed -mic-mute or
+    // -speaker-mute run left muted. Each start of the receiver does it, but
+    // after the uninstall there is none; the stopped receiver has already put
+    // back its own.
+    private func restoreMutedDevices() {
         guard FileManager.default.isExecutableFile(atPath: receiverPath) else { return }
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: receiverPath)
-        proc.arguments = ["-mic-restore"]
+        proc.arguments = ["-restore-mutes"]
         let done = DispatchSemaphore(value: 0)
         proc.terminationHandler = { _ in done.signal() }
         guard (try? proc.run()) != nil else { return }
@@ -1223,10 +1203,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // camera extension (macOS asks for the admin password; the app has to
     // still exist for that, so it comes first), stop the receiver, then run
     // the bundled uninstall script as root through the standard macOS
-    // password dialog. It removes the audio device driver, restarts
-    // coreaudiod, deletes the app and forgets the package receipts. The
-    // browser camera's folder goes just before, as the user: it is in their
-    // home, and the script that removes it is inside the app.
+    // password dialog. It deletes the app and forgets the package receipts,
+    // and removes the audio device driver of earlier versions if one is
+    // still there (restarting coreaudiod then). The browser extension's
+    // folder goes just before, as the user: it is in their home, and the
+    // script that removes it is inside the app.
     @objc private func uninstall() {
         let confirm = NSAlert()
         confirm.messageText = L("uninstall_q")
@@ -1249,7 +1230,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // it at the end, with what to do (a reboot clears it).
         let cameraProblem = deactivateCameraExtension(timeout: 60)
         stopReceiver()
-        restoreMicrophones()
+        restoreMutedDevices()
         let removedBrowserExtension = runBrowserExtensionScript(["remove"]).values["removed"] == "1"
 
         // Paths come from the bundle; quote them for the shell all the same.
@@ -1257,10 +1238,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let source = "do shell script \"\(quoted) --from-app\" with administrator privileges"
         var error: NSDictionary?
         if NSAppleScript(source: source)?.executeAndReturnError(&error) != nil {
-            // The browser camera is gone with the app; a later install of
-            // Remote Visio starts without it.
+            // The browser extension's setup is gone with the app; a later
+            // install of Remote Visio starts without it.
             UserDefaults.standard.removeObject(forKey: browserCameraInstalledKey)
-            UserDefaults.standard.removeObject(forKey: browserCameraKey)
             UserDefaults.standard.removeObject(forKey: browserCameraModeKey)
             if let problem = cameraProblem {
                 let note = NSAlert()
@@ -1274,7 +1254,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Cancelled at the password dialog (error -128) or failed: put things
         // back the way they were, the camera extension included, and the
-        // browser camera's folder, which the browser still loads from
+        // browser extension's folder, which the browser still loads from
         // (`install --unpacked --no-open` makes the copy and opens nothing).
         let code = (error?[NSAppleScript.errorNumber] as? Int) ?? 0
         activateCameraExtensionIfInstalled()
@@ -1323,49 +1303,45 @@ extension AppDelegate: NSMenuDelegate {
             }
         }
         menu.addItem(.separator())
-        let mute = NSMenuItem(title: L("mute"), action: #selector(toggleSpeakerMute), keyEquivalent: "")
-        mute.target = self
-        mute.state = UserDefaults.standard.bool(forKey: speakerMuteKey) ? .on : .off
-        menu.addItem(mute)
+        // Controls: this Mac's own speakers and microphones, each muted while
+        // the receiver runs (a submenu, so the day-to-day switches sit
+        // together and the menu stays short).
+        let controls = NSMenuItem(title: L("controls"), action: nil, keyEquivalent: "")
+        let controlsMenu = NSMenu(title: L("controls"))
+        let speakerMute = NSMenuItem(title: L("speaker_mute"), action: #selector(toggleSpeakerMute), keyEquivalent: "")
+        speakerMute.target = self
+        speakerMute.state = UserDefaults.standard.bool(forKey: speakerMuteKey) ? .on : .off
+        controlsMenu.addItem(speakerMute)
         let micMute = NSMenuItem(title: L("mic_mute"), action: #selector(toggleMicMute), keyEquivalent: "")
         micMute.target = self
         micMute.state = UserDefaults.standard.bool(forKey: micMuteKey) ? .on : .off
-        menu.addItem(micMute)
-        // "Relay the Camera", the master switch, and the Browser Camera
-        // switch under it, always: the browser camera extension can come
-        // straight from the Chrome Web Store, without this app's install
-        // step, and its user has to be able to switch it on here. The
-        // Browser Camera switch is greyed out (its check mark kept) while
-        // the relay is off, since it then has no effect.
-        let browserCameraInstalled = UserDefaults.standard.bool(forKey: browserCameraInstalledKey)
-        let cameraOff = UserDefaults.standard.bool(forKey: cameraOffKey)
-        let camera = NSMenuItem(title: L("camera_toggle"), action: #selector(toggleCameraRelay), keyEquivalent: "")
-        camera.target = self
-        camera.state = cameraOff ? .off : .on
-        menu.addItem(camera)
-        let browserCamera = NSMenuItem(title: L("bcam_toggle"),
-                                       action: cameraOff ? nil : #selector(toggleBrowserCamera), keyEquivalent: "")
-        browserCamera.target = self
-        browserCamera.state = UserDefaults.standard.bool(forKey: browserCameraKey) ? .on : .off
-        browserCamera.indentationLevel = 1
-        menu.addItem(browserCamera)
-        // Always offered: the browser camera is optional, and only the user
-        // sets it up. Greyed out while an install is under way.
-        let installBrowser = NSMenuItem(title: L(browserCameraInstalled ? "bcam_reinstall" : "bcam_install"),
-                                        action: browserExtensionBusy ? nil : #selector(installBrowserCamera),
-                                        keyEquivalent: "")
-        installBrowser.target = self
-        menu.addItem(installBrowser)
+        controlsMenu.addItem(micMute)
+        controls.submenu = controlsMenu
+        menu.addItem(controls)
+        // No camera switches: the receiver always serves the browser
+        // extension's Remote Visio Camera, with its microphone and speaker,
+        // and relays into the virtual camera whenever that is installed.
         if #available(macOS 13.0, *) {
             let login = NSMenuItem(title: L("login"), action: #selector(toggleLoginItem), keyEquivalent: "")
             login.target = self
             login.state = SMAppService.mainApp.status == .enabled ? .on : .off
             menu.addItem(login)
         }
+        // The one-off actions sit with Quit, apart from the switches above:
+        // installing the browser extension (it carries the microphone, the
+        // speaker and the camera for web pages; only the user sets it up, and
+        // the item is greyed out while an install is under way) and
+        // uninstalling Remote Visio.
+        menu.addItem(.separator())
+        let browserCameraInstalled = UserDefaults.standard.bool(forKey: browserCameraInstalledKey)
+        let installBrowser = NSMenuItem(title: L(browserCameraInstalled ? "bcam_reinstall" : "bcam_install"),
+                                        action: browserExtensionBusy ? nil : #selector(installBrowserExtension),
+                                        keyEquivalent: "")
+        installBrowser.target = self
+        menu.addItem(installBrowser)
         let uninstallItem = NSMenuItem(title: L("uninstall"), action: #selector(uninstall), keyEquivalent: "")
         uninstallItem.target = self
         menu.addItem(uninstallItem)
-        menu.addItem(.separator())
         let quitItem = NSMenuItem(title: L("quit"), action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)

@@ -1,20 +1,71 @@
 {
+  // remotevisio.com on Cloudflare Workers: the Astro build (./dist) as static
+  // assets, plus a Worker (worker/index.js) that 301s relaymic.com,
+  // www.relaymic.com and www.remotevisio.com to https://remotevisio.com, and
+  // /send to the sender app. The app and the direct-mode relay
+  // (send.remotevisio.com) are a Worker of their own, ../relay: nothing of
+  // them is here.
+  // Build first (npm run build), then deploy with npx wrangler deploy.
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "relaymic-site",
-  "main": "./src/index.js",
-  "compatibility_date": "2026-08-17",
+  "name": "remotevisio-site",
+  "main": "./worker/index.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "preview_urls": false,
 
   "assets": {
-    "directory": "./public",
-    "binding": "ASSETS"
+    "directory": "./dist",
+    "binding": "ASSETS",
+    // Needed for the host redirects: by default an asset is served before
+    // the Worker runs.
+    "run_worker_first": true,
+    // /privacy/index.html is served at /privacy. /privacy/ would get a 307
+    // from here; worker/index.js answers it with a 301 first.
+    "html_handling": "drop-trailing-slash",
+    // dist/404.html, with status 404.
+    "not_found_handling": "404-page"
   },
 
+  // Custom domains: each zone must be in the same Cloudflare account as this
+  // Worker. relaymic.com is still attached to the old Worker ("relaymic-site");
+  // remove it there first, or deploy will report the conflict.
+  // send.remotevisio.com belongs to the relay Worker (../relay/wrangler.jsonc)
+  // and must never be attached here.
   "routes": [
+    { "pattern": "remotevisio.com", "custom_domain": true },
+    { "pattern": "www.remotevisio.com", "custom_domain": true },
     { "pattern": "relaymic.com", "custom_domain": true },
     { "pattern": "www.relaymic.com", "custom_domain": true }
   ],
 
+  // Production values; wrangler dev --var NAME:VALUE overrides them.
+  "vars": {
+    // Where /send goes: the sender app, served by the relay Worker.
+    "APP_ORIGIN": "https://send.remotevisio.com"
+  },
+
+  // Query strings are removed from the URLs Workers Logs keep (a marketing
+  // URL carries utm_* at most, and nothing a visitor types needs logging),
+  // and no traces are kept.
   "observability": {
-    "enabled": true
+    "enabled": true,
+    "redact_query_string": true,
+    "traces": { "enabled": false }
+  },
+
+  "env": {
+    // Local development only, never deployed:
+    //   npx wrangler dev --env dev --ip 127.0.0.1 --port <port>
+    // Without routes: with them, wrangler dev rewrites every request to the
+    // first route's host, Origin and Host included, so the host redirects
+    // could not be tried. Vars are not inherited by an environment, so
+    // APP_ORIGIN is repeated, pointing at the relay Worker's own wrangler
+    // dev (../relay, port 7660: give this one another port when both run).
+    "dev": {
+      "routes": [],
+      "vars": {
+        "APP_ORIGIN": "http://send.localhost:7660"
+      }
+    }
   }
 }

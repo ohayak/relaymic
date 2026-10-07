@@ -1,0 +1,177 @@
+---
+import Layout from "../Layout.astro";
+import { seo, links, product, requirements, publisher } from "@utils/config";
+import { alts } from "@utils/media";
+import { softwareApplication, breadcrumbs, webPage } from "@utils/jsonld";
+import { downloadInfo } from "@utils/download";
+import Breadcrumbs from "@components/Breadcrumbs.astro";
+import Icon from "@components/Icon.astro";
+import ThemedShot from "@components/ThemedShot.astro";
+import Wireframe from "@components/Wireframe.astro";
+
+const sha = downloadInfo().sha256;
+const released = links.downloadReleased.trim();
+const releasedLabel = released
+  ? new Date(`${released}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })
+  : "";
+
+const jsonLd = [
+  webPage("/download", "Download Remote Visio for Mac", seo.download.description),
+  softwareApplication(),
+  breadcrumbs([
+    { name: "Home", path: "/" },
+    { name: "Download", path: "/download" },
+  ]),
+];
+---
+
+<Layout title={seo.download.title} description={seo.download.description} jsonLd={jsonLd}>
+  <div class="mx-auto max-w-screen-lg px-4 pb-6 pt-10 md:pt-16">
+    <Breadcrumbs items={[{ title: "Home", href: "/" }, { title: "Download" }]} />
+    <div class="mt-6 grid items-start gap-10 md:grid-cols-[1.3fr_1fr]">
+      <div>
+        <h1 class="text-4xl font-extrabold leading-[1.05] tracking-tight md:text-6xl">Download Remote Visio for Mac</h1>
+        <p class="lede mt-5 max-w-xl">
+          Install it on the Mac you control remotely. Then add its browser extension there, and open one address on the device in front of you.
+        </p>
+      </div>
+      <div class="rounded-box border border-base-300 bg-base-200 p-6">
+        <a href={links.downloadPkgUrl} class="btn btn-primary btn-lg w-full rounded-full" download={links.downloadPkgName}>
+          <Icon name="download" class="h-5 w-5" />
+          Download for Mac
+        </a>
+        <p class="mt-3 text-center font-mono text-sm text-base-content/80">{links.downloadPkgName}</p>
+        <dl class="mt-5 space-y-2 text-sm">
+          <div class="flex justify-between gap-4"><dt class="text-base-content/75">Version</dt><dd class="font-medium">{product.version}</dd></div>
+          <div class="flex justify-between gap-4"><dt class="text-base-content/75">Requires</dt><dd class="font-medium">{product.minMacOS}</dd></div>
+          <div class="flex justify-between gap-4"><dt class="text-base-content/75">Processor</dt><dd class="font-medium">{product.arch}</dd></div>
+          <div class="flex justify-between gap-4"><dt class="text-base-content/75">Price</dt><dd class="font-medium">Free, no account</dd></div>
+          {releasedLabel && <div class="flex justify-between gap-4"><dt class="text-base-content/75">Released</dt><dd class="font-medium"><time datetime={released}>{releasedLabel}</time></dd></div>}
+        </dl>
+        <p class="mt-4 flex items-start gap-2 text-sm text-base-content/85">
+          <Icon name="shield" class="mt-0.5 h-4 w-4 shrink-0" />
+          Signed with Apple Developer ID and notarized by Apple, so macOS opens it normally.
+        </p>
+        {
+          sha && (
+            <div class="mt-4 text-sm">
+              <p class="text-base-content/75">SHA-256</p>
+              <code class="mt-1 block break-all rounded-md bg-base-100 p-2 font-mono text-xs">{sha}</code>
+            </div>
+          )
+        }
+        <p class="mt-4 border-t border-base-300 pt-4 text-sm text-base-content/80">
+          <Icon name="apple" class="-mt-1 mr-1 inline h-4 w-4" />Coming to the Mac App Store.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <section class="section" aria-labelledby="install-title">
+    <h2 id="install-title" class="section-title">Install in four steps</h2>
+    <ol class="mt-10 grid gap-4 md:grid-cols-2">
+      <li class="card-surface p-6">
+        <span class="font-mono text-sm text-base-content/75">Step 1</span>
+        <h3 class="mt-1 text-xl font-bold">Run the installer on the remote Mac</h3>
+        <p class="mt-2 text-base-content/85">
+          Open <span class="kbd-url">{links.downloadPkgName}</span> and follow the steps. It installs RemoteVisio.app in Applications and starts it.
+          The Remote Visio icon appears in the menu bar, and the app starts at login from then on (turn that off with <em>Start at Login</em> in
+          its menu).
+        </p>
+      </li>
+      <li class="card-surface p-6">
+        <span class="font-mono text-sm text-base-content/75">Step 2</span>
+        <h3 class="mt-1 text-xl font-bold">Add the browser extension</h3>
+        <p class="mt-2 text-base-content/85">
+          In the menu-bar menu, choose <strong>Install Browser Extension…</strong>. It opens the extension's page in the Chrome Web Store in your
+          Chromium browser: click <strong>Add to Chrome</strong> (<strong>Get</strong> in Edge), then pin it from the Extensions menu. Reload meeting
+          pages that were already open.
+        </p>
+        <a href={links.chromeWebStoreUrl} rel="noopener" class="link mt-3 inline-flex items-center gap-1 text-sm font-semibold">
+          Open it in the Chrome Web Store <Icon name="external" class="h-4 w-4" />
+        </a>
+      </li>
+      <li class="card-surface p-6">
+        <span class="font-mono text-sm text-base-content/75">Step 3</span>
+        <h3 class="mt-1 text-xl font-bold">Open the sender page on your device</h3>
+        <p class="mt-2 text-base-content/85">
+          The menu-bar menu lists the Mac's addresses, like <span class="kbd-url">https://100.101.102.103:7420</span>. Open one in a browser on the
+          device in front of you (over the same network or <a class="link" href="/guides/tailscale-setup-for-remote-visio">Tailscale</a>), accept the
+          certificate warning once and press <strong>Start</strong>.
+        </p>
+      </li>
+      <li class="card-surface p-6">
+        <span class="font-mono text-sm text-base-content/75">Step 4</span>
+        <h3 class="mt-1 text-xl font-bold">Pick Remote Visio in your meeting</h3>
+        <p class="mt-2 text-base-content/85">
+          In Google Meet, Teams or Zoom on the web, choose Remote Visio Microphone, Speaker and Camera, and click <strong>Allow</strong> when the
+          extension asks. It asks once per site.
+        </p>
+      </li>
+    </ol>
+    <div class="mt-10 grid items-center gap-8 md:grid-cols-2">
+      <Wireframe
+        name="setup-1"
+        alt="Wireframe: the Remote Visio menu-bar menu on the Mac with the sender addresses, the Controls submenu and Install Browser Extension."
+        class="rounded-box border border-base-300"
+      />
+      <div class="mx-auto max-w-[300px]">
+        <ThemedShot base="extension-popup" alt={alts["extension-popup"]} class="h-auto w-full rounded-box border border-base-300" />
+        <p class="mt-3 text-center text-sm text-base-content/75">The extension's button once everything runs.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="bg-base-200" aria-labelledby="camera-title">
+    <div class="section grid gap-10 md:grid-cols-2">
+      <div>
+        <h2 id="camera-title" class="text-2xl font-extrabold tracking-tight md:text-3xl">Optional: the virtual camera for native apps</h2>
+        <p class="mt-3 text-base-content/85">
+          Builds that include it also install Remote Visio Camera as a camera system extension, which video apps on the Mac can use. macOS asks you
+          to approve it once: System Settings &gt; General &gt; Login Items &amp; Extensions &gt; Camera Extensions (on macOS 14: Privacy &amp;
+          Security). A Mac managed by an organization may block it; web meetings then use the browser extension's camera, which needs no approval.
+        </p>
+      </div>
+      <div>
+        <h2 class="text-2xl font-extrabold tracking-tight md:text-3xl">Intel Mac, or from source</h2>
+        <p class="mt-3 text-base-content/85">
+          The download is for Apple Silicon. On an Intel Mac, build Remote Visio from its source code. SETUP.md walks you, or your AI assistant,
+          through every step.
+        </p>
+        <a href={links.setupUrl} rel="noopener" class="btn btn-outline mt-4 rounded-full"><Icon name="code" class="h-4 w-4" />Build from source</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section grid gap-10 md:grid-cols-2" aria-labelledby="req-title">
+    <div>
+      <h2 id="req-title" class="text-2xl font-extrabold tracking-tight md:text-3xl">System requirements</h2>
+      <ul class="mt-6 space-y-4">
+        {
+          requirements.map((r) => (
+            <li class="flex gap-3">
+              <Icon name="check" class="mt-1 h-5 w-5 shrink-0" />
+              <p><strong>{r.title}.</strong> <span class="text-base-content/85">{r.text}</span></p>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+    <div>
+      <h2 class="text-2xl font-extrabold tracking-tight md:text-3xl">Update and uninstall</h2>
+      <p class="mt-3 text-base-content/85">
+        <strong>To update</strong>, run the new installer: it quits the running app, replaces it and starts it again. The browser extension updates
+        itself from the Chrome Web Store.
+      </p>
+      <p class="mt-3 text-base-content/85">
+        <strong>To uninstall</strong>, choose <strong>Uninstall Remote Visio…</strong> in the menu-bar menu. It asks for your administrator password
+        and removes the app, its login item, the camera extension and the package receipts. Then remove "Remote Visio Camera" from your browser's
+        extensions page. A few settings and logs stay on the Mac; the <a class="link" href="/privacy">privacy policy</a> lists them and how to
+        delete them.
+      </p>
+      <p class="mt-3 text-sm text-base-content/80">
+        Remote Visio is free software under the {product.license}. Questions: <a class="link" href={`mailto:${publisher.email}`}>{publisher.email}</a>.
+      </p>
+    </div>
+  </section>
+</Layout>

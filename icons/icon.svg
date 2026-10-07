@@ -1,11 +1,12 @@
 <!--
-  The Remote Visio Camera extension's large icons (browser-extension/icons/
-  icon-48.png and icon-128.png), as the Chrome Web Store wants them: 96 px
-  of artwork centred in a 128 px square with 16 px of transparent padding.
-  The glyph is the Remote Visio icon (icons/icon-96.png) redrawn as vectors
-  on its 96-unit grid, so it stays sharp at any size; the tile is the site's
-  ink colour. Those two PNGs, and the black variants in icons/, were
-  rendered from this drawing once; it stays as their vector source.
+  The Remote Visio Camera extension's icon as the Chrome Web Store wants
+  it: 96 px of artwork centred in a 128 px square with 16 px of transparent
+  padding. The glyph is the Remote Visio icon (icons/icon-96.png) redrawn
+  as vectors on its 96-unit grid, so it stays sharp at any size; the tile
+  is the site's ink colour. The extension's icons were rendered from this drawing once,
+  white on the tile; they are now the glyph alone, black on transparency
+  (icons/icon-black-transparent-128.png and the black variants in icons/),
+  and this stays as its vector source.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
   <rect id="tile" x="16" y="16" width="96" height="96" rx="20" fill="#131417"/>

@@ -26,7 +26,7 @@ func main() {
 	bitrate := flag.Int("bitrate", 96000, "Opus bitrate (bps)")
 	listDevices := flag.Bool("list", false, "list input devices and exit")
 	meter := flag.Bool("meter", false, "print the capture level once a second")
-	speaker := flag.Bool("speaker", true, "receive the remote Mac's system audio and play it on the local default output (no echo cancellation; headphones recommended)")
+	speaker := flag.Bool("speaker", true, "receive the sound of the remote Mac's pages that play into Remote Visio Speaker (the return path) and play it on the local default output (no echo cancellation; headphones recommended)")
 	flag.Parse()
 
 	log.SetFlags(log.Ltime)

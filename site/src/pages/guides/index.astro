@@ -1,0 +1,59 @@
+---
+import Layout from "../../Layout.astro";
+import { seo, site } from "@utils/config";
+import { guides } from "@utils/guides";
+import { breadcrumbs, webPage } from "@utils/jsonld";
+import Breadcrumbs from "@components/Breadcrumbs.astro";
+import Icon from "@components/Icon.astro";
+import CtaBand from "@components/CtaBand.astro";
+
+const jsonLd = [
+  webPage("/guides", "Guides", seo.guides.description, "CollectionPage"),
+  breadcrumbs([
+    { name: "Home", path: "/" },
+    { name: "Guides", path: "/guides" },
+  ]),
+  {
+    "@type": "ItemList",
+    itemListElement: guides.map((g, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      url: `${site.url}/guides/${g.slug}`,
+      name: g.title,
+    })),
+  },
+];
+---
+
+<Layout title={seo.guides.title} description={seo.guides.description} jsonLd={jsonLd}>
+  <div class="mx-auto max-w-screen-lg px-4 pb-8 pt-10 md:pt-16">
+    <Breadcrumbs items={[{ title: "Home", href: "/" }, { title: "Guides" }]} />
+    <h1 class="mt-6 max-w-3xl text-4xl font-extrabold leading-[1.05] tracking-tight md:text-6xl">Guides: meetings on a remote Mac</h1>
+    <p class="lede mt-5 max-w-2xl">
+      Step-by-step answers for using your microphone, camera and speaker on a Mac you reach through Parsec, AnyDesk, TeamViewer, Screen Sharing
+      or another remote desktop tool. Each guide says what works, and what does not.
+    </p>
+  </div>
+  <section class="mx-auto max-w-screen-lg px-4 pb-20" aria-label="All guides">
+    <ul class="grid gap-4 md:grid-cols-2">
+      {
+        guides.map((g, i) => (
+          <li class="reveal">
+            <a
+              href={`/guides/${g.slug}`}
+              class="group flex h-full flex-col rounded-box border border-base-300 bg-base-100 p-6 transition-colors hover:border-base-content/40 hover:bg-base-200"
+            >
+              <span class="font-mono text-sm text-base-content/75">{String(i + 1).padStart(2, "0")} · {g.readingMinutes} min read</span>
+              <h2 class="mt-3 text-xl font-bold leading-snug group-hover:underline">{g.title}</h2>
+              <p class="mt-2 flex-1 text-base-content/85">{g.metaDescription}</p>
+              <span class="mt-4 inline-flex items-center gap-1 text-sm font-semibold">
+                Read the guide <Icon name="arrowRight" class="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              </span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+  <CtaBand />
+</Layout>
